@@ -1,0 +1,62 @@
+{
+    "workbench.colorCustomizations": {
+        "activityBar.activeBackground": "#442e9b",
+        "activityBar.background": "#442e9b",
+        "activityBar.foreground": "#e7e7e7",
+        "activityBar.inactiveForeground": "#e7e7e799",
+        "activityBarBadge.background": "#000000",
+        "activityBarBadge.foreground": "#e7e7e7",
+        "commandCenter.border": "#e7e7e799",
+        "editorGroup.border": "#442e9b",
+        "panel.border": "#442e9b",
+        "sash.hoverBorder": "#442e9b",
+        "sideBar.border": "#442e9b",
+        "statusBar.background": "#332274",
+        "statusBar.border": "#332274",
+        "statusBar.debuggingBackground": "#637422",
+        "statusBar.debuggingBorder": "#637422",
+        "statusBar.debuggingForeground": "#e7e7e7",
+        "statusBar.foreground": "#e7e7e7",
+        "statusBarItem.hoverBackground": "#442e9b",
+        "statusBarItem.remoteBackground": "#332274",
+        "statusBarItem.remoteForeground": "#e7e7e7",
+        "tab.activeBorder": "#442e9b",
+        "titleBar.activeBackground": "#332274",
+        "titleBar.activeForeground": "#e7e7e7",
+        "titleBar.border": "#332274",
+        "titleBar.inactiveBackground": "#33227499",
+        "titleBar.inactiveForeground": "#e7e7e799"
+    },
+    "peacock.remoteColor": "#332274",
+    {
+        "typescript.tsdk": "node_modules/typescript/lib",
+        "prettier-eslint-typescript.eslintConfig": {
+           "rules": {
+              "curly": "error",
+              "dot-notation": "error",
+              "no-undef-init": "error",
+              "no-useless-rename": "error",
+              "no-useless-return": "error",
+              "no-var": "error",
+              "object-shorthand": "error",
+              "one-var": [ "error", { "initialized": "never", "uninitialized": "always" } ],
+              "prefer-const": "error",
+              "prefer-template": "error",
+              "array-bracket-spacing": [ "error", "always" ],
+              "generator-star-spacing": [ "error", "both" ],
+              "space-before-function-paren": [ "off", "always" ],
+              "yield-star-spacing": [ "error", "both" ]
+           }
+        },
+        "prettier-eslint-typescript.prettierOptions": {
+           "arrowParens": "avoid",
+           "bracketSpacing": true,
+           "printWidth": 120,
+           "quoteProps": "as-needed",
+           "singleQuote": true,
+           "tabWidth": 2,
+           "trailingComma": "none",
+           "useTabs": false
+        }
+     }
+}
