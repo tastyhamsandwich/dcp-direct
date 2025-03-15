@@ -1,6 +1,7 @@
 import React from 'react'
 import NavLinks from './NavLinks';
 import NavRight from './NavRight';
+import '@app/styles.module.css';
 
 const NavBar = () => {
 

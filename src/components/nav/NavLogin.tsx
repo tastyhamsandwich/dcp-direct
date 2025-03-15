@@ -1,98 +1,87 @@
-"use client"
+'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-//import { signInAction } from '@/app/actions';
+import { Label } from '@comps/ui/Label';
+import { Input } from '@comps/ui/Input';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { signInSchema } from '@lib/zod';
-import { createClient } from '@supabaseC';
+import { loginSchema } from '@lib/zod';
+import { useAuth } from '@contexts/authContext';
+import '@app/styles.module.css';
+import './navstyles.css';
 
 const NavLogin = () => {
-  const router = useRouter();
-  //const { refreshProfile } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
+  const { signIn, error: authError, loading } = useAuth();
   const [error, setError] = useState<string | null>(null);
 
   const {
-    handleSubmit,
     register,
+    handleSubmit,
     formState: { errors },
   } = useForm({
-    resolver: zodResolver(signInSchema),
+    resolver: zodResolver(loginSchema),
   });
 
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: { email: string; password: string }) => {
+    setError(null);
     try {
-      setIsLoading(true);
-      setError(null);
-      
-      const formData = new FormData();
-      formData.append('email', data.email);
-      formData.append('password', data.password);
-      
-      // Use client-side authentication instead of server action
-      const supabase = createClient();
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: data.email,
-        password: data.password,
-      });
-
-      // Navigate to dashboard
-      router.push('/dashboard');
-            
-    } catch (error: any) {
-      console.error('Login error:', error);
-      setError(error.message || 'An error occurred during login');
+      await signIn(data.email, data.password);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed');
     }
-  }
+  };
 
   return (
     <div className="login-container">
       <form className="login-form" onSubmit={handleSubmit(onSubmit)}>
-        {error && (
+        {(error || authError) && (
           <div className="error-message text-red-500 text-sm mb-2">
-            {error}
+            {error || authError}
           </div>
         )}
-        <label htmlFor="email">
-          <input 
+        <div className="mb-2 pr-3">
+          <Label htmlFor="email" className="sr-only">Email</Label>
+          <Input 
             className="login-input" 
             type="text" 
             {...register('email')}
             placeholder="Email" 
             aria-describedby="user-email"
             aria-invalid={!!errors.email}
-            disabled={isLoading}
+            disabled={loading}
             required 
           />
-        </label>
-        <label htmlFor="password">
-          <input
-            className="login-input"
+          {errors.email?.message && <p className="text-red-500 text-xs">{errors.email?.message as string}</p>}
+        </div>
+        
+        <div className="mb-2 pr-3">
+          <Label htmlFor="password" className="sr-only">Password</Label>
+          <Input
+            className="login-input w-full text-white bg-slate-800 mb-1"
             type="password"
             {...register('password')}
             placeholder="Password"
             aria-describedby="user-password"
             aria-invalid={!!errors.password}
-            disabled={isLoading}
+            disabled={loading}
             required
           />
-        </label>
-        <div className="button-signup-container">
+          {errors.password?.message && <p className="text-red-500 text-xs">{errors.password?.message as string}</p>}
+        </div>
+        
+        <div className="button-signup-container flex flex-col items-center">
           <button 
-            type="submit" 
-            className="login-button"
-            disabled={isLoading}
+            type="submit"
+            className="login-button bg-[#4caf50] hover:bg-[#45a049] text-white font-bold py-1 px-3 rounded mb-2 w-full"
+            disabled={loading}
           >
-          {isLoading ? 'Logging in...' : 'Login'}
+            {loading ? 'Logging In...' : 'Log In'}
           </button>
-          <div className="signup-container">
-            <a href="/signup" className="signup-link">New user? Sign up!</a>
+          <div className="signup-container text-sm">
+            <Link href="/register" className="signup-link text-[#8aff8e] hover:underline">New user? Sign up!</Link>
           </div>
         </div>
-        {errors.email?.message && <p className="text-red-500 text-sm">{errors.email?.message as string}</p>}
-        {errors.password?.message && <p className="text-red-500 text-sm">{errors.password?.message as string}</p>}
       </form>
     </div>
   );

@@ -2,7 +2,7 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
-import { createDeck, shuffleDeck, dealCards, evaluateHands } from '@utils/pokerLogic';
+import { createDeck, shuffleDeck, dealCards, evaluateHands } from '@game/pokerLogic';
 
 // Game logic utils
 

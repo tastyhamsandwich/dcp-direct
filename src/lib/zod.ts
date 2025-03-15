@@ -15,7 +15,7 @@ const passwordSchema = z
     message: "Password must contain at least one special character",
   });
 
-export const signInSchema = z
+export const loginSchema = z
 .object({
   email: z.string({ required_error: "Email is required" })
     .min(1, "Email is required")
@@ -24,7 +24,7 @@ export const signInSchema = z
     .min(1, "Password is required")
 })
 
-export const signUpSchema = z
+export const registerSchema = z
   .object({
     email: z.string({ required_error: "Email address is required" })
       .min(1, "Email address is required")

@@ -9,6 +9,9 @@
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
+    "strictPropertyInitialization": false,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noImplicitAny": false,
@@ -23,6 +26,7 @@
     "paths": {
       "@comps/*": ["./src/components/*"],
       "@components/*": ["./src/components/*"],
+      "@contexts/*": ["./src/contexts/*"],
       "@lib/*": ["./src/lib/*"],
       "@app/*": ["./src/app/*"],
       "@supabaseC": ["./src/lib/supabase/client"],
@@ -33,5 +37,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "misc"]
 }

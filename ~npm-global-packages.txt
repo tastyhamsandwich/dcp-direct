@@ -1,0 +1,4 @@
+C:\Users\danvi\AppData\Roaming\npm
++-- bcrypt@5.1.1
+`-- corepack@0.31.0
+
