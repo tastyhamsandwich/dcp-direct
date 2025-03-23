@@ -1,4 +1,4 @@
-import { EarlyGameState, GameState } from '@game/gameLogic';
+import { GameState } from '@game/pokerLogic';
 import { string } from 'zod';
 
 export type { GameList, GameRoom, ExtendedWebSocket, WSMessageType, WSMessage, WSJoinGame, WSPlayerAction, WSStartRound, WSChatMessage, WSGetGamesList, WSGamesList, WSCreateGame };
@@ -6,7 +6,7 @@ export type { GameList, GameRoom, ExtendedWebSocket, WSMessageType, WSMessage, W
 type GameList = GameRoom[];
 
 type GameRoom = {
-  game: EarlyGameState | GameState;
+  game: GameState;
   players: Set<string>; // WebSocket connection IDs
 }
 
