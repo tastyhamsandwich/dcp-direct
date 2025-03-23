@@ -1,226 +1,202 @@
-import express from 'express';
-import http from 'http';
-import { Server } from 'socket.io';
+import { Game, Deck, evaluateHands, GamePhase, RoomStatus } from '@game/pokerLogic';
+import { createServer } from "node:http";
+import next from "next";
+import { Server } from "socket.io";
 import { v4 as uuidv4 } from 'uuid';
-import { createDeck, shuffleDeck, dealCards, evaluateHands } from '@game/pokerLogic';
 
-// Game logic utils
+const dev = process.env.NODE_ENV !== "production";
+const hostname = "localhost";
+const port = 3003;
+// when using middleware `hostname` and `port` must be provided below
+const app = next({ dev, hostname, port });
+const handler = app.getRequestHandler();
+
+app.prepare().then(() => {
+  const httpServer = createServer(handler);
+
+  const io = new Server(httpServer);
+
+  io.on("connection", (socket) => {
+    // ...
+  });
+
+  httpServer
+    .once("error", (err) => {
+      console.error(err);
+      process.exit(1);
+  })
+    .listen(port, () => {
+      console.log(`> Ready on http://${hostname}:${port}`);
+  });
 
 
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: "http://localhost:3003", // Your frontend URL
-    methods: ["GET", "POST"]
-  }
-});
+  // Store active games
+  const games: {[key: string]: Game } = {};
 
-// Store active games
-const games = {};
-// Store user sessions
-const users = {};
+  // Store user sessions
+  const users = {};
 
-// Handle socket connections
-io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
-  
-  // Handle user registration
-  socket.on('register', ({ username }) => {
-    users[socket.id] = {
-      id: socket.id,
-      username,
-      chips: 1000, // Starting chips
-    };
+  // Handle socket connections
+  io.on('connection', (socket) => {
+    console.log('User connected:', socket.id);
     
-    socket.emit('registration_success', { user: users[socket.id] });
-  });
-  
-  // Create a new game
-  socket.on('create_game', ({ tableName, maxPlayers, blinds }) => {
-    const gameId = uuidv4();
-    const userId = socket.id;
-    
-    if (!users[userId]) {
-      socket.emit('error', { message: 'You must register first' });
-      return;
-    }
-    
-    games[gameId] = {
-      id: gameId,
-      name: tableName,
-      maxPlayers: maxPlayers || 6,
-      players: [{ ...users[userId], position: 0 }],
-      smallBlind: blinds?.small || 5,
-      bigBlind: blinds?.big || 10,
-      dealerPosition: 0,
-      currentTurn: null,
-      phase: 'waiting',
-      deck: [],
-      communityCards: [],
-      pot: 0,
-      sidePots: [],
-      bettingRound: 0,
-      currentBet: 0,
-      createdBy: userId
-    };
-    
-    // Join the game room
-    socket.join(gameId);
-    
-    socket.emit('game_created', { gameId, game: games[gameId] });
-  });
-  
-  // Join an existing game
-  socket.on('join_game', ({ gameId }) => {
-    const userId = socket.id;
-    const game = games[gameId];
-    
-    if (!game) {
-      socket.emit('error', { message: 'Game not found' });
-      return;
-    }
-    
-    if (game.players.length >= game.maxPlayers) {
-      socket.emit('error', { message: 'Game is full' });
-      return;
-    }
-    
-    if (!users[userId]) {
-      socket.emit('error', { message: 'You must register first' });
-      return;
-    }
-    
-    // Add player to the game
-    game.players.push({
-      ...users[userId],
-      position: game.players.length
-    });
-    
-    // Join the game room
-    socket.join(gameId);
-    
-    // Let everyone know someone joined
-    io.to(gameId).emit('player_joined', { 
-      player: users[userId],
-      game: games[gameId]
-    });
-    
-    // Check if we can start the game
-    if (game.players.length >= 2 && game.phase === 'waiting') {
-      startGame(gameId);
-    }
-  });
-  
-  // Handle player actions (fold, check, call, raise)
-  socket.on('player_action', ({ gameId, action }) => {
-    const game = games[gameId];
-    const userId = socket.id;
-    
-    if (!game) {
-      socket.emit('error', { message: 'Game not found' });
-      return;
-    }
-    
-    if (game.currentTurn !== userId) {
-      socket.emit('error', { message: 'Not your turn' });
-      return;
-    }
-    
-    handlePlayerAction(gameId, userId, action);
-  });
-  
-  // Handle chat messages
-  socket.on('chat_message', ({ gameId, message }) => {
-    const userId = socket.id;
-    
-    if (!users[userId]) return;
-    
-    io.to(gameId).emit('chat_message', {
-      sender: users[userId].username,
-      message,
-      timestamp: new Date().toISOString()
-    });
-  });
-  
-  // Handle disconnections
-  socket.on('disconnect', () => {
-    const userId = socket.id;
-    
-    // Handle player leaving games
-    Object.keys(games).forEach(gameId => {
-      const game = games[gameId];
-      const playerIndex = game.players.findIndex(p => p.id === userId);
+    // Handle user registration
+    socket.on('register', ({ username }) => {
+      console.log(`Received socket event 'register'...`);
+      users[socket.id] = {
+        id: socket.id,
+        username,
+        chips: 1000, // Starting chips
+      };
       
-      if (playerIndex >= 0) {
-        // Remove player from game
-        game.players.splice(playerIndex, 1);
-        
-        if (game.players.length < 2) {
-          // Not enough players, reset game
-          game.phase = 'waiting';
-          game.communityCards = [];
-          game.pot = 0;
-        }
-        
-        // Let remaining players know
-        io.to(gameId).emit('player_left', {
-          playerId: userId,
-          game: games[gameId]
-        });
+      console.log(`Emitting socket event 'registration_success'...`);
+      socket.emit('registration_success', { user: users[socket.id] });
+      
+    });
+    
+    // Create a new game
+    socket.on('create_game', ({ tableName, creator, maxPlayers, blinds }) => {
+      console.log(`Received socket event 'create_game'...`);
+
+      const gameId = uuidv4();
+      const userId = socket.id;
+      
+      
+      if (!users[userId]) {
+        socket.emit('error', { message: 'You must register first' });
+        return;
+      }
+      
+      games[gameId] = new Game(gameId, tableName, creator, maxPlayers, blinds?.small || 5, blinds?.big || 10);
+      
+      // Join the game room
+      console.log(`Socket.join(gameId) executing...`);
+      socket.join(gameId);
+      
+      console.log(`Emitting socket event 'game_created'...`);
+      socket.emit('game_created', { gameId });
+    });
+    
+    // Join an existing game
+    socket.on('join_game', ({ gameId }) => {
+      console.log(`Received socket event 'join_game'...`);
+      const userId = socket.id;
+      const game = games[gameId];
+      
+      if (!game) {
+        socket.emit('error', { message: 'Game not found' });
+        return;
+      }
+      
+      if (game.players.length >= game.maxPlayers) {
+        socket.emit('error', { message: 'Game is full' });
+        return;
+      }
+      
+      if (!users[userId]) {
+        socket.emit('error', { message: 'You must register first' });
+        return;
+      }
+      
+      // Add player to the game
+      game.players.push({
+        ...users[userId],
+        position: game.players.length
+      });
+      
+      // Join the game room
+      console.log(`Socket.join(gameId) executing...`);
+      socket.join(gameId);
+      
+      // Let everyone know someone joined
+      console.log(`Emitting socket event 'player_joined' to specific room '${gameId}'...`);
+      io.to(gameId).emit('player_joined', { 
+        player: users[userId],
+        game: games[gameId]
+      });
+      
+      // Check if we can start the game
+      if (game.players.length >= 2 && game.phase === 'waiting') {
+        game.startRound();
       }
     });
     
-    // Remove user from users list
-    delete users[userId];
+    // Handle player actions (fold, check, call, raise)
+    socket.on('player_action', ({ gameId, action }) => {
+      console.log(`Received socket event 'player_action'...`);
+      const game = games[gameId];
+      const userId = socket.id;
+      
+      if (!game) {
+        socket.emit('error', { message: 'Game not found' });
+        return;
+      }
+      
+      if (game.activePlayerId !== userId) {
+        socket.emit('error', { message: 'Not your turn' });
+        return;
+      }
+      
+//      handlePlayerAction(gameId, userId, action);
+    });
+    
+    // Handle chat messages
+    socket.on('chat_message', ({ gameId, message }) => {
+      console.log(`Received socket event 'chat_message'...`);
+      const userId = socket.id;
+      
+      if (!users[userId]) return;
+      
+      console.log(`Emitting socket event 'chat_message' to specific room '${gameId}'...`);
+      io.to(gameId).emit('chat_message', {
+        sender: users[userId].username,
+        message,
+        timestamp: new Date().toISOString()
+      });
+    });
+    
+    // Handle disconnections
+    socket.on('disconnect', () => {
+      console.log(`Received socket event 'disconnect'...`);
+      const userId = socket.id;
+      
+      // Handle player leaving games
+      Object.keys(games).forEach(gameId => {
+        const game = games[gameId];
+        const playerIndex = game.players.findIndex(p => p.id === userId);
+        
+        if (playerIndex >= 0) {
+          // Remove player from game
+          game.players.splice(playerIndex, 1);
+          
+          if (game.players.length < 2) {
+            game.hasStarted = false;
+            // Not enough players, reset game
+            game.phase = GamePhase.WAITING;
+            game.status = 'waiting';
+            game.communityCards = [];
+            game.pot = 0;
+          }
+          
+          // Let remaining players know
+          console.log(`Emitting socket event 'player_left' to specific room '${gameId}'...`);
+          io.to(gameId).emit('player_left', {
+            playerId: userId,
+            game: games[gameId]
+          });
+        }
+      });
+      
+      // Remove user from users list
+      delete users[userId];
+    });
   });
 });
 
-// Game logic functions
-function startGame(gameId) {
-  const game = games[gameId];
-  
-  if (game.players.length < 2) return;
-  
-  game.phase = 'dealing';
-  game.deck = shuffleDeck(createDeck());
-  game.communityCards = [];
-  game.pot = 0;
-  game.currentBet = 0;
-  game.bettingRound = 0;
-  
-  // Deal cards to players
-  game.players.forEach(player => {
-    player.cards = dealCards(game.deck, 2);
-    player.bet = 0;
-    player.folded = false;
-    player.allIn = false;
-  });
-  
-  // Set blinds and first betting round
-  const smallBlindPos = (game.dealerPosition + 1) % game.players.length;
-  const bigBlindPos = (game.dealerPosition + 2) % game.players.length;
-  
-  // Post blinds
-  game.players[smallBlindPos].bet = game.smallBlind;
-  game.players[smallBlindPos].chips -= game.smallBlind;
-  game.pot += game.smallBlind;
-  
-  game.players[bigBlindPos].bet = game.bigBlind;
-  game.players[bigBlindPos].chips -= game.bigBlind;
-  game.pot += game.bigBlind;
-  
-  game.currentBet = game.bigBlind;
-  
-  // Set first player to act (after big blind)
-  game.currentTurn = game.players[(bigBlindPos + 1) % game.players.length].id;
-  game.phase = 'betting';
-  
-  // Notify players
-  io.to(gameId).emit('game_update', { game: games[gameId] });
-}
 
-function handlePlayerAction(gameId, playerId, action) {
+/*
+
+function handlePlayerAction(gameId, playerId, action, amount?) {
   const game = games[gameId];
   const playerIndex = game.players.findIndex(p => p.id === playerId);
   const player = game.players[playerIndex];
@@ -334,15 +310,18 @@ function advanceGamePhase(gameId) {
     case 'betting':
       if (game.bettingRound === 0) {
         // Deal flop (3 cards)
-        game.communityCards = dealCards(game.deck, 3);
+        console.log(`Dealing flop...`);
+        dealCommunityCards(game.deck, game.burnPile, game.communityCards, true);
         game.bettingRound = 1;
       } else if (game.bettingRound === 1) {
         // Deal turn (1 card)
-        game.communityCards.push(dealCards(game.deck, 1)[0]);
+        console.log(`Dealing turn...`);
+        dealCommunityCards(game.deck, game.burnPile, game.communityCards, false);
         game.bettingRound = 2;
       } else if (game.bettingRound === 2) {
         // Deal river (1 card)
-        game.communityCards.push(dealCards(game.deck, 1)[0]);
+        console.log(`Dealing river...`);
+        dealCommunityCards(game.deck, game.burnPile, game.communityCards, false);
         game.bettingRound = 3;
       } else {
         // Final betting round complete, go to showdown
@@ -385,7 +364,7 @@ function determineWinner(gameId) {
   // Evaluate hands and determine winner(s)
   const winners = evaluateHands(activePlayers, game.communityCards);
   
-  endHand(gameId, winners.map(w => w.id));
+  endHand(gameId, winners.map(w => w.sessionId));
 }
 
 function endHand(gameId, winnerIds) {
@@ -431,3 +410,5 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+*/

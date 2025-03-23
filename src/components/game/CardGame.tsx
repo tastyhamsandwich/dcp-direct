@@ -73,9 +73,9 @@ const PlayerHand = ({ cards, canPlay = false }: {
 // GameTable component to display the game board
 const GameTable = () => {
   const { state, currentPlayer, sendAction, isConnected } = useGame();
-  const { players, phase, message, currentPlayerId } = state;
+  const { players, phase, message, activePlayer } = state;
   
-  const isPlayerTurn = currentPlayer && currentPlayer.id === currentPlayerId;
+  const isPlayerTurn = currentPlayer && currentPlayer.id === activePlayer.id;
   
   // Handle playing a card
   const handlePlayCard = (cardId: number) => {
@@ -107,13 +107,13 @@ const GameTable = () => {
       <div className="game-board flex flex-col items-center">
         {/* Other players */}
         <div className="other-players flex justify-center gap-4 mb-8">
-          {players.filter(p => p.id !== currentPlayer?.id).map((player) => (
-            <div key={player.id} className="other-player bg-gray-800 rounded p-2 text-white">
+          {players.filter(p => p.sessionId !== currentPlayer?.id).map((player) => (
+            <div key={player.sessionId} className="other-player bg-gray-800 rounded p-2 text-white">
               <div className="player-name font-bold">{player.name}</div>
               <div className="player-chips">Chips: {player.chips}</div>
               <div className="player-status">
                 {player.ready ? 'Ready' : 'Not Ready'}
-                {currentPlayerId === player.id && ' (Current Turn)'}
+                {currentPlayer === player.sessionId && ' (Current Turn)'}
               </div>
               <PlayerHand cards={player.cards} canPlay={false} />
             </div>

@@ -36,10 +36,5 @@ interface WSMessage {
   settings?: Record<string, any>;
 }
 
-export async function GET(request: Request): Promise<NextResponse> {
-
-    const url = new URL(request.url);
-    const gameId = url.pathname.split('/').pop()!;
-
-    const messageType = request.
-}
+// Define the game rooms
+const gameRooms = new Map<string, GameRoom>();

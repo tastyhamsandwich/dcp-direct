@@ -19,15 +19,15 @@ export default function NavRight() {
     let fallbackTimer: NodeJS.Timeout | null = null;
 
     if (loading) {
-      // Show extended message after 5 seconds
+      // Show extended message after 2 seconds instead of 5
       timer = setTimeout(() => {
         setLoadingTimeout(true);
-      }, 5000);
+      }, 2000);
 
-      // After 10 seconds of loading, show fallback UI
+      // After 3 seconds of loading, show fallback UI instead of 10
       fallbackTimer = setTimeout(() => {
         setShowFallback(true);
-      }, 10000);
+      }, 3000);
     } else {
       setLoadingTimeout(false);
       setShowFallback(false);
@@ -58,15 +58,13 @@ export default function NavRight() {
     });
   }, [user, profile, loading, pathname]);
 
-  // If we've been loading too long, show a fallback UI that allows interaction
-  if (showFallback && loading) {
+  // If we've been loading too long, show login/profile components directly
+  // This ensures users can interact with the UI even if auth is still technically loading
+  if (showFallback) {
     return (
       <div className="nav-right pt-3 pr-8 pb-2">
-        <div className="flex flex-col items-center bg-[#333] p-3 rounded-lg shadow-md">
-          <div className="text-gray-200 text-sm mb-2">
-            Authentication is taking longer than expected
-          </div>
-          {user && profile ? <NavProfile /> : <NavLogin />}
+        <div className="flex flex-col items-center">
+          {user ? <NavProfile /> : <NavLogin />}
         </div>
       </div>
     );

@@ -247,7 +247,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(true);
       
       try {
-        // Check for existing session
+        // Check for existing session - this is faster than waiting for onAuthStateChange
         const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
@@ -261,31 +261,43 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setSession(currentSession);
           setUser(currentSession.user);
           
-          // Fetch profile for the authenticated user
+          // Set loading to false right after we know the user is authenticated
+          // This allows the UI to start rendering with the user data we have
+          setLoading(false);
+          
+          // Fetch profile in background without blocking UI
           if (currentSession.user) {
             const profileData = await fetchProfile(currentSession.user.id);
             if (profileData) {
               setProfile(profileData);
             }
           }
+        } else {
+          // If no session, we can immediately show unauthenticated state
+          setLoading(false);
         }
       } catch (err) {
         console.error('Error initializing auth:', err);
         setError('Failed to initialize authentication');
-      } finally {
         setLoading(false);
       }
     };
 
-    // Initialize auth state
+    // Initialize auth state immediately
     initializeAuth();
 
     // Set up auth state change listener
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       console.log('Auth state changed:', event);
+      
+      // Immediately update session and user state
       setSession(newSession);
       setUser(newSession?.user || null);
       
+      // Clear loading state as soon as we know auth state
+      setLoading(false);
+      
+      // Fetch profile data in background
       if (newSession?.user) {
         const profileData = await fetchProfile(newSession.user.id);
         if (profileData) {
@@ -300,7 +312,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       authListener.subscription.unsubscribe();
     };
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [/* Dependency array intentionally empty - only run on mount */]);
 
   // Auth context value
   const value = {

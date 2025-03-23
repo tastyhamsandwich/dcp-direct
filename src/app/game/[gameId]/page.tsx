@@ -7,11 +7,14 @@ import CardGame from '@components/game/CardGame';
 import { useAuth } from '@contexts/authContext';
 import Table from '@components/game/Table';
 import Chat from '@components/ui/Chat';
+import type { WSMessage } from '@lib/socketTypes';
+import { GameState } from '@game/pokerLogic';
+
 
 export default function GamePage({ params }: { params: { gameId: string } }) {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
-  const [gameState, setGameState] = useState<any>(null);
+  const [gameState, setGameState] = useState<GameState | null>(null);
   const [chatMessages, setChatMessages] = useState<string[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [socket, setSocket] = useState<WebSocket | null>(null);
@@ -46,7 +49,7 @@ export default function GamePage({ params }: { params: { gameId: string } }) {
     
     // Listen for messages
     ws.addEventListener('message', (event) => {
-      const data = JSON.parse(event.data);
+      const data = JSON.parse(event.data) as WSMessage;
       
       switch (data.type) {
         case 'game_update':

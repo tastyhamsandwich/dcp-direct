@@ -31,11 +31,12 @@
       "@app/*": ["./src/app/*"],
       "@supabaseC": ["./src/lib/supabase/client"],
       "@supabaseS": ["./src/lib/supabase/server"],
+      "@src/*": ["./src/*"],
       "@game/*": ["./src/game/*"],
       "@utils/*": ["./src/lib/utils/*"],
       "@hooks/*": ["./src/hooks/*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": ["./socket.ts", "./src/*.ts", "next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/server.js"],
   "exclude": ["node_modules", "misc"]
 }

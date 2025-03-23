@@ -3,13 +3,16 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@contexts/authContext';
-import Lobby from '@comps/ui/Lobby';
+import Lobby from '@comps/game/lobby/Lobby';
+import CreateGameButton from '@comps/game/lobby/CreateGame';
+import type { GameList, GameRoom, ExtendedWebSocket, WSMessageType, WSMessage, WSJoinGame, WSPlayerAction, WSStartRound, WSChatMessage, WSGetGamesList, WSGamesList, WSCreateGame } from '@lib/socketTypes';
+import { io, type Socket } from 'socket.io-client';
 
 export default function GameLobby() {
   const { user, profile, loading } = useAuth();
-  const [gamesList, setGamesList] = useState([]);
+  const [gamesList, setGamesList] = useState<GameList>([]);
   const [isConnected, setIsConnected] = useState(false);
-  const [socket, setSocket] = useState<WebSocket | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
   const router = useRouter();
   
   // Redirect to login if not authenticated
@@ -24,69 +27,50 @@ export default function GameLobby() {
     if (!user || !profile) return;
     
     // Initialize WebSocket connection
-    const ws = new WebSocket(`ws://${window.location.host}/api/socket/lobby`);
-    setSocket(ws);
+    const socket = io();
+    setSocket(socket);
     
     // Connection opened
-    ws.addEventListener('open', () => {
+    socket.on('open', () => {
       setIsConnected(true);
       
       // Request games list on connection
-      ws.send(JSON.stringify({
-        type: 'get_games_list'
-      }));
+    socket.send('get_games_list');
     });
     
     // Listen for messages
-    ws.addEventListener('message', (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        switch (data.type) {
-          case 'games_list':
-            setGamesList(data.games || []);
-            break;
-          case 'game_created':
-            router.push(`/game/${data.gameId}`);
-            break;
-          case 'error':
-            console.error('Socket error:', data.message);
-            alert(data.message);
-            break;
-          default:
-            console.log('Unknown message type:', data.type);
-        }
-      } catch (error) {
-        console.error('Error processing message:', error);
-      }
+    socket.on('games_list', (gamesList) => {
+      setGamesList(gamesList);
     });
-    
-    // Listen for errors
-    ws.addEventListener('error', (error) => {
-      console.error('WebSocket error:', error);
-      setIsConnected(false);
+      
+    socket.on('game_created', (gameId) => {
+      router.push(`/game/${gameId}`);
     });
-    
+
+    socket.on('error', (message) => {
+      console.error(`Socket error: ${message}`);
+    });
+          
     // Connection closed
-    ws.addEventListener('close', () => {
+    socket.on('close', () => {
       setIsConnected(false);
     });
     
     // Clean up
     return () => {
-      ws.close();
+      socket.close();
     };
   }, [user, profile, router]);
   
   const handleCreateGame = (settings) => {
     if (!socket || !isConnected || !user) return;
     
-    socket.send(JSON.stringify({
-      type: 'create_game',
-      userId: user.id,
-      username: profile?.username,
-      settings
-    }));
+    socket.send('create_game', {
+      name: settings.name,
+      creator: settings.player,
+      maxPlayers: settings.maxPlayers || 6,
+      blinds: settings.blinds
+    });
   };
   
   const handleJoinGame = (gameId) => {
@@ -113,7 +97,9 @@ export default function GameLobby() {
         onCreateGame={handleCreateGame}
         onJoinGame={handleJoinGame}
         username={profile.username}
+        userId={profile.id}
       />
+      <CreateGameButton formAction={handleCreateGame}/>
     </div>
   );
 }

@@ -35,8 +35,87 @@ export enum RoomStatus {
 
 export type Action = 'none' | 'fold' | 'check' | 'bet' | 'call' | 'raise';
 
+export interface GameState {
+    id: string;
+  name: string;           
+  creator: Player;        
+  players: Player[];
+  status: 'waiting' | 'playing' | 'paused';
+  phase: GamePhase;
+  maxPlayers: number;
+  hasStarted: boolean;
+  roundActive: boolean;
+  tablePositions: TableSeat[];
+  smallBlind: number;
+  bigBlind: number;
+  dealerIndex: number;
+  smallBlindIndex?: number;
+  bigBlindIndex?: number;
+  dealerId?: string;
+  smallBlindId?: string;
+  bigBlindId?: string;
+  pot: number;
+  sidepots?: Sidepot[];
+  deck: Deck | null;
+  communityCards: Card[];
+  burnPile: Card[];
+  activePlayerId: string;
+  activePlayerIndex: number | null;
+  currentBet: number;
+}
+
 interface Stringable {
   toString: () => string;
+}
+
+/**
+ * Represents an entry in the list of games.
+ * 
+ * @typedef {Object} ListEntry
+ * @property {string} id - The unique identifier for the game.
+ * @property {string} name - The name of the game.
+ * @property {number} playerCount - The number of players in the game.
+ * @property {number} maxPlayers - The maximum number of players allowed.
+ * @property {boolean} isStarted - Indicates whether the game has started.
+ */
+export type ListEntry = {
+  id: string;
+  name: string;
+  playerCount: number;
+  maxPlayers: number;
+  isStarted: boolean;
+}
+
+
+
+
+
+/**
+ * Represents the role IDs of the players.
+ * 
+ * @interface RoleIds
+ * @property {string} dealerId - The ID of the dealer.
+ * @property {string} smallBlindId - The ID of the small blind.
+ * @property {string} bigBlindId - The ID of the big blind.
+ */
+export interface RoleIds {
+  dealerId: string;
+  smallBlindId: string;
+  bigBlindId: string;
+}
+
+/**
+ * Represents a seat at the table.
+ * 
+ * @interface TableSeat
+ * @property {number} seatNumber - The number of the seat.
+ * @property {boolean} occupied - Indicates whether the seat is occupied.
+ * @property {string | null} playerId - The ID of the player occupying the seat.
+ */
+export interface TableSeat {
+  seatNumber: number;
+  occupied: boolean;
+  playerId: string | null;
 }
 
 /**
@@ -57,19 +136,18 @@ interface Stringable {
  */
 export interface Player {
   id: string;
-  sessionId: string;
-  seatIndex: number;
+  seatNumber: number;
   username: string;
   chips: number;
   folded: boolean;
   active: boolean;
   ready: boolean;
   allIn: boolean;
-  cards: Card[]
+  cards: Card[];
   currentBet: number;
   previousAction: Action
   avatar: string;
-  name: string; // Fallback for name if displayName is not available
+  name?: string; // Fallback for name if displayName is not available
 }
 
 
@@ -319,7 +397,7 @@ export class Deck {
     // Construct new deck, and shuffle if shuffle flag is set true
     if (autoShuffle === true) {
     this.cards = this.generateDeck();
-    this.shuffleDeck();
+    this.shuffle();
     // If no shuffle flag is set, just generate new deck in order
     } else {
     this.cards = this.generateDeck();
@@ -366,7 +444,7 @@ export class Deck {
     this.cards = this.generateDeck();
   }
 
-  shuffleDeck(): void {
+  shuffle(): void {
     // Shuffle deck using Fisher-Yates
     for (let i = this.cards.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -522,5 +600,270 @@ export class Sidepot {
 
   public getUsableHands(): { [key: string]: Hand } {
       return this.usableHands;
+  }
+}
+
+export class Game {
+  id: string;
+  name: string;           
+  creator: Player;        
+  players: Player[];
+  status: 'waiting' | 'playing' | 'paused';
+  phase: GamePhase;
+  maxPlayers: number;
+  hasStarted: boolean;
+  roundActive: boolean;
+  tablePositions: TableSeat[];
+  smallBlind: number;
+  bigBlind: number;
+  dealerIndex: number;
+  smallBlindIndex?: number;
+  bigBlindIndex?: number;
+  dealerId?: string;
+  smallBlindId?: string;
+  bigBlindId?: string;
+  pot: number;
+  sidepots?: Sidepot[];
+  deck: Deck | null;
+  communityCards: Card[];
+  burnPile: Card[];
+  activePlayerId: string;
+  activePlayerIndex: number | null;
+  currentBet: number;
+
+  constructor(id, name, creator, maxPlayers?, smallBlind?, bigBlind?) {
+    this.id = id;
+    this.name = name;
+    this.creator = creator;
+    this.maxPlayers = maxPlayers || 6;
+    this.smallBlind = smallBlind || 5;
+    this.bigBlind = bigBlind || 10;
+    this.players = [creator];
+    this.status = 'waiting';
+    this.phase = GamePhase.WAITING;
+    this.hasStarted = false;
+    this.roundActive = false;
+    this.tablePositions = this.initTableSeats(this.maxPlayers);
+    this.pot = 0;
+    this.sidepots = [];
+    this.deck = null;
+    this.communityCards = [];
+    this.burnPile = [];
+    this.activePlayerId = '';
+    this.activePlayerIndex = null;
+    this.currentBet = 0;
+    this.dealerIndex = 0;
+  }
+
+  /**
+   * Initializes the table seats.
+   * 
+   * @function initTableSeats
+   * @param {number} maxPlayers - The maximum number of players.
+   * @returns {TableSeat[]} The initialized table seats.
+   */
+  initTableSeats(maxPlayers): TableSeat[] {
+    const tablePositions: TableSeat[] = [];
+    tablePositions.push({seatNumber: 0, occupied: true, playerId: this.creator.id})
+    this.creator.seatNumber = 0;
+    for (let i = 1; i < maxPlayers ; i++)
+      tablePositions.push({seatNumber: i, occupied: false, playerId: null})
+
+    return tablePositions;
+  }
+
+  /**
+   * Gets the ID of the next player around the table, ignoring empty seats.
+   * 
+   * @function getNextPlayerId
+   * @param {string} currentPlayerId - The ID of the current player.
+   * @returns {string} The ID of the next player.
+   * @throws {Error} If an unknown error occurs while finding the player ID.
+   */
+  getNextPlayerId(currentPlayerId: string): string {
+    for (let i = 0; i < this.tablePositions.length; i++) {
+      if (this.tablePositions[i].occupied)
+        continue;
+      
+      if (this.tablePositions[i].playerId === currentPlayerId) {
+        for (let j = i+1; j <= this.tablePositions.length; j++) {
+          if (j === this.tablePositions.length)
+            j = 0;
+          if (this.tablePositions[j].occupied)
+            return this.tablePositions[j].playerId!
+          else
+            continue;
+        }
+      }
+    }
+    throw new Error("Unknown error occurred finding Player Id");
+  }
+
+
+  /**
+   * Gets the role IDs for the current round.
+   * 
+   * @function getRoleIds
+   * @param {GameState} state - The current state of the game.
+   * @param {boolean} isFirstRound - Indicates whether it is the first round.
+   * @returns {RoleIds} The role IDs for the current round.
+   */
+  getRoleIds(isFirstRound: boolean): RoleIds {
+    const players         = this.players;
+    const maxPlayers      = players.length;
+    const maxAdjusted     = maxPlayers - 1;
+    const prevDealerIndex = this.dealerIndex;
+    
+    const dIndex  = isFirstRound ? 0 : (prevDealerIndex! + 1) % (maxAdjusted);
+    const sbIndex = (dIndex + 1) % maxPlayers;
+    const bbIndex = (dIndex + 2) % maxPlayers;
+
+    return {
+      dealerId: players[dIndex].id,
+      smallBlindId: players[sbIndex].id,
+      bigBlindId: players[bbIndex].id
+    }
+  } 
+
+  /**
+   * Starts a new round.
+   * 
+   * @function startRound
+   * @param {GameState} state - The current state of the game.
+   * @returns {GameState} The updated game state.
+   */
+  startRound() {
+
+    try {
+      // Reset game flags & arrays, reset game objects
+      this.communityCards = [];
+      this.burnPile = [];
+      this.pot = 0;
+      this.sidepots = [];
+      this.deck = new Deck(true);
+      this.phase = GamePhase.PREFLOP;
+      this.status = 'playing';
+
+      // Dealer Index is advanced at end of a round, to avoid it being advanced
+      // on the first round of a game
+      this.smallBlindIndex = (this.dealerIndex + 1) % this.players.length;
+      this.bigBlindIndex = (this.smallBlindIndex + 1) % this.players.length;
+
+      // Set Id values for tracked roles, to simplify data access for other methods.
+      this.dealerId = this.players[this.dealerIndex].id;
+      this.smallBlindId = this.players[this.smallBlindIndex].id;
+      this.bigBlindId = this.players[this.bigBlindIndex].id;
+
+      // Reset player flags, settings, and objects
+      this.players.forEach(p => {
+        p.currentBet = 0;
+        p.active = true;
+        p.folded = false;
+        p.allIn = false;
+        p.ready = true;
+        p.previousAction = 'none';
+        p.cards = [];
+      })
+      
+      // Deal initial cards
+      this.dealCards();
+
+      // Small blind posts blind bet
+      if (this.smallBlind > this.players[this.smallBlindIndex].chips) {
+        this.pot += this.players[this.smallBlindIndex].chips;
+        this.players[this.smallBlindIndex].chips = 0;
+        this.players[this.smallBlindIndex].allIn = true;
+      } else {
+        this.pot += this.smallBlind;
+        this.players[this.smallBlindIndex].chips -= this.smallBlind;
+      }
+
+      // Big blind posts blind bet
+      if (this.bigBlind > this.players[this.bigBlindIndex].chips) {
+        this.pot += this.players[this.bigBlindIndex].chips;
+        this.players[this.bigBlindIndex].chips = 0;
+        this.players[this.bigBlindIndex].allIn = true;
+      } else {
+        this.pot += this.bigBlind;
+        this.players[this.bigBlindIndex].chips -= this.bigBlind;
+      }
+
+      this.activePlayerIndex = (this.bigBlindIndex + 1) % this.players.length;
+      this.activePlayerId = this.players[this.activePlayerIndex].id;
+
+      return true;
+      
+    } catch (error) {
+      console.log(`Threw error: ${error}`);
+      throw new Error();
+    }
+  }
+
+  /**
+   * Deal cards to players at start of round, accounting for progressive change in dealer position
+   * 
+   * @function dealCards
+   * @param {GameState} state - The current state of the game.
+   * @returns {boolean} - Returns true/false depending upon successful function execution.
+   */
+  dealCards() {
+    const deck = this.deck;
+
+    if (deck === null) return false;
+
+    const numCards = 2; // Can be made dynamic at a later date for other game types, like Omaha
+
+    for (let i = 0; i < numCards; i++) {
+      let currentPosition = (this.dealerIndex + 1) % this.players.length;  // Start left of dealer
+      let playersDealtTo = 0;  // Track how many players we've dealt to
+      
+      while (playersDealtTo < this.players.length) {  // Continue until all players have been dealt to
+          if (this.players[currentPosition] && this.players[currentPosition].active) {
+              const card = deck.draw();
+              this.players[currentPosition].cards.push(card);
+              console.log(`Dealt ${card} to player '${this.players[currentPosition].username}'`);
+          }
+          
+          currentPosition = (currentPosition + 1) % this.players.length;  // Move to next player, wrap around if needed
+          playersDealtTo++;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Sort the player array by seat index.
+   * This is critical for allowing game logic to neatly loop through players in order.
+   * All sorts of processes would get out of order if we just appended new players to the array.
+   * 
+   * @function sortPlayerList
+   * @returns {void}
+   */
+  sortPlayerList() {
+    this.players.sort((a, b) => a.seatNumber - b.seatNumber);
+    return;
+  }
+
+  dealCommunityCards(flop: boolean = false) {
+
+    if (this.deck === null) return false;
+
+    this.burnPile.push(this.deck.draw());
+    console.log(`Burned card ${Card.name}`);
+
+    if (flop) {
+      for (let i = 0; i < 3; i++) {
+        const card = this.deck.draw();
+        this.communityCards.push(card);
+        console.log(`Dealt card ${card.name}`);
+      }
+    } else {
+      const card = this.deck.draw();
+      this.communityCards.push(card);
+      console.log(`Dealt card ${card.name}`);
+    }
+
+    return;
   }
 }
