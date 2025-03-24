@@ -11,7 +11,7 @@ import { useAuth } from '@contexts/authContext';
 import '@app/styles.module.css';
 import './navstyles.css';
 
-const NavLogin = () => {
+const NavLogin = (props) => {
   const { signIn, error: authError, loading } = useAuth();
   const [error, setError] = useState<string | null>(null);
 
@@ -25,6 +25,7 @@ const NavLogin = () => {
 
   const onSubmit = async (data: { email: string; password: string }) => {
     setError(null);
+    props.onLoginClicked();
     try {
       await signIn(data.email, data.password);
     } catch (err) {

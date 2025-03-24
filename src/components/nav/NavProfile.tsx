@@ -1,17 +1,21 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@contexts/authContext';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-export default function NavProfile() {
+export default function NavProfile(props) {
   const { profile, signOut } = useAuth();
   const [isImageLoading, setIsImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
   const router = useRouter();
 
+  useEffect(() => {
+    props.onProfileLoad();
+  }, []);
+  
   const handleImageLoad = () => {
     setIsImageLoading(false);
   };

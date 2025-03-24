@@ -8,8 +8,9 @@ import { useAuth } from '@contexts/authContext';
 
 export default function NavRight() {
   const { user, profile, loading } = useAuth();
-  const [loadingTimeout, setLoadingTimeout] = useState(false);
-  const [showFallback, setShowFallback] = useState(false);
+  const [loadingTimeout, setLoadingTimeout] = useState<boolean>(false);
+  const [showFallback, setShowFallback] = useState<boolean>(false);
+  const [loginClicked, setLoginClicked] = useState<boolean>(false); // Ensure this is a state variable
   const router = useRouter();
   const pathname = usePathname();
 
@@ -41,7 +42,7 @@ export default function NavRight() {
 
   // Redirect to dashboard when user logs in
   useEffect(() => {
-    if (user && profile && !loading && pathname === '/') {
+    if (loginClicked && user && profile && !loading && pathname === '/') {
       console.log('User logged in, redirecting to dashboard');
       router.push('/dashboard');
     }
@@ -58,13 +59,21 @@ export default function NavRight() {
     });
   }, [user, profile, loading, pathname]);
 
+  const handleLoginClicked = () => {
+    setLoginClicked(true);
+  }
+  
+  const handleProfileLoad = () => {
+    setLoginClicked(false);
+  }
+
   // If we've been loading too long, show login/profile components directly
   // This ensures users can interact with the UI even if auth is still technically loading
   if (showFallback) {
     return (
       <div className="nav-right pt-3 pr-8 pb-2">
         <div className="flex flex-col items-center">
-          {user ? <NavProfile /> : <NavLogin />}
+          {user ? <NavProfile onProfileLoad={handleProfileLoad} /> : <NavLogin loginClicked={loginClicked} onLoginClicked={handleLoginClicked} />}
         </div>
       </div>
     );
@@ -91,9 +100,9 @@ export default function NavRight() {
           )}
         </div>
       ) : user && profile ? (
-        <NavProfile />
+        <NavProfile onProfileLoad={handleProfileLoad} />
       ) : (
-        <NavLogin />
+        <NavLogin loginClicked={loginClicked} onLoginClicked={handleLoginClicked} />
       )}
     </div>
   );

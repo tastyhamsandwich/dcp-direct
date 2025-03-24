@@ -222,6 +222,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Sign out
   const signOut = async () => {
     try {
+
+      console.log(`Attempting to sign out of Supabase...`);
       const { error } = await supabase.auth.signOut();
       
       if (error) {

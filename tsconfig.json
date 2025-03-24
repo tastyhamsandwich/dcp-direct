@@ -32,6 +32,7 @@
       "@supabaseC": ["./src/lib/supabase/client"],
       "@supabaseS": ["./src/lib/supabase/server"],
       "@src/*": ["./src/*"],
+      "@socket": ["./socket"],
       "@game/*": ["./src/game/*"],
       "@utils/*": ["./src/lib/utils/*"],
       "@hooks/*": ["./src/hooks/*"]
