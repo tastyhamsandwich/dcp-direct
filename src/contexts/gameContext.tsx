@@ -1,29 +1,16 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { useWebSocket } from '@hooks/useWebSocket';
-import { GameState, Player } from '@game/gameLogic';
+import { Deck, GameState, Player } from '@game/pokerLogic';
 
 // Define our game context interface
 interface IGameContext {
   state: GameState;
   currentPlayer: Player | null;
-  dispatch: React.Dispatch<any>;
   sendAction: (actionType: string, data?: any) => void;
   isConnected: boolean;
 }
 
 const GameContext = createContext<IGameContext | null>(null);
-
-// Initial state for our game
-const initialState: GameState = {
-  id: '',
-  players: [],
-  deck: [],
-  currentPlayerId: null,
-  phase: 'waiting', // waiting, playing, roundEnd, gameOver
-  roundNumber: 0,
-  message: 'Waiting for players...',
-  lastUpdate: Date.now()
-};
 
 // Our reducer to handle game state updates
 function gameReducer(state: GameState, action: any): GameState {
@@ -75,44 +62,34 @@ export function GameProvider({ children, gameId = '', currentUserId = '' }: {
     if (!socket) return;
     
     // Listen for game updates from the server
-    socket.addEventListener('message', (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        switch (data.type) {
-          case 'game_update':
-            dispatch({ type: 'GAME_UPDATE', payload: data.game });
-            break;
-          case 'message':
-            dispatch({ type: 'NEW_MESSAGE', payload: data.message });
-            break;
-          default:
-            console.log('Unknown message type:', data.type);
-        }
-      } catch (error) {
-        console.error('Error processing WebSocket message:', error);
-      }
+    socket.on('game_update', (data: { game: GameState }) => {
+      // TODO game update
+    });
+            
+    socket.on('chat_message', (message) => {
+      // TODO chat message
     });
     
+    socket.on('private_message', (message) => {
+      // TODO private message
+    });
+
+
     return () => {
       socket.close();
     };
   }, [socket]);
   
   // Function to send player actions to the server
-  const sendAction = (actionType: string, data: any = {}) => {
+  const sendAction = (actionType: string, amount?: number) => {
     if (!socket || !isConnected) return;
     
-    socket.send(JSON.stringify({
-      type: 'player_action',
-      action: {
+    socket.emit('player_action', state.id, {
         type: actionType,
-        data,
-        gameId: state.id,
-        playerId: currentUserId
+        amount: amount
+    });
       }
-    }));
-  };
+    }
   
   return (
     <GameContext.Provider value={{ 
@@ -126,6 +103,7 @@ export function GameProvider({ children, gameId = '', currentUserId = '' }: {
     </GameContext.Provider>
   );
 }
+
 
 export const useGame = () => {
   const context = useContext(GameContext);

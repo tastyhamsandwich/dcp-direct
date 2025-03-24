@@ -86,10 +86,6 @@ export type ListEntry = {
   isStarted: boolean;
 }
 
-
-
-
-
 /**
  * Represents the role IDs of the players.
  * 

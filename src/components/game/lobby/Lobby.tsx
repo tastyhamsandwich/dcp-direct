@@ -1,35 +1,69 @@
-import React from 'react';
-import { generateNewGameId } from '@game/gameLogic';
-import CreateGameButton from '@comps/game/lobby/CreateGame';
+import React, { useState } from 'react';
+import CreateGameModal from '@comps/game/lobby/CreateGameModal';
+import { Player } from '@game/pokerLogic';
+import Link from 'next/link';
+import 'lobby.modules.css';
 
-const Lobby = ({games, onCreateGame, onJoinGame, username, userId}) => {
+type SearchParamProps = {
+  searchParams: Record<string, string> | null | undefined;
+};
 
-  if (!games) {
-    return <div>Loading...</div>;
-  }
+const Lobby = ({games, searchParams, profile, socket}) => {
+  
+  const [buttonDisabled, setButtonDisabled] = useState<boolean>(false);
+  const show = searchParams?.show;
+
+  let avatarUrl; 
+  if (!profile) return <div>Loading...</div>;
+  if (profile.avatar_url === null)
+    avatarUrl = 'placeholder.png';
   else
-  if (games.length === 0) {
+    avatarUrl = profile.avatar_url;
+    
+  const username = profile.username;
+  const userId = socket.id;
+
+  const player: Player = {
+    id: userId,
+    seatNumber: 0,
+    username: username,
+    chips: profile.balance,
+    cards: [],
+    currentBet: 0,
+    folded: false,
+    active: true,
+    ready: false,
+    allIn: false,
+    previousAction: 'none',
+    avatar: avatarUrl
+  }
+
+  if (!games)
+    return <div>Loading...</div>;
+  else if (!username || !userId) {
     return (
-      <div>
-        <h2>Game List</h2>
-        <p>No games available. Create one below!</p>
-        <button onClick={() => onCreateGame()}>Create Game</button>
+      <div className="lobby-window">
+        <div>
+          <h2>Game List</h2>
+          <ul>
+            {games.map((game, index) => (
+              <li key={index}>
+                <span>{game.name}</span><span>{game.players.length}/{game.maxPlayers}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <button className="accordion">Section 1</button>
+        <>
+          <Link href="/?show=true">
+            Create New Game
+          </Link>
+
+          {show && <CreateGameModal />}
+        </>
       </div>
     );
   }
-
-  return (
-    <div>
-      <h2>Game List</h2>
-      <ul>
-        {games.map((game, index) => (
-          <li key={index}>
-            <span>{game.name}</span><span>{game.players.length}/{game.maxPlayers}</span><button onClick={() => onJoinGame(game.id)}>Join Game</button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
 }
 
 export default Lobby;

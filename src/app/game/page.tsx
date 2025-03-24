@@ -35,7 +35,7 @@ export default function GameLobby() {
       setIsConnected(true);
       
       // Request games list on connection
-    socket.send('get_games_list');
+    socket.emit('get_games_list');
     });
     
     // Listen for messages
@@ -65,7 +65,7 @@ export default function GameLobby() {
   const handleCreateGame = (settings) => {
     if (!socket || !isConnected || !user) return;
     
-    socket.send('create_game', {
+    socket.emit('create_game', {
       name: settings.name,
       creator: settings.player,
       maxPlayers: settings.maxPlayers || 6,
@@ -94,12 +94,11 @@ export default function GameLobby() {
       
       <Lobby
         games={gamesList}
-        onCreateGame={handleCreateGame}
-        onJoinGame={handleJoinGame}
-        username={profile.username}
-        userId={profile.id}
+        profile={profile}
+        socket={socket}
+        searchParams
       />
-      <CreateGameButton formAction={handleCreateGame}/>
+     
     </div>
   );
 }

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack -p 3003",
-    "devsock": "tsx src/server.ts",
+    "devsock": "tsx src/server.ts -H 192.168.1.",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -32,6 +32,7 @@
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
     "tailwind-merge": "^3.0.2",
+    "tsx": "^4.19.3",
     "uuid": "^11.1.0",
     "websockets": "^0.2.0",
     "zod": "^3.24.2"
@@ -50,6 +51,7 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
+      "esbuild",
       "supabase"
     ]
   },

@@ -137,7 +137,81 @@ app.prepare().then(() => {
         return;
       }
       
-//      handlePlayerAction(gameId, userId, action);
+      const actionType = action.type;
+      const player = game.players.find(p => p.id === userId);
+
+      if (typeof player === 'undefined') return false;
+
+      switch (actionType) {
+        case 'fold':
+          player.previousAction = 'fold';
+          player.folded = true;
+          break;
+          
+        case 'check':
+          if (game.currentBet > player.currentBet) {
+            socket.emit('error', { message: 'You must call or raise. You cannot check when the current bet is higher than the amount you have bet this round.'});
+            return false;
+          }
+
+          player.previousAction = 'check';
+          break;
+          
+        case 'call':
+          const callAmount = game.currentBet - player.currentBet;
+          if (callAmount > player.chips) {
+            // Player is going all-in
+            game.pot += player.chips;
+            player.currentBet += player.chips;
+            player.chips = 0;
+            player.allIn = true;
+          } else {
+            game.pot += callAmount;
+            player.currentBet = game.currentBet;
+            player.chips -= callAmount;
+          }
+          player.previousAction = 'call';
+          break;
+          
+        case 'bet':
+          const betAmount = action.amount;
+          if (betAmount > player.chips) {
+            socket.emit('error', { message: 'You do not have enough chips to bet that amount.'});
+            return false;
+          }
+          if (game.currentBet > 0) {
+            socket.emit('error', { message: 'You cannot bet when there is already a bet in place. You must call or raise.'});
+            return false;
+          }
+          game.pot += betAmount;
+          player.currentBet = betAmount;
+          player.chips -= betAmount;
+          player.previousAction = 'bet';
+          game.currentBet = betAmount;
+
+          break;
+          
+        case 'raise':
+          const raiseTotal = game.currentBet + action.amount;
+          const raiseAmount = raiseTotal - player.currentBet;
+
+          if (raiseAmount >= player.chips) {
+            // All-in
+            game.pot += player.chips;
+            player.currentBet += player.chips;
+            player.chips = 0;
+            player.allIn = true;
+            game.currentBet = player.currentBet;
+          } else {
+            game.pot += raiseAmount;
+            player.currentBet = raiseTotal;
+            player.chips -= raiseAmount;
+            game.currentBet = raiseTotal;
+          }
+          player.previousAction = 'raise';
+
+          break;
+      }
     });
     
     // Handle chat messages
@@ -176,6 +250,11 @@ app.prepare().then(() => {
             game.status = 'waiting';
             game.communityCards = [];
             game.pot = 0;
+          }
+
+          if (game.players.length === 0) {
+            delete games[gameId];
+            console.log(`Room '${game.name}' (ID: ${gameId}) no longer has any participants,  destroying room...`);
           }
           
           // Let remaining players know

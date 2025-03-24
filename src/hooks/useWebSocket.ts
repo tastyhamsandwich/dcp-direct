@@ -1,28 +1,29 @@
 import { useState, useEffect, useRef } from 'react';
+import { io, type Socket } from 'socket.io-client';
 
 export function useWebSocket(url: string) {
   const [isConnected, setIsConnected] = useState(false);
-  const socketRef = useRef<WebSocket | null>(null);
+  const socketRef = useRef<Socket | null>(null);
   
   useEffect(() => {
     // Create WebSocket connection
-    const socket = new WebSocket(url);
+    const socket = io();
     socketRef.current = socket;
     
     // Connection opened
-    socket.addEventListener('open', () => {
-      console.log('WebSocket Connected');
+    socket.on('open', () => {
+      console.log('Socket.io connected.');
       setIsConnected(true);
     });
     
     // Listen for errors
-    socket.addEventListener('error', (error) => {
-      console.error('WebSocket Error:', error);
+    socket.on('error', (error) => {
+      console.error('Socket.io Error: ', error);
     });
     
     // Connection closed
-    socket.addEventListener('close', () => {
-      console.log('WebSocket Disconnected');
+    socket.on('close', () => {
+      console.log('Socket.io Disconnected.');
       setIsConnected(false);
     });
     
