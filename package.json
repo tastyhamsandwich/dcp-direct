@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack -p 3003",
-    "devsock": "tsx src/server.ts -H 192.168.1.",
+    "devsock": "tsx src/server.ts",
+    "dev:all": "concurrently \"pnpm dev\" \"pnpm devsock\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -20,6 +21,7 @@
     "bcryptjs": "^3.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "concurrently": "^8.2.2",
     "cookie": "^1.0.2",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",

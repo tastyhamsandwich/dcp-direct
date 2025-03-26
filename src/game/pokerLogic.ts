@@ -36,7 +36,7 @@ export enum RoomStatus {
 export type Action = 'none' | 'fold' | 'check' | 'bet' | 'call' | 'raise';
 
 export interface GameState {
-    id: string;
+  id: string;
   name: string;           
   creator: Player;        
   players: Player[];
@@ -78,7 +78,8 @@ interface Stringable {
  * @property {number} maxPlayers - The maximum number of players allowed.
  * @property {boolean} isStarted - Indicates whether the game has started.
  */
-export type ListEntry = {
+export interface ListEntry {
+  index: number;
   id: string;
   name: string;
   playerCount: number;
@@ -130,7 +131,7 @@ export interface TableSeat {
  * @property avatar - The URI for the player's avatar image.
  * @property name - A fallback for the player's username
  */
-export interface Player {
+export interface Player extends User {
   id: string;
   seatNumber: number;
   username: string;
@@ -146,6 +147,11 @@ export interface Player {
   name?: string; // Fallback for name if displayName is not available
 }
 
+export interface User {
+  id: string;
+  username: string;
+  chips: number;
+}
 
 /** 
  * Represents a playing card.
@@ -401,20 +407,7 @@ export class Deck {
   }
 
   // Implement iterator for deck, so that it can be looped through easily
-  [Symbol.iterator]() {
-    let index = 0;
-    const cards = this.cards;
-
-    return {
-    next(): IteratorResult<Card> {
-      if (index < cards.length) {
-      return { value: cards[index++], done: false };
-      } else {
-      return { value: undefined, done: true };
-      }
-    }
-    };
-  }
+  o
 
 
   private generateDeck(): Card[] {
@@ -861,5 +854,33 @@ export class Game {
     }
 
     return;
+  }
+
+  returnGameState() {
+    const gameState = {
+    id: this.id,
+    name: this.name,
+    creator: this.creator,
+    maxPlayers: this.maxPlayers,
+    smallBlind: this.smallBlind,
+    bigBlind: this.bigBlind,
+    players: this.players,
+    status: this.status,
+    phase: this.phase,
+    hasStarted: this.hasStarted,
+    roundActive: this.roundActive,
+    tablePositions: this.tablePositions,
+    pot: this.pot,
+    sidepots: this.sidepots,
+    deck: this.deck,
+    communityCards: this.communityCards,
+    burnPile: this.burnPile,
+    activePlayerId: this.activePlayerId,
+    activePlayerIndex: this.activePlayerIndex,
+    currentBet: this.currentBet,
+    dealerIndex: this.dealerIndex,
+    }
+
+    return gameState;
   }
 }
