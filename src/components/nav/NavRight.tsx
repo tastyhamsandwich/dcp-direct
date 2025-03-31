@@ -46,7 +46,7 @@ export default function NavRight() {
       console.log('User logged in, redirecting to dashboard');
       router.push('/dashboard');
     }
-  }, [user, profile, loading, pathname, router]);
+  }, [loginClicked, user, profile, loading, pathname, router]);
 
   // Add an effect to log authentication state changes for debugging
   useEffect(() => {
@@ -73,7 +73,7 @@ export default function NavRight() {
     return (
       <div className="nav-right pt-3 pr-8 pb-2">
         <div className="flex flex-col items-center">
-          {user ? <NavProfile onProfileLoad={handleProfileLoad} /> : <NavLogin loginClicked={loginClicked} onLoginClicked={handleLoginClicked} />}
+          {user && profile ? <NavProfile onProfileLoad={handleProfileLoad} /> : <NavLogin loginClicked={loginClicked} onLoginClicked={handleLoginClicked} />}
         </div>
       </div>
     );

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@contexts/authContext';
 import Lobby from '@comps/game/lobby/Lobby';
-import { User, ListEntry } from '@game/pokerLogic';
+import { User, ListEntry } from '@game/types';
 import { io, type Socket } from 'socket.io-client';
 
 export default function GameLobby() {
@@ -63,7 +63,7 @@ export default function GameLobby() {
 
     socketInstance.on('error', (error) => {
       console.error('Socket error:', error.message);
-      // Implement error handling UI here
+      alert(`Error: ${error.message}`);
     });
     
     return () => {
@@ -93,32 +93,48 @@ export default function GameLobby() {
   
   // Show loading state
   if (loading) {
-    return <div className="text-center p-10">Loading...</div>;
+    return <div className="flex items-center justify-center h-screen bg-gray-900 text-gray-200">
+      <div className="animate-pulse">Loading...</div>
+    </div>;
   }
   
   // Show error if not authenticated
   if (!user || !profile) {
-    return <div className="text-center p-10">You must be logged in to access the game lobby.</div>;
+    return <div className="flex items-center justify-center h-screen bg-gray-900 text-gray-200">
+      <div className="bg-gray-800 p-8 rounded-lg shadow-lg">
+        <h2 className="text-xl font-bold mb-4">Authentication Required</h2>
+        <p className="mb-4">You must be logged in to access the game lobby.</p>
+        <button 
+          onClick={() => router.push('/login')}
+          className="w-full bg-blue-700 hover:bg-blue-800 text-white font-medium py-2 rounded"
+        >
+          Go to Login
+        </button>
+      </div>
+    </div>;
   }
   
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-6">Poker Game Lobby</h1>
-      <div className="bg-blue-100 border-l-4 border-blue-500 p-4 mb-4">
-        <p className="text-blue-700">
-          {isConnected 
-            ? '✅ Connected to game server' 
-            : '❌ Disconnected from game server'}
-        </p>
+    <div className="min-h-screen bg-gray-900 text-gray-200">
+      <div className="container mx-auto p-4">
+        <div className="bg-gray-800 border-l-4 border-blue-700 p-4 mb-6 rounded">
+          <p className="text-gray-200">
+            {isConnected 
+              ? '✅ Connected to game server' 
+              : '❌ Disconnected from game server'}
+          </p>
+        </div>
+        
+        <h1 className="text-3xl font-bold mb-6 text-gray-100">Poker Game Lobby</h1>
+        
+        <Lobby
+          games={gamesList}
+          profile={profile}
+          socket={socket}
+          onJoinGame={handleJoinGame}
+          onCreateGame={handleCreateGame}
+        />
       </div>
-      
-      <Lobby
-        games={gamesList}
-        profile={profile}
-        socket={socket}
-        onJoinGame={handleJoinGame}
-        onCreateGame={handleCreateGame}
-      />
     </div>
   );
 }

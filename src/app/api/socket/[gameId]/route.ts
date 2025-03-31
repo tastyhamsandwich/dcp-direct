@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabaseS';
 import { cookies } from 'next/headers';
-import { GameState, initializeGame, processPlayerAction, checkRoundEnd, startRound } from '@game/gameLogic';
+import { GameState, initializeGame, processPlayerAction, checkRoundEnd, startRound } from '@src/game/utils';
 
 // Define interfaces for type safety
 interface GameRoom {

@@ -23,5 +23,5 @@ initializeSocket(io);
 
 const SOCKET_PORT = process.env.SOCKET_PORT || 3001;
 httpServer.listen(SOCKET_PORT, () => {
-  console.log(`Socket.io server running on port ${SOCKET_PORT}`);
+  console.log(`%c Socket.io server running on port ${SOCKET_PORT}\n`, `color: green`);
 });

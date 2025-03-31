@@ -1,5 +1,5 @@
 import { useReducer, useEffect } from 'react';
-import { GamePhase, TableSeat, Sidepot, Deck, Card, Action as PlayerAction, Player } from '@game/pokerLogic';
+import { GamePhase, TableSeat, Sidepot, Deck, Card, Action as PlayerAction, Player } from '@src/game/classes';
 import { Socket } from 'socket.io-client';
 
 type GameState = {

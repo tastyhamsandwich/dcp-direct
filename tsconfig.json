@@ -39,5 +39,5 @@
     }
   },
   "include": ["./socket.ts", "./src/*.ts", "next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/server.js"],
-  "exclude": ["node_modules", "misc"]
+  "exclude": ["node_modules", "misc/*.*"]
 }

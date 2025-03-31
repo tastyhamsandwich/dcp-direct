@@ -13,8 +13,11 @@ export default function NavProfile(props) {
   const router = useRouter();
 
   useEffect(() => {
-    props.onProfileLoad();
-  }, []);
+    // Only call onProfileLoad when we actually have a profile
+    if (profile) {
+      props.onProfileLoad();
+    }
+  }, [profile, props]);
   
   const handleImageLoad = () => {
     setIsImageLoading(false);

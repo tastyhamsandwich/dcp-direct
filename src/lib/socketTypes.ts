@@ -1,4 +1,4 @@
-import { GameState } from '@game/pokerLogic';
+import { GameState } from '@src/game/classes';
 import { string } from 'zod';
 
 export type { GameList, GameRoom, ExtendedWebSocket, WSMessageType, WSMessage, WSJoinGame, WSPlayerAction, WSStartRound, WSChatMessage, WSGetGamesList, WSGamesList, WSCreateGame };

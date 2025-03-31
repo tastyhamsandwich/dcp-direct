@@ -73,3 +73,18 @@ Areas for future development and improvement include:
 - Implementing a persistent storage solution for game history
 - Enhancing the lobby system with game filtering and searching
 - Adding social features like friends lists and private games
+
+## Tasks and Milestones
+
+A checklist for ongoing development:
+
+[X] Basic website scaffolding  
+[X] User authentication  
+[X] User profile dashboard  
+[X] Game lobby access  
+[X] Create/join games  
+[X] Back-end websocket architecture  
+[X] Poker object classes and logic  
+[x] Working game sequence  
+[ ] AI players  
+[ ] Extras  

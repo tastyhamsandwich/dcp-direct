@@ -1,61 +1,50 @@
 .lobby-container {
-  max-width: 800px;
+  max-width: 1000px;
   margin: 0 auto;
-  padding: 20px;
 }
 
 .games-list {
-  background-color: white;
+  margin-bottom: 24px;
+}
+
+/* Fix for Tailwind's hover:bg-gray-650 which might not exist */
+.bg-gray-650 {
+  background-color: #2d3748; /* Custom gray shade between gray-600 and gray-700 */
+}
+
+.hover\:bg-gray-650:hover {
+  background-color: #2d3748;
+}
+
+/* Animation for loading state */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Custom scrollbar for chat */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 8px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: #374151; /* gray-700 */
   border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  margin-bottom: 20px;
 }
 
-.create-game {
-  margin-top: 20px;
-}
-
-/* Game list item styling */
-.games-list ul {
-  list-style-type: none;
-  padding: 0;
-}
-
-.games-list li {
-  border: 1px solid #e5e7eb;
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #4B5563; /* gray-600 */
   border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 12px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  transition: all 0.2s;
 }
 
-.games-list li:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-/* Modal overlay */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-}
-
-.modal-content {
-  background-color: white;
-  border-radius: 8px;
-  padding: 24px;
-  width: 100%;
-  max-width: 500px;
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #6B7280; /* gray-500 */
 }

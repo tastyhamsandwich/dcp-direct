@@ -263,16 +263,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setSession(currentSession);
           setUser(currentSession.user);
           
-          // Set loading to false right after we know the user is authenticated
-          // This allows the UI to start rendering with the user data we have
-          setLoading(false);
-          
-          // Fetch profile in background without blocking UI
+          // Keep loading true until we get the profile
+          // Fetch profile data
           if (currentSession.user) {
             const profileData = await fetchProfile(currentSession.user.id);
             if (profileData) {
               setProfile(profileData);
             }
+            // Now that we have both user and profile, we can stop loading
+            setLoading(false);
+          } else {
+            setLoading(false);
           }
         } else {
           // If no session, we can immediately show unauthenticated state
