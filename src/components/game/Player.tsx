@@ -13,8 +13,8 @@ const Player = ({ player, isActive, isCurrentPlayer, role, roundActive = false }
   // AND it's not just the initial blind posting
   const showBet = currentBet > 0 && roundActive && 
     ((isSmallBlind && player.previousAction !== 'none') || 
-     (isBigBlind && player.previousAction !== 'none') ||
-     (!isSmallBlind && !isBigBlind));
+      (isBigBlind && player.previousAction !== 'none') ||
+      (!isSmallBlind && !isBigBlind));
 
   return (
     <div className={`outer-container ${folded ? 'opacity-50' : ''}`}>

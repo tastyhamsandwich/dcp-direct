@@ -93,8 +93,10 @@ export class Player implements User {
     this.cards = [];
     this.currentBet = 0;
     this.previousAction = 'none';
-    this.handRank.hand = '';
-    this.handRank.value = 0;
+    this.handRank = {
+      hand: '',
+      value: 0
+    }
     
     // Log player creation for debugging
     console.log(`Player created: ${username} with ${this.chips} chips at seat ${seatNumber}`);
