@@ -37,12 +37,12 @@ export enum RoomStatus {
   PAUSED = 'paused'
 }
 
-export type Action = 'none' | 'fold' | 'check' | 'bet' | 'call' | 'raise';
+export type Action = 'none' | 'fold' | 'check' | 'bet' | 'call' | 'raise' | 'win';
 
 export interface GameState {
   id: string;
   name: string;           
-  creator: Player;        
+  creator: Player;
   players: Player[];
   status: 'waiting' | 'playing' | 'paused';
   phase: GamePhase;

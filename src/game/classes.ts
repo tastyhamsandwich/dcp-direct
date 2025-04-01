@@ -74,6 +74,10 @@ export class Player implements User {
   currentBet: number;
   previousAction: Action
   avatar: string;
+  handRank: {
+    hand: string;
+    value: number;
+  }
 
   constructor(id, username, seatNumber, chips, avatar) {
     this.id = id;
@@ -89,6 +93,8 @@ export class Player implements User {
     this.cards = [];
     this.currentBet = 0;
     this.previousAction = 'none';
+    this.handRank.hand = '';
+    this.handRank.value = 0;
     
     // Log player creation for debugging
     console.log(`Player created: ${username} with ${this.chips} chips at seat ${seatNumber}`);
@@ -421,25 +427,37 @@ export function dealCards(deck: Deck, count: number) {
  * Represents a sidepot.
  * @class
  * @param amount - The amount of the sidepot.
- * @param possibleWinners - The players in the sidepot.
+ * @param possibleWinners - The players eligible to win this pot.
  */
 export class Sidepot {
-  private amount: number;
-  private possibleWinners: Player[];
-
-  constructor(amount: number, possibleWinners: Player[]) {
-      this.amount = amount;
-      this.possibleWinners = possibleWinners;
+  amount: number;
+  eligiblePlayers: Player[];
+  
+  constructor(amount: number, eligiblePlayers: Player[]) {
+    this.amount = amount;
+    this.eligiblePlayers = eligiblePlayers;
   }
 
-  public addHand(player: Player, hand: Hand) {
-      if (!this.possibleWinners.includes(player)) {
-          throw new Error('Player is not a possible winner');
-      }
+  public addAmount(value: number): void {
+    this.amount += value;
   }
-
-  public addPlayer(player: Player) {
-    this.possibleWinners.push(player);
+  
+  public getAmount(): number {
+    return this.amount;
+  }
+  
+  public getEligiblePlayers(): Player[] {
+    return this.eligiblePlayers;
+  }
+  
+  public isPlayerEligible(player: Player): boolean {
+    return this.eligiblePlayers.includes(player);
+  }
+  
+  public addEligiblePlayer(player: Player): void {
+    if (!this.isPlayerEligible(player)) {
+      this.eligiblePlayers.push(player);
+    }
   }
 }
 
@@ -463,7 +481,8 @@ export class Game {
   smallBlindId?: string;
   bigBlindId?: string;
   pot: number;
-  sidepots?: Sidepot[];
+  sidepots: Sidepot[];
+  ineligiblePlayers: Player[];
   deck: Deck | null;
   communityCards: Card[] | null;
   burnPile: Card[] | null;
@@ -488,6 +507,7 @@ export class Game {
     this.tablePositions = this.initTableSeats(this.maxPlayers);
     this.pot = 0;
     this.sidepots = [];
+    this.ineligiblePlayers = [];
     this.deck = null;
     this.communityCards = [];
     this.burnPile = [];
@@ -585,6 +605,7 @@ export class Game {
       this.burnPile = [];
       this.pot = 0;
       this.sidepots = [];
+      this.ineligiblePlayers = [];
       this.deck = new Deck(true);
       this.phase = GamePhase.Preflop;
       this.status = 'playing';
@@ -779,6 +800,10 @@ export class Game {
         playerId: pos.playerId
       })),
       pot: this.pot,
+      sidepots: this.sidepots.map(sidepot => ({
+        amount: sidepot.amount,
+        eligiblePlayers: sidepot.eligiblePlayers.map(p => p.id)
+      })),
       // Don't send deck to client
       communityCards: this.communityCards ? this.communityCards.map(card => ({
         suit: card.suit,
@@ -834,8 +859,22 @@ export class Game {
       console.log(`Only one active player remains: ${activePlayers[0].username}`);
       // Award pot to the last remaining player
       const winner = activePlayers[0];
+      let totalWinnings = this.pot;
       winner.chips += this.pot;
+      winner.previousAction = 'win';
+      
+      // Handle any sidepots
+      if (this.sidepots.length > 0) {
+        this.sidepots.forEach(sidepot => {
+          const sidepotAmount = sidepot.getAmount();
+          winner.chips += sidepotAmount;
+          totalWinnings += sidepotAmount;
+        });
+      }
+      
+      // Socket will handle emitting the win announcement outside this method
       this.pot = 0;
+      this.sidepots = [];
 
       // Handle round reset
       if (this.resetRound()) return true;
@@ -1021,6 +1060,8 @@ export class Game {
     // Reset game state
     this.pot = 0;
     this.currentBet = 0;
+    this.sidepots = [];
+    this.ineligiblePlayers = [];
     this.deck = null;
     this.burnPile = null;
     this.communityCards = null;
@@ -1072,5 +1113,206 @@ export class Game {
 
   evaluateHands(players: Player[], communityCards: Card[]) {
     return evaluateHands(players, communityCards);
+  }
+  
+  /**
+   * Creates a sidepot when a player goes all-in.
+   * @param allInPlayer - The player who went all-in.
+   * @param allInAmount - The amount the player went all-in for.
+   */
+  createSidepot(allInPlayer: Player, allInAmount: number): void {
+    // Filter out players who have folded
+    const activePlayers = this.players.filter(p => !p.folded);
+    
+    // Calculate contributions to this sidepot
+    let sidepotAmount = 0;
+    
+    // Add the all-in player's entire bet to the sidepot
+    sidepotAmount += allInAmount;
+    
+    // Add matching amounts from other players to the sidepot
+    activePlayers.forEach(player => {
+      if (player !== allInPlayer) {
+        // How much of this player's bet goes to the sidepot (capped at all-in amount)
+        const contributionToSidepot = Math.min(player.currentBet, allInAmount);
+        sidepotAmount += contributionToSidepot;
+      }
+    });
+    
+    // Mark this player as ineligible for future pots
+    this.ineligiblePlayers.push(allInPlayer);
+    
+    // Create a new sidepot with all active players who contributed
+    const eligiblePlayers = activePlayers.filter(p => !this.ineligiblePlayers.includes(p) || p === allInPlayer);
+    const newSidepot = new Sidepot(sidepotAmount, eligiblePlayers);
+    
+    console.log(`Created sidepot of ${sidepotAmount} for all-in player ${allInPlayer.username}`);
+    console.log(`Eligible players: ${eligiblePlayers.map(p => p.username).join(', ')}`);
+    
+    // Add the sidepot to the list
+    this.sidepots.push(newSidepot);
+    
+    // Recalculate the main pot (reduce by the sidepot amount)
+    this.pot -= sidepotAmount;
+    
+    // If main pot is negative, something went wrong
+    if (this.pot < 0) {
+      console.error('Error: Main pot became negative after creating sidepot');
+      this.pot = 0;
+    }
+  }
+  
+  /**
+   * Distributes pot(s) to winner(s) at showdown.
+   * Handles both main pot and sidepots.
+   * @returns An array of winner information containing player IDs and amounts won
+   */
+  distributePots(): { playerId: string, playerName: string, amount: number, potType: string }[] {
+    const winnerInfo: { playerId: string, playerName: string, amount: number, potType: string }[] = [];
+    
+    // First deal with any sidepots (from earliest to latest)
+    for (let i = 0; i < this.sidepots.length; i++) {
+      const sidepot = this.sidepots[i];
+      const potIndex = i + 1; // Numbering sidepots from 1
+      const eligiblePlayers = sidepot.getEligiblePlayers().filter(p => !p.folded);
+      
+      if (eligiblePlayers.length === 0) {
+        console.error('No eligible players for sidepot');
+        continue;
+      }
+      
+      if (eligiblePlayers.length === 1) {
+        // Only one eligible player, award pot directly
+        const winner = eligiblePlayers[0];
+        winner.chips += sidepot.getAmount();
+        winner.previousAction = 'win';
+        console.log(`Player ${winner.username} awarded ${sidepot.getAmount()} from sidepot ${potIndex} (uncontested)`);
+        
+        // Record winner info
+        winnerInfo.push({
+          playerId: winner.id,
+          playerName: winner.username,
+          amount: sidepot.getAmount(),
+          potType: `Sidepot ${potIndex}`
+        });
+      } else {
+        // Multiple eligible players, evaluate hands
+        const winners = this.evaluateHands(eligiblePlayers, this.communityCards as Card[]);
+        
+        // Split pot among winners
+        const potPerWinner = Math.floor(sidepot.getAmount() / winners.length);
+        const remainder = sidepot.getAmount() % winners.length;
+        
+        winners.forEach(winner => {
+          winner.chips += potPerWinner;
+          winner.previousAction = 'win';
+          console.log(`Player ${winner.username} awarded ${potPerWinner} from sidepot ${potIndex}`);
+          
+          // Record winner info
+          winnerInfo.push({
+            playerId: winner.id,
+            playerName: winner.username,
+            amount: potPerWinner,
+            potType: `Sidepot ${potIndex}`
+          });
+        });
+        
+        // Give remainder to first position after dealer
+        if (remainder > 0) {
+          let currentPos = (this.dealerIndex + 1) % this.players.length;
+          while (!winners.includes(this.players[currentPos])) {
+            currentPos = (currentPos + 1) % this.players.length;
+          }
+          this.players[currentPos].chips += remainder;
+          console.log(`Player ${this.players[currentPos].username} awarded ${remainder} remainder from sidepot ${potIndex}`);
+          
+          // Add the remainder to the winner's total in winnerInfo
+          const winnerIndex = winnerInfo.findIndex(w => 
+            w.playerId === this.players[currentPos].id && 
+            w.potType === `Sidepot ${potIndex}`
+          );
+          
+          if (winnerIndex >= 0) {
+            winnerInfo[winnerIndex].amount += remainder;
+          }
+        }
+      }
+    }
+    
+    // Handle the main pot (if any)
+    if (this.pot > 0) {
+      // Filter eligible players (not folded and not in the ineligible list)
+      const eligiblePlayers = this.players.filter(p => 
+        !p.folded && !this.ineligiblePlayers.includes(p)
+      );
+      
+      if (eligiblePlayers.length === 0) {
+        console.error('No eligible players for main pot');
+        return winnerInfo;
+      }
+      
+      if (eligiblePlayers.length === 1) {
+        // Only one eligible player, award pot directly
+        const winner = eligiblePlayers[0];
+        winner.chips += this.pot;
+        winner.previousAction = 'win';
+        console.log(`Player ${winner.username} awarded ${this.pot} from main pot (uncontested)`);
+        
+        // Record winner info
+        winnerInfo.push({
+          playerId: winner.id,
+          playerName: winner.username,
+          amount: this.pot,
+          potType: 'Main pot'
+        });
+      } else {
+        // Multiple eligible players, evaluate hands
+        const winners = this.evaluateHands(eligiblePlayers, this.communityCards as Card[]);
+        
+        // Split pot among winners
+        const potPerWinner = Math.floor(this.pot / winners.length);
+        const remainder = this.pot % winners.length;
+        
+        winners.forEach(winner => {
+          winner.chips += potPerWinner;
+          winner.previousAction = 'win';
+          console.log(`Player ${winner.username} awarded ${potPerWinner} from main pot`);
+          
+          // Record winner info
+          winnerInfo.push({
+            playerId: winner.id,
+            playerName: winner.username,
+            amount: potPerWinner,
+            potType: 'Main pot'
+          });
+        });
+        
+        // Give remainder to first position after dealer
+        if (remainder > 0) {
+          let currentPos = (this.dealerIndex + 1) % this.players.length;
+          while (!winners.includes(this.players[currentPos])) {
+            currentPos = (currentPos + 1) % this.players.length;
+          }
+          this.players[currentPos].chips += remainder;
+          console.log(`Player ${this.players[currentPos].username} awarded ${remainder} remainder from main pot`);
+          
+          // Add the remainder to the winner's total in winnerInfo
+          const winnerIndex = winnerInfo.findIndex(w => 
+            w.playerId === this.players[currentPos].id && 
+            w.potType === 'Main pot'
+          );
+          
+          if (winnerIndex >= 0) {
+            winnerInfo[winnerIndex].amount += remainder;
+          }
+        }
+      }
+    }
+    
+    // Reset pots
+    this.pot = 0;
+    this.sidepots = [];
+    
+    return winnerInfo;
   }
 }

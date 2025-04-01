@@ -84,6 +84,15 @@
 
 .player-chips {}
 
-.player-cards {}
+.player-cards {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
 
-.player-bet {}
+.player-bet {
+  background-color: #f0b100;
+  color: #000;
+  border-radius: 0.25rem;
+  padding-inline: 0.5rem;
+}

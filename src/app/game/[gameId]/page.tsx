@@ -10,7 +10,18 @@ import Deck from '@components/game/Deck';
 import Player from '@components/game/Player';
 import Table from '@components/game/Table';
 import Actions from '@components/game/Actions';
+import WinnerDisplay from '@components/game/WinnerDisplay';
 import { Playwrite_ES } from 'next/font/google';
+
+// Define winner info interface
+interface WinnerInfo {
+  playerId: string;
+  playerName: string;
+  amount: number;
+  potType: string;
+  hand?: string;
+  cards?: string[];
+}
 
 // Define action types
 type GameAction =
@@ -19,7 +30,9 @@ type GameAction =
   | { type: 'SET_GAME_STATE'; payload: GameState }
   | { type: 'ADD_CHAT_MESSAGE'; payload: any }
   | { type: 'SET_MESSAGE'; payload: string }
-  | { type: 'CLEAR_MESSAGE' };
+  | { type: 'CLEAR_MESSAGE' }
+  | { type: 'SET_WINNERS'; payload: { winners: WinnerInfo[], showdown: boolean } }
+  | { type: 'CLEAR_WINNERS' };
 
 // Define state interface
 interface GamePageState {
@@ -28,6 +41,8 @@ interface GamePageState {
   isConnected: boolean;
   socket: Socket | null;
   message: string;
+  winners: WinnerInfo[] | null;
+  showdown: boolean;
 }
 
 // Initial state
@@ -37,6 +52,8 @@ const initialState: GamePageState = {
   isConnected: false,
   socket: null,
   message: '',
+  winners: null,
+  showdown: false
 };
 
 // Reducer function
@@ -54,6 +71,14 @@ function gameReducer(state: GamePageState, action: GameAction): GamePageState {
       return { ...state, message: action.payload };
     case 'CLEAR_MESSAGE':
       return { ...state, message: '' };
+    case 'SET_WINNERS':
+      return { 
+        ...state, 
+        winners: action.payload.winners, 
+        showdown: action.payload.showdown 
+      };
+    case 'CLEAR_WINNERS':
+      return { ...state, winners: null, showdown: false };
     default:
       return state;
   }
@@ -65,7 +90,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   const [isMyTurn, setIsMyTurn] = useState(false);
   const [allowedActions, setAllowedActions] = useState<string[]>([]);
   const [state, dispatch] = useReducer(gameReducer, initialState);
-  const { gameState, chatMessages, isConnected, socket, message } = state;
+  const { gameState, chatMessages, isConnected, socket, message, winners, showdown } = state;
   
   const unwrappedParams = React.use(params);
   
@@ -165,6 +190,17 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
       }
     });
     
+    socketInstance.on('round_winners', (data) => {
+      console.log('Round winners received:', data);
+      dispatch({ 
+        type: 'SET_WINNERS', 
+        payload: { 
+          winners: data.winners, 
+          showdown: data.showdown 
+        }
+      });
+    });
+    
     socketInstance.on('chat_message', (data) => {
       console.log('Chat message received:', data);
       dispatch({ type: 'ADD_CHAT_MESSAGE', payload: data });
@@ -223,8 +259,23 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     return <div className="text-center p-10 text-gray-200">You must be logged in to play.</div>;
   }
   
+  // Handler for closing the winner display
+  const handleCloseWinnerDisplay = () => {
+    dispatch({ type: 'CLEAR_WINNERS' });
+  };
+  
   return (
     <div className="container mx-auto p-4 bg-gray-900 text-gray-200 min-h-screen">
+      {/* Winner display modal */}
+      {winners && (
+        <WinnerDisplay 
+          winners={winners} 
+          showdown={showdown} 
+          onClose={handleCloseWinnerDisplay}
+          visible={winners !== null}
+        />
+      )}
+    
       <div className="bg-gray-800 border-l-4 border-blue-700 p-4 mb-4 rounded">
         <p className="text-gray-200">
           {isConnected 

@@ -24,15 +24,15 @@ const Player = ({ player, isActive, isCurrentPlayer, role, roundActive = false }
           <div className={`player-name ${isActive ? 'text-white' : 'text-gray-600'}`}>{name}</div>
           <div className="player-chips">{chips}
             <div className="button-container">
-          {isDealer && <div className="dealer-button">D</div>}
-          {isSmallBlind && <div className="smallblind-button">S</div>}
-          {isBigBlind && <div className="bigblind-button justify-">B</div>}
-        </div>
+              {isDealer && <div className="dealer-button">D</div>}
+              {isSmallBlind && <div className="smallblind-button">S</div>}
+              {isBigBlind && <div className="bigblind-button">B</div>}
+            </div>
           </div>
-          {showBet && <div className="player-bet bg-yellow-500 text-black rounded px-2">${currentBet}</div>}
+          {showBet && <div className="player-bet">{currentBet}</div>}
         </div>
       </div>
-      <div className="player-cards flex gap-1 mt-2">
+      <div className="player-cards">
         {cards.map((card, index) => (
           <Card
             scaleFactor={0.75}

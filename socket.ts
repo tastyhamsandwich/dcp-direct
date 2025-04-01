@@ -1,6 +1,7 @@
 import { Server } from 'socket.io';
 import { User, GamePhase, ListEntry, Action } from '@game/types';
 import { Player, Game, Sidepot } from '@game/classes';
+import { evaluateHand } from '@game/utils';
 import { v4 as uuidv4 } from 'uuid';
 
 export function initializeSocket(io: Server) {
@@ -306,11 +307,14 @@ export function initializeSocket(io: Server) {
           const callAmount = game.currentBet - player.currentBet;
           if (callAmount > player.chips) {
             // Player is going all-in
-            game.pot += player.chips;
-            player.currentBet += player.chips;
+            const allInAmount = player.chips;
+            player.currentBet += allInAmount;
             player.chips = 0;
             player.allIn = true;
             allIn = true;
+            
+            // Create a sidepot for this all-in player
+            game.createSidepot(player, player.currentBet);
           } else {
             game.pot += callAmount;
             player.currentBet = game.currentBet;
@@ -330,14 +334,27 @@ export function initializeSocket(io: Server) {
             socket.emit('error', { message: 'You cannot bet when there is already a bet in place. You must call or raise.'});
             return false;
           }
+          
+          // Handle all-in bet
           if (betAmount === player.chips) {
             allIn = true;
+            player.allIn = true;
+            player.currentBet = betAmount;
+            player.chips = 0;
+            game.currentBet = betAmount;
+            game.pot += betAmount;
+            
+            // Create a sidepot for this all-in player
+            game.createSidepot(player, betAmount);
+          } else {
+            // Normal bet
+            game.pot += betAmount;
+            player.currentBet = betAmount;
+            player.chips -= betAmount;
+            game.currentBet = betAmount;
           }
-          game.pot += betAmount;
-          player.currentBet = betAmount;
-          player.chips -= betAmount;
+          
           player.previousAction = 'bet';
-          game.currentBet = betAmount;
           actionSuccess = true;
           break;
 
@@ -346,14 +363,18 @@ export function initializeSocket(io: Server) {
           const raiseAmount = raiseTotal - player.currentBet;
 
           if (raiseAmount >= player.chips) {
-            // All-in
-            game.pot += player.chips;
-            player.currentBet += player.chips;
+            // All-in raise
+            const allInAmount = player.chips;
+            player.currentBet += allInAmount;
             player.chips = 0;
             player.allIn = true;
             game.currentBet = player.currentBet;
             allIn = true;
+            
+            // Create a sidepot for this all-in player
+            game.createSidepot(player, player.currentBet);
           } else {
+            // Normal raise
             game.pot += raiseAmount;
             player.currentBet = raiseTotal;
             player.chips -= raiseAmount;
@@ -364,17 +385,36 @@ export function initializeSocket(io: Server) {
           break;
       }
 
-      if (allIn) {
-        const sidepot = new Sidepot(game.pot, [player]);
-      }
+      // All-in sidepots are now handled in each action case
 
       // If action was successful, advance the game
       if (actionSuccess) {
         // Track the previous phase to detect phase changes
         const previousPhase = game.phase;
+        
+        // Track active players before status check to detect fold-out win
+        const activeBefore = game.players.filter(p => !p.folded).length;
 
         // Advance to next player or phase
         game.checkPhaseStatus();
+        
+        // Check if someone won by everyone else folding
+        const activeAfter = game.players.filter(p => !p.folded).length;
+        if (activeBefore > 1 && activeAfter === 1) {
+          const winner = game.players.find(p => !p.folded);
+          if (winner) {
+            // Emit winner announcement for fold-out win
+            io.to(gameId).emit('round_winners', {
+              winners: [{
+                playerId: winner.id,
+                playerName: winner.username,
+                amount: previousPhase !== GamePhase.Waiting ? winner.chips - game.players.find(p => p.id === winner.id)!.chips : 0,
+                potType: 'All pots (win by fold)'
+              }],
+              showdown: false
+            });
+          }
+        }
 
         // If we've moved to showdown, handle the showdown
         if (game.phase === GamePhase.Showdown && previousPhase !== GamePhase.Showdown) {
@@ -729,10 +769,32 @@ function handleShowdown(game, io) {
     if (activePlayers.length === 1) {
       // Award pot to the last remaining player
       const winner = activePlayers[0];
+      let totalWinnings = game.pot;
       winner.chips += game.pot;
-
-      // Record the win
       winner.previousAction = 'win';
+      
+      // Handle any sidepots (should be empty in this case)
+      if (game.sidepots.length > 0) {
+        console.log(`Unexpected: ${game.sidepots.length} sidepots exist with only one active player`);
+        // Just add all sidepots to the winner
+        game.sidepots.forEach(sidepot => {
+          const sidepotAmount = sidepot.getAmount();
+          winner.chips += sidepotAmount;
+          totalWinnings += sidepotAmount;
+        });
+      }
+      
+      // Emit winner announcement to all players (win by fold)
+      io.to(game.id).emit('round_winners', {
+        winners: [{
+          playerId: winner.id,
+          playerName: winner.username,
+          amount: totalWinnings,
+          potType: 'All pots (win by fold)',
+          // No hand info since the player won by fold
+        }],
+        showdown: false
+      });
 
       // Reset the game for next round
       setTimeout(() => {
@@ -742,17 +804,44 @@ function handleShowdown(game, io) {
       return;
     }
 
-    // If multiple players remain, determine winner by hand strength
-    const winners = game.evaluateHands(activePlayers, game.communityCards);
-
-    // Split pot among winners
-    const potPerWinner = Math.floor(game.pot / winners.length);
-    winners.forEach(winner => {
-      winner.chips += potPerWinner;
-      winner.previousAction = 'win';
+    // Use the improved pot distribution logic that handles sidepots
+    console.log(`Distributing pots at showdown with ${activePlayers.length} active players and ${game.sidepots.length} sidepots`);
+    
+    // Store winner information before distributing pots
+    const winnerInfo = activePlayers.map(player => {
+      const hand = game.communityCards ? 
+        player.cards.concat(game.communityCards) : 
+        player.cards;
+      
+      const handEval = evaluateHand(hand);
+      return {
+        playerId: player.id,
+        playerName: player.username,
+        hand: handEval.hand,
+        cards: player.cards.map(card => card.name)
+      };
+    });
+    
+    // Distribute pots and track winners and amounts
+    const potWinners = game.distributePots();
+    
+    // Combine hand information with winning amounts
+    const winnerDetails = potWinners.map(winner => {
+      const handInfo = winnerInfo.find(info => info.playerId === winner.playerId);
+      return {
+        ...handInfo,
+        amount: winner.amount,
+        potType: winner.potType
+      };
+    });
+    
+    // Emit winner announcement to all players
+    io.to(game.id).emit('round_winners', {
+      winners: winnerDetails,
+      showdown: true
     });
 
-    // Reset the game for next round
+    // Reset the game for next round after delay
     setTimeout(() => {
       resetForNextRound(game, io);
     }, 8000); // Give players 8 seconds to see the result
