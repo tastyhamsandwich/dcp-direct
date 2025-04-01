@@ -106,7 +106,7 @@ import React, { useState, useEffect } from 'react';
                 className="w-full"
                 disabled={!isActive}
               />
-              <div className="text-gray-300 text-xs text-center">{raiseAmount}</div>
+              <div className="text-gray-300 text-xs text-center">Bet {raiseAmount}</div>
               {gameCurrentBet === 0 ? (
                 <button 
                   className={`bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded mt-1 ${!isActive || 
@@ -123,7 +123,7 @@ import React, { useState, useEffect } from 'react';
                   onClick={() => isActive && isActionAllowed('raise') && onAction('raise', raiseAmount)}
                   disabled={!isActive || !isActionAllowed('raise')}
                 >
-                  Raise to {raiseAmount + gameCurrentBet}
+                  Raise total bet to {raiseAmount + (gameCurrentBet - playerCurrentBet)}
                 </button>
               )}
             </div>

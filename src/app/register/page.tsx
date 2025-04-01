@@ -37,12 +37,12 @@ const RegisterPage = () => {
     email: string; 
     password: string; 
     username: string;
-    dob: Date;
+    dob: string;
   }) => {
     setError(null);
     try {
-      const dobString = data.dob.toISOString().split('T')[0]; // Convert date to string format
-      await signUp(data.email, data.password, data.username, dobString);
+      //const dobString = data.dob.toISOString().split('T')[0]; // Convert date to string format
+      await signUp(data.email, data.password, data.username, '01-01-2020');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     }
@@ -143,7 +143,7 @@ const RegisterPage = () => {
                   required
                 />
               </div>
-              {errors.dob?.message && <p className="text-red-500">{errors.dob?.message as string}</p>}
+              {errors.dob?.message && <p className="text-red-500 font-bold">{errors.dob?.message as string}</p>}
             </div>
             <div className="justify-center flex form-submit pt-5">
               <button

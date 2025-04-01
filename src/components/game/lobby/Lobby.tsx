@@ -19,7 +19,7 @@ const Lobby: React.FC<LobbyProps> = ({
   onJoinGame,
   onCreateGame 
 }) => {
-  const [showModal, setShowModal] = useState(false);
+  const [showModal, setShowModal] = useState<boolean>(false);
   
   if (!profile || !socket) return (
     <div className="flex justify-center items-center h-64 bg-gray-800 rounded-lg">
@@ -71,7 +71,7 @@ const Lobby: React.FC<LobbyProps> = ({
             <p className="text-gray-300 mb-4 text-center">No games available. Create a new game to start playing!</p>
             <button 
               onClick={() => setShowModal(true)}
-              className="bg-blue-700 hover:bg-blue-800 text-white font-medium px-6 py-3 rounded-lg transition duration-150"
+              className="bg-blue-700 hover:bg-blue-800 text-white font-medium px-6 py-3 max-w-64 min-w-12 rounded-lg transition duration-150"
             >
               Create First Game
             </button>
@@ -116,10 +116,10 @@ const Lobby: React.FC<LobbyProps> = ({
           </div>
         )}
         
-        <div className="pt-4 border-t border-gray-700">
+        <div className="pt-4 flex mx-auto border-t border-gray-700">
           <button 
             onClick={() => setShowModal(true)}
-            className="w-full bg-green-700 hover:bg-green-800 text-white font-medium py-3 rounded-lg transition duration-150"
+            className="w-full bg-green-700 hover:bg-green-800 text-white font-medium py-3 min-w-12 max-w-64 mx-auto rounded-lg transition duration-150"
           >
             Create New Game
           </button>

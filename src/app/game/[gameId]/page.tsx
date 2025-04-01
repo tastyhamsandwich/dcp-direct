@@ -29,6 +29,7 @@ type GameAction =
   | { type: 'SET_CONNECTED'; payload: boolean }
   | { type: 'SET_GAME_STATE'; payload: GameState }
   | { type: 'ADD_CHAT_MESSAGE'; payload: any }
+  | { type: 'ADD_SYSTEM_MESSAGE'; payload: any }
   | { type: 'SET_MESSAGE'; payload: string }
   | { type: 'CLEAR_MESSAGE' }
   | { type: 'SET_WINNERS'; payload: { winners: WinnerInfo[], showdown: boolean } }
@@ -67,6 +68,8 @@ function gameReducer(state: GamePageState, action: GameAction): GamePageState {
       return { ...state, gameState: action.payload };
     case 'ADD_CHAT_MESSAGE':
       return { ...state, chatMessages: [...state.chatMessages, action.payload] };
+    case 'ADD_SYSTEM_MESSAGE':
+      return { ...state, chatMessages: [...state.chatMessages, action.payload] };
     case 'SET_MESSAGE':
       return { ...state, message: action.payload };
     case 'CLEAR_MESSAGE':
@@ -87,7 +90,8 @@ function gameReducer(state: GamePageState, action: GameAction): GamePageState {
 export default function GamePage({ params }: { params: Promise<{ gameId: string }> }) {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
-  const [isMyTurn, setIsMyTurn] = useState(false);
+  const [isMyTurn, setIsMyTurn] = useState<boolean>(false);
+  const [isWinnerOpen, setIsWinnerOpen] = useState<boolean>(false);
   const [allowedActions, setAllowedActions] = useState<string[]>([]);
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const { gameState, chatMessages, isConnected, socket, message, winners, showdown } = state;
@@ -154,7 +158,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
       console.log('Game starting:', data);
       dispatch({ type: 'SET_GAME_STATE', payload: data.game });
       if (data.message) {
-        socketInstance.emit('chat_message', { gameId: unwrappedParams.gameId, message: data.message });
+        dispatch({ type: 'ADD_SYSTEM_MESSAGE', payload: data.message });
       }
     });
     
@@ -162,7 +166,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
       console.log('Round starting:', data);
       dispatch({ type: 'SET_GAME_STATE', payload: data.game });
       if (data.message) {
-        socketInstance.emit('chat_message', { gameId: unwrappedParams.gameId, message: data.message });
+        dispatch({ type: 'ADD_SYSTEM_MESSAGE', payload: data.message });
       }
     });
     
@@ -176,7 +180,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
       }
       // Show message if provided
       if (data.message) {
-        socketInstance.emit('chat_message', { gameId: unwrappedParams.gameId, message: data.message });
+        dispatch({ type: 'ADD_SYSTEM_MESSAGE', payload: data.message });
       }
     });
     
@@ -186,7 +190,14 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
       setIsMyTurn(false);
       // Display message to user if provided
       if (data.message) {
-        socketInstance.emit('chat_message', { gameId: unwrappedParams.gameId, message: data.message });
+        dispatch({ 
+          type: 'ADD_SYSTEM_MESSAGE', 
+          payload: {
+            sender: 'SYSTEM:', 
+            message: data.message, 
+            timestamp: new Date().toISOString() 
+          }
+        });
       }
     });
     
@@ -270,7 +281,8 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
       {winners && (
         <WinnerDisplay 
           winners={winners} 
-          showdown={showdown} 
+          showdown={showdown}
+          isOpen={isWinnerOpen} 
           onClose={handleCloseWinnerDisplay}
           visible={winners !== null}
         />
@@ -447,7 +459,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                     canCheck={gameState.currentBet === (gameState.players.find(p => p.id === socket?.id)?.currentBet || 0)}
                     gameCurrentBet={gameState.currentBet}
                     playerCurrentBet={gameState.players.find(p=> p.id === socket?.id)?.currentBet || 0}
-                    minRaise={gameState.currentBet > 0 ? gameState.currentBet : 10}
+                    minRaise={gameState.currentBet > 0 ? (gameState.currentBet - gameState.players.find(p => p.id === socket.id)!.currentBet) : 5}
                     playerChips={gameState.players.find(p => p.id === socket?.id)?.chips || 0}
                     onAction={handlePlayerAction}
                     isActive={true}

@@ -879,8 +879,9 @@ function resetForNextRound(game, io) {
 
   // Set all players to not ready for next round
   // This is critical - players must actively opt-in to the next round
+  // CURRENTLY DISABLED, ALL PLAYERS SET TO READY AUTOMATICALLY
   game.players.forEach(p => {
-    p.ready = false;
+    p.ready = true;
   });
   
   // Also update roles based on new dealer position

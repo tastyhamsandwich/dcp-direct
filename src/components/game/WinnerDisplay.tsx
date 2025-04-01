@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import useClickOutside from '@hooks/useClickOutside';
 import Image from 'next/image';
 
 interface WinnerInfo {
@@ -13,12 +14,18 @@ interface WinnerInfo {
 interface WinnerDisplayProps {
   winners: WinnerInfo[];
   showdown: boolean;
+  isOpen: boolean;
   onClose: () => void;
   visible: boolean;
 }
 
-const WinnerDisplay = ({ winners, showdown, onClose, visible }: WinnerDisplayProps) => {
+const WinnerDisplay = ({ winners, showdown, isOpen, onClose, visible }: WinnerDisplayProps) => {
+  const winnerRef = useRef(null);
   if (!visible || !winners.length) return null;
+
+  useClickOutside(winnerRef, onClose);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">

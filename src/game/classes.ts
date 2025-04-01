@@ -5,6 +5,11 @@ import { capitalize, valueToRank } from '@lib/utils';
 import { evaluateHand, evaluateHands } from '@game/utils';
 import { Socket } from 'socket.io';
 
+type HandRank = {
+  hand: string,
+  value: number
+}
+
 /**
  * Represents a player in the game.
  * Implements the `User` interface.
@@ -74,10 +79,7 @@ export class Player implements User {
   currentBet: number;
   previousAction: Action
   avatar: string;
-  handRank: {
-    hand: string;
-    value: number;
-  }
+  handRank: HandRank;
 
   constructor(id, username, seatNumber, chips, avatar) {
     this.id = id;
@@ -613,6 +615,8 @@ export class Game {
       this.status = 'playing';
       this.roundCount++;
 
+      if (this.roundCount > 1) this.dealerIndex = (this.dealerIndex + 1) % this.players.length;
+
       // Dealer Index is advanced at end of a round, to avoid it being advanced
       // on the first round of a game
       this.smallBlindIndex = (this.dealerIndex + 1) % this.players.length;
@@ -848,6 +852,22 @@ export class Game {
     return nextPlayerIndex;
   }
 
+  private getPhaseName(addNum = 0) {
+    const finalPhase = this.phase + addNum;
+    switch (finalPhase) {
+      case GamePhase.Preflop:
+        return 'Pre-Flop';
+      case GamePhase.Flop:
+        return 'Flop';
+      case GamePhase.Turn:
+        return 'Turn';
+      case GamePhase.River:
+        return 'River';
+      case GamePhase.Showdown:
+        return 'Showdown';
+    }
+  }
+
   checkPhaseStatus() {
     this.sortPlayerList();
 
@@ -879,7 +899,10 @@ export class Game {
       this.sidepots = [];
 
       // Handle round reset
-      if (this.resetRound()) return true;
+      if (this.resetRound()) {
+        this.dealCards();
+        return true;
+      }
     }
 
     // Track if all players have had a chance to act in this betting round
@@ -913,9 +936,10 @@ export class Game {
     // 1. We can't find next eligible player, OR
     // 2. Betting round is complete (everyone has acted and matched or folded)
     if (!foundNextPlayer || bettingRoundComplete) {
-      console.log(`Advancing to next phase from ${this.phase}`);
+      console.log(`Advancing to next phase (${this.getPhaseName(1)}) from ${this.getPhaseName()}`);
       
-      switch (this.phase) {
+      this.phase++;
+      /*switch (this.phase) {
         case GamePhase.Preflop:
           this.phase = GamePhase.Flop;
           this.dealCommunityCards(true); // Deal flop (3 cards)
@@ -932,7 +956,7 @@ export class Game {
           this.phase = GamePhase.Showdown;
           // Showdown logic will be handled elsewhere
           break;
-      }
+      }*/
 
       // Reset player bets for the new phase
       this.resetBets();
@@ -1068,6 +1092,7 @@ export class Game {
     this.burnPile = null;
     this.communityCards = null;
     this.phase = GamePhase.Waiting;
+    this.roundCount++;
 
     // Reset player state but don't change ready status here
     this.players.forEach(p => {

@@ -9,8 +9,9 @@ export async function registerAction(formData: FormData) {
     const username = formData.get('username') as string;
     const password = formData.get('password') as string;
     const confirmPassword = formData.get('confirmPassword') as string;
-    const dob = formData.get('dob');
+    const dob = formData.get('dob') as string;
 
+    const date = dob.toString();
     if (password !== confirmPassword) {
         throw new Error('Passwords do not match');
     }
@@ -31,7 +32,7 @@ export async function registerAction(formData: FormData) {
         options: {
             data: {
                 username: username,
-                dob: dob
+                dob: date
             },
         },
     })
