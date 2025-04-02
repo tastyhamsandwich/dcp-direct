@@ -24,7 +24,7 @@ interface AuthContextType {
   error: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signInWithOAuth: (provider: 'discord') => Promise<void>;
-  signUp: (email: string, password: string, username: string, dob: string) => Promise<void>;
+  signUp: (email: string, password: string, username: string, /* dob: string (REMOVED DOB FOR NOW) */ ) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<void>;
@@ -162,7 +162,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Sign up with email and password
-  const signUp = async (email: string, password: string, username: string, dob: string) => {
+  const signUp = async (email: string, password: string, username: string, /* dob: string REMOVED TEMPORARILY */ ) => {
     setLoading(true);
     setError(null);
     
@@ -174,7 +174,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         options: {
           data: {
             username,
-            dob,
+            /* dob, REMOVED TEMPORARILY */
           },
         },
       });

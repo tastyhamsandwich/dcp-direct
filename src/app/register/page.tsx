@@ -37,12 +37,12 @@ const RegisterPage = () => {
     email: string; 
     password: string; 
     username: string;
-    dob: string;
+    dob?: string;
   }) => {
     setError(null);
     try {
       //const dobString = data.dob.toISOString().split('T')[0]; // Convert date to string format
-      await signUp(data.email, data.password, data.username, '01-01-2020');
+      await signUp(data.email, data.password, data.username, /* REMOVED DOB FOR NOW */);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
     }
@@ -129,6 +129,7 @@ const RegisterPage = () => {
                 <p className="text-red-500">{errors.confirmPassword?.message as string}</p>
               )}
             </div>
+            { /*
             <div className="form-item flex flex-column space-x-8 pt-10 justify-between">
               <div className="label-container pl-10">
                 <Label htmlFor="dob">Date of Birth</Label>
@@ -144,7 +145,7 @@ const RegisterPage = () => {
                 />
               </div>
               {errors.dob?.message && <p className="text-red-500 font-bold">{errors.dob?.message as string}</p>}
-            </div>
+            </div> */ }
             <div className="justify-center flex form-submit pt-5">
               <button
                 type="submit"

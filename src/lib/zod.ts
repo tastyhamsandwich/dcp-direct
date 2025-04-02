@@ -35,7 +35,7 @@ export const registerSchema = z
       .max(16, "Username cannot exceed 16 characters"),
     password: passwordSchema,
     confirmPassword: passwordSchema,
-    dob: z.string({ required_error: "Date of birth is required" })
+    // dob: z.string({ required_error: "Date of birth is required" }) // TEMPORARILY DISABLED
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
