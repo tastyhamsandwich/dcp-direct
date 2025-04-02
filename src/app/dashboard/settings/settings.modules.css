@@ -1,0 +1,37 @@
+.outer-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100vh;
+  padding: 10px;
+}
+
+.profile-settings {
+  display: flex;
+  flex-direction: column;
+  border-width: .5rem;
+  background-color: rgb(80, 83, 87);
+  width: 64rem;
+  border-radius: 1rem;
+  border-color: rgb(4, 41, 88);
+  height: 15rem;
+  border-style: groove;
+  box-shadow: 0 25px 50px -12px rgb(31 41 55);
+  box-shadow: inset;
+  text-align: center;
+  padding: 2rem;
+  align-items: flex-start;
+}
+
+.email {
+  color: black;
+  font-family:
+}
+
+.display-name {
+  color: white;
+}
+
+.password-reset {
+  color: white;
+}

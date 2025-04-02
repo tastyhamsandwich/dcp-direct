@@ -11,9 +11,11 @@ import { loginSchema } from "@lib/zod";
 import { useState, useEffect } from "react";
 import { useAuth } from "@contexts/authContext";
 import { useRouter } from "next/navigation";
+import { createClient } from '@supabaseC';
+import Image from 'next/image';
 
 const LoginPage = () => {
-  const { signIn, error: authError, loading, user } = useAuth();
+  const { signIn, signInWithOAuth, error: authError, loading, user } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
@@ -40,6 +42,16 @@ const LoginPage = () => {
       setError(err instanceof Error ? err.message : 'Login failed');
     }
   };
+
+  const handleDiscordSignIn = async () => {
+    setError(null);
+    try {
+      // Use the signInWithOAuth function from the auth context
+      await signInWithOAuth('discord');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login with Discord failed');
+    }
+  }
 
   return (
     <div className="pt-47 flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#111] to-[#222255] text-white">
@@ -106,6 +118,18 @@ const LoginPage = () => {
               </button>
             </div>
           </form>
+
+        </div>
+        <div className="flex justify-center pt-4">
+          <button 
+            type="button"
+            className="flex items-center bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold py-2 px-4 rounded"
+            onClick={handleDiscordSignIn}
+            disabled={loading}
+          >
+            <Image src="/logos/discord.png" height={24} width={24} alt="Discord" className="mr-2" />
+            {loading ? "Connecting..." : "Sign in with Discord"}
+          </button>
         </div>
       </div>
       <div className="text-white pt-10">
@@ -123,6 +147,7 @@ const LoginPage = () => {
           !
         </h3>
       </div>
+      
     </div>
   );
 }

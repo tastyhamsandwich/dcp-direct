@@ -78,13 +78,32 @@ Areas for future development and improvement include:
 
 A checklist for ongoing development:
 
-[X] Basic website scaffolding  
-[X] User authentication  
-[X] User profile dashboard  
-[X] Game lobby access  
-[X] Create/join games  
-[X] Back-end websocket architecture  
-[X] Poker object classes and logic  
-[x] Working game sequence  
-[ ] AI players  
-[ ] Extras  
+ [✔️] Basic website scaffolding  
+ [✔️] User authentication  
+ [✔️] User profile dashboard  
+ [✔️] Game lobby access  
+ [✔️] Create/join games  
+ [✔️] Back-end websocket architecture  
+ [✔️] Poker object classes and logic  
+ [✔️] Working game sequence  
+ [✔️] Animations and sound effects  
+ [➕] **Full Dashboard feature set**  
+ ➖ [  ] Change display name  
+ ➖ [  ] Password reset  
+ ➖ [  ] Change e-mail   
+ ➖ [  ] Light/Dark theme  
+ ➖ [  ] Daily tips  
+ ➖ [  ] Statistics tracking  
+ ➖ [  ] Strategy guide  
+ ➖ [  ] New player guide  
+ [  ] Changelog / Announcements page  
+ [  ] Forums  
+ [  ] Multi-Factor Authentication  
+ [➕] **Full login provider sets**  
+ ➖  [✔️] Discord  
+ ➖ [  ] Facebook  
+ ➖ [  ] Google  
+ ➖ [  ] Phone  
+ ➖  [✔️] E-mail  
+ [  ] AI players   
+ [  ] Extras   

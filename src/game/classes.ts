@@ -739,7 +739,8 @@ export class Game {
 
   dealCommunityCards(flop: boolean = false): boolean {
 
-    if (this.deck === null || this.burnPile === null || this.communityCards === null) return false;
+    // Check if deck is initialized and arrays exist
+    if (this.deck === null || !Array.isArray(this.burnPile) || !Array.isArray(this.communityCards)) return false;
 
     const burnCard = this.deck.draw();
     this.burnPile.push(burnCard);
@@ -938,25 +939,28 @@ export class Game {
     if (!foundNextPlayer || bettingRoundComplete) {
       console.log(`Advancing to next phase (${this.getPhaseName(1)}) from ${this.getPhaseName()}`);
       
+      const oldPhase = this.phase;
       this.phase++;
-      /*switch (this.phase) {
-        case GamePhase.Preflop:
-          this.phase = GamePhase.Flop;
+      
+      // Deal community cards based on the new phase
+      switch (this.phase) {
+        case GamePhase.Flop:
+          console.log('Dealing the flop');
           this.dealCommunityCards(true); // Deal flop (3 cards)
           break;
-        case GamePhase.Flop:
-          this.phase = GamePhase.Turn;
+        case GamePhase.Turn:
+          console.log('Dealing the turn');
           this.dealCommunityCards(); // Deal turn (1 card)
           break;
-        case GamePhase.Turn:
-          this.phase = GamePhase.River;
+        case GamePhase.River:
+          console.log('Dealing the river');
           this.dealCommunityCards(); // Deal river (1 card)
           break;
-        case GamePhase.River:
-          this.phase = GamePhase.Showdown;
+        case GamePhase.Showdown:
+          console.log('Moving to showdown');
           // Showdown logic will be handled elsewhere
           break;
-      }*/
+      }
 
       // Reset player bets for the new phase
       this.resetBets();
@@ -1089,8 +1093,8 @@ export class Game {
     this.sidepots = [];
     this.ineligiblePlayers = [];
     this.deck = null;
-    this.burnPile = null;
-    this.communityCards = null;
+    this.burnPile = []; // Initialize as an empty array instead of null
+    this.communityCards = []; // Initialize as an empty array instead of null
     this.phase = GamePhase.Waiting;
     this.roundCount++;
 
@@ -1224,44 +1228,48 @@ export class Game {
         });
       } else {
         // Multiple eligible players, evaluate hands
-        const winners = this.evaluateHands(eligiblePlayers, this.communityCards as Card[]);
-        
-        // Split pot among winners
-        const potPerWinner = Math.floor(sidepot.getAmount() / winners.length);
-        const remainder = sidepot.getAmount() % winners.length;
-        
-        winners.forEach(winner => {
-          winner.chips += potPerWinner;
-          winner.previousAction = 'win';
-          console.log(`Player ${winner.username} awarded ${potPerWinner} from sidepot ${potIndex}`);
+        if (Array.isArray(this.communityCards) && this.communityCards.length > 0) {
+          const winners = this.evaluateHands(eligiblePlayers, this.communityCards);
           
-          // Record winner info
-          winnerInfo.push({
-            playerId: winner.id,
-            playerName: winner.username,
-            amount: potPerWinner,
-            potType: `Sidepot ${potIndex}`
+          // Split pot among winners
+          const potPerWinner = Math.floor(sidepot.getAmount() / winners.length);
+          const remainder = sidepot.getAmount() % winners.length;
+          
+          winners.forEach(winner => {
+            winner.chips += potPerWinner;
+            winner.previousAction = 'win';
+            console.log(`Player ${winner.username} awarded ${potPerWinner} from sidepot ${potIndex}`);
+            
+            // Record winner info
+            winnerInfo.push({
+              playerId: winner.id,
+              playerName: winner.username,
+              amount: potPerWinner,
+              potType: `Sidepot ${potIndex}`
+            });
           });
-        });
-        
-        // Give remainder to first position after dealer
-        if (remainder > 0) {
-          let currentPos = (this.dealerIndex + 1) % this.players.length;
-          while (!winners.includes(this.players[currentPos])) {
-            currentPos = (currentPos + 1) % this.players.length;
-          }
-          this.players[currentPos].chips += remainder;
-          console.log(`Player ${this.players[currentPos].username} awarded ${remainder} remainder from sidepot ${potIndex}`);
           
-          // Add the remainder to the winner's total in winnerInfo
-          const winnerIndex = winnerInfo.findIndex(w => 
-            w.playerId === this.players[currentPos].id && 
-            w.potType === `Sidepot ${potIndex}`
-          );
-          
-          if (winnerIndex >= 0) {
-            winnerInfo[winnerIndex].amount += remainder;
+          // Give remainder to first position after dealer
+          if (remainder > 0) {
+            let currentPos = (this.dealerIndex + 1) % this.players.length;
+            while (!winners.includes(this.players[currentPos])) {
+              currentPos = (currentPos + 1) % this.players.length;
+            }
+            this.players[currentPos].chips += remainder;
+            console.log(`Player ${this.players[currentPos].username} awarded ${remainder} remainder from sidepot ${potIndex}`);
+            
+            // Add the remainder to the winner's total in winnerInfo
+            const winnerIndex = winnerInfo.findIndex(w => 
+              w.playerId === this.players[currentPos].id && 
+              w.potType === `Sidepot ${potIndex}`
+            );
+            
+            if (winnerIndex >= 0) {
+              winnerInfo[winnerIndex].amount += remainder;
+            }
           }
+        } else {
+          console.error('Community cards are not available for hand evaluation');
         }
       }
     }
@@ -1294,44 +1302,48 @@ export class Game {
         });
       } else {
         // Multiple eligible players, evaluate hands
-        const winners = this.evaluateHands(eligiblePlayers, this.communityCards as Card[]);
-        
-        // Split pot among winners
-        const potPerWinner = Math.floor(this.pot / winners.length);
-        const remainder = this.pot % winners.length;
-        
-        winners.forEach(winner => {
-          winner.chips += potPerWinner;
-          winner.previousAction = 'win';
-          console.log(`Player ${winner.username} awarded ${potPerWinner} from main pot`);
+        if (Array.isArray(this.communityCards) && this.communityCards.length > 0) {
+          const winners = this.evaluateHands(eligiblePlayers, this.communityCards);
           
-          // Record winner info
-          winnerInfo.push({
-            playerId: winner.id,
-            playerName: winner.username,
-            amount: potPerWinner,
-            potType: 'Main pot'
+          // Split pot among winners
+          const potPerWinner = Math.floor(this.pot / winners.length);
+          const remainder = this.pot % winners.length;
+          
+          winners.forEach(winner => {
+            winner.chips += potPerWinner;
+            winner.previousAction = 'win';
+            console.log(`Player ${winner.username} awarded ${potPerWinner} from main pot`);
+            
+            // Record winner info
+            winnerInfo.push({
+              playerId: winner.id,
+              playerName: winner.username,
+              amount: potPerWinner,
+              potType: 'Main pot'
+            });
           });
-        });
-        
-        // Give remainder to first position after dealer
-        if (remainder > 0) {
-          let currentPos = (this.dealerIndex + 1) % this.players.length;
-          while (!winners.includes(this.players[currentPos])) {
-            currentPos = (currentPos + 1) % this.players.length;
-          }
-          this.players[currentPos].chips += remainder;
-          console.log(`Player ${this.players[currentPos].username} awarded ${remainder} remainder from main pot`);
           
-          // Add the remainder to the winner's total in winnerInfo
-          const winnerIndex = winnerInfo.findIndex(w => 
-            w.playerId === this.players[currentPos].id && 
-            w.potType === 'Main pot'
-          );
-          
-          if (winnerIndex >= 0) {
-            winnerInfo[winnerIndex].amount += remainder;
+          // Give remainder to first position after dealer
+          if (remainder > 0) {
+            let currentPos = (this.dealerIndex + 1) % this.players.length;
+            while (!winners.includes(this.players[currentPos])) {
+              currentPos = (currentPos + 1) % this.players.length;
+            }
+            this.players[currentPos].chips += remainder;
+            console.log(`Player ${this.players[currentPos].username} awarded ${remainder} remainder from main pot`);
+            
+            // Add the remainder to the winner's total in winnerInfo
+            const winnerIndex = winnerInfo.findIndex(w => 
+              w.playerId === this.players[currentPos].id && 
+              w.potType === 'Main pot'
+            );
+            
+            if (winnerIndex >= 0) {
+              winnerInfo[winnerIndex].amount += remainder;
+            }
           }
+        } else {
+          console.error('Community cards are not available for hand evaluation');
         }
       }
     }

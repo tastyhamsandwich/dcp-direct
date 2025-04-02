@@ -1,9 +1,9 @@
 {
   "name": "dcp-direct",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack -p 3003",
+    "dev": "next dev --turbopack -p 3003 -H 172.21.87.173",
     "devsock": "tsx src/server.ts",
     "dev:all": "concurrently \"pnpm dev\" \"pnpm devsock\"",
     "build": "next build",
@@ -24,6 +24,7 @@
     "concurrently": "^8.2.2",
     "cookie": "^1.0.2",
     "express": "^4.21.2",
+    "framer-motion": "^12.6.3",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.479.0",
     "next": "15.2.2",

@@ -23,6 +23,7 @@ interface AuthContextType {
   loading: boolean;
   error: string | null;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithOAuth: (provider: 'discord') => Promise<void>;
   signUp: (email: string, password: string, username: string, dob: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -37,6 +38,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   error: null,
   signIn: async () => {},
+  signInWithOAuth: async () => {},
   signUp: async () => {},
   signOut: async () => {},
   refreshProfile: async () => {},
@@ -269,6 +271,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const profileData = await fetchProfile(currentSession.user.id);
             if (profileData) {
               setProfile(profileData);
+            } else {
+              // If the user has signed in with OAuth but doesn't have a profile yet, create one
+              if (currentSession.user.app_metadata.provider === 'discord') {
+                try {
+                  // Get user details from OAuth provider
+                  const username = currentSession.user.user_metadata.full_name || 
+                                  currentSession.user.user_metadata.name || 
+                                  `User-${currentSession.user.id.substring(0, 6)}`;
+                  
+                  // Initialize a profile with default values
+                  const { error: profileError } = await supabase
+                    .from('profiles')
+                    .insert({
+                      id: currentSession.user.id,
+                      username,
+                      balance: 1000, // Default starting balance
+                      avatar_url: currentSession.user.user_metadata.avatar_url || null,
+                    });
+                  
+                  if (profileError) {
+                    console.error('Error creating profile for OAuth user:', profileError);
+                  } else {
+                    // Fetch the newly created profile
+                    const newProfileData = await fetchProfile(currentSession.user.id);
+                    if (newProfileData) {
+                      setProfile(newProfileData);
+                    }
+                  }
+                } catch (err) {
+                  console.error('Error creating profile for OAuth user:', err);
+                }
+              }
             }
             // Now that we have both user and profile, we can stop loading
             setLoading(false);
@@ -291,24 +325,56 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Set up auth state change listener
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-      console.log('Auth state changed:', event);
+      console.log('Auth state changed:', event, newSession);
       
       // Immediately update session and user state
       setSession(newSession);
       setUser(newSession?.user || null);
       
-      // Clear loading state as soon as we know auth state
-      setLoading(false);
-      
-      // Fetch profile data in background
-      if (newSession?.user) {
+      // Handle login events (including OAuth signin completions)
+      if (event === 'SIGNED_IN' && newSession?.user) {
+        // Fetch profile data
         const profileData = await fetchProfile(newSession.user.id);
+        
         if (profileData) {
           setProfile(profileData);
+        } else if (newSession.user.app_metadata.provider === 'discord') {
+          // Create a profile for an OAuth user if they don't have one yet
+          try {
+            // Get user details from OAuth provider
+            const username = newSession.user.user_metadata.full_name || 
+                            newSession.user.user_metadata.name || 
+                            `User-${newSession.user.id.substring(0, 6)}`;
+            
+            // Initialize a profile with default values
+            const { error: profileError } = await supabase
+              .from('profiles')
+              .insert({
+                id: newSession.user.id,
+                username,
+                balance: 1000, // Default starting balance
+                avatar_url: newSession.user.user_metadata.avatar_url || null,
+              });
+            
+            if (profileError) {
+              console.error('Error creating profile for OAuth user:', profileError);
+            } else {
+              // Fetch the newly created profile
+              const newProfileData = await fetchProfile(newSession.user.id);
+              if (newProfileData) {
+                setProfile(newProfileData);
+              }
+            }
+          } catch (err) {
+            console.error('Error creating profile for OAuth user:', err);
+          }
         }
-      } else {
+      } else if (event === 'SIGNED_OUT') {
         setProfile(null);
       }
+      
+      // Clear loading state 
+      setLoading(false);
     });
 
     // Clean up listener on unmount
@@ -318,6 +384,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [/* Dependency array intentionally empty - only run on mount */]);
 
+  // Sign in with OAuth provider
+  const signInWithOAuth = async (provider: 'discord') => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      // OAuth flow continues in the browser with a redirect
+      // We'll handle the callback in the useEffect with onAuthStateChange
+    } catch (err) {
+      console.error('Error signing in with OAuth:', err);
+      setError('Failed to sign in with OAuth');
+      setLoading(false);
+    }
+  };
+
   // Auth context value
   const value = {
     user,
@@ -326,6 +419,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     loading,
     error,
     signIn,
+    signInWithOAuth,
     signUp,
     signOut,
     refreshProfile,
