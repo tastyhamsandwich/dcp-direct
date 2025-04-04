@@ -66,7 +66,7 @@ function Dashboard() {
             <div className={styles.dashboardContainer}>
                 <header className={styles.dashboardHeader}>
                     <h1>Welcome, {profile.username}!</h1>
-                    <p>Current Balance: ${profile.balance}</p>
+                    <p>Current Balance: {profile.balance}</p>
                 </header>
 
                 {/* Enhanced poker guides section */}

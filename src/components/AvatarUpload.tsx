@@ -56,7 +56,7 @@ export default function AvatarUpload() {
                 body: formData
             });
 
-            const data = await response.json();
+            const data: any = await response.json();
 
             if (!response.ok) {
                 throw new Error(data.error || 'Failed to upload avatar');
@@ -95,7 +95,7 @@ export default function AvatarUpload() {
             <input
                 ref={fileInputRef}
                 type="file"
-                accept={imageConfig.avatar.validExtensions.map(ext => `.${ext}`).join(',')}
+                accept="{image/*"
                 onChange={handleFileSelect}
                 className="hidden"
                 aria-label="Upload avatar"
@@ -115,11 +115,7 @@ export default function AvatarUpload() {
             )}
 
             {selectedFile && (
-                <ImageCropper
-                    file={selectedFile}
-                    onCropComplete={handleCropComplete}
-                    onCancel={handleCancelCrop}
-                />
+                <ImageCropper />
             )}
         </>
     );

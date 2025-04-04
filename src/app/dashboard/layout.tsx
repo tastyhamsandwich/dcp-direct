@@ -5,6 +5,8 @@ import { useAuth } from '@contexts/authContext';
 import Link from 'next/link';
 import Image from 'next/image';
 import AvatarUpload from '@comps/AvatarUpload';
+import { Pencil } from 'lucide-react';
+import ImageModal from '@comps/ui/ImageModal';
 
 export default function DashboardLayout({
     children,
@@ -13,6 +15,7 @@ export default function DashboardLayout({
 }) {
     const { profile, loading } = useAuth();
     const [showUpload, setShowUpload] = useState(false);
+    const [modalOpen, setModalOpen] = useState(false);
     const [imageError, setImageError] = useState(false);
     const [isImageLoading, setIsImageLoading] = useState(true);
 
@@ -81,15 +84,22 @@ export default function DashboardLayout({
                                             onError={handleImageError}
                                             unoptimized
                                         />
+                                        <button className="absolute -bottom-3 left-0 right-0 m-auto w-fit p-[.35rem] rounded-full bg-gray-800 hover:bg-gray-700 border border-gray-600"
+                                        title="Change profile"
+                                        onClick={() => setModalOpen(true)}
+                                        >
+                                          <Pencil />
+                                        </button>
                                     </div>
-                                    {/* Hover Overlay */}
+                                    { modalOpen && <ImageModal closeModal={() => setModalOpen(false) }/>}
+                                    {/* Hover Overlay 
                                     <div className={`absolute inset-0 flex items-center justify-center rounded-full bg-black bg-opacity-50 transition-opacity duration-200 ${showUpload ? 'opacity-100' : 'opacity-0'}`}>
                                         <span className="text-white text-sm">Change Avatar</span>
                                     </div>
-                                    {/* Hidden AvatarUpload */}
+                                    {/* Hidden AvatarUpload 
                                     <div className={`absolute inset-0 ${showUpload ? 'block' : 'hidden'}`}>
                                         <AvatarUpload />
-                                    </div>
+                                    </div>*/}
                                 </>
                             ) : (
                                 <div className="relative w-full h-full">
@@ -149,7 +159,7 @@ export default function DashboardLayout({
                     <div className="flex items-center justify-between">
                         <span className="text-gray-400">Balance</span>
                         <span className="text-[#eedd00] font-bold">
-                            ${profile?.balance || '0'}
+                            {profile?.balance || '0'}
                         </span>
                     </div>
                 </div>
