@@ -38,11 +38,7 @@ const WinnerDisplay = ({ winners, showdown, isOpen, onClose, visible }: WinnerDi
     }
   }, [isOpen, visible]);
 
-  if (!visible || !winners.length) return null;
-
   useClickOutside(winnerRef, onClose);
-
-  if (!isOpen) return null;
 
   // Animation variants
   const containerVariants = {
@@ -102,20 +98,21 @@ const WinnerDisplay = ({ winners, showdown, isOpen, onClose, visible }: WinnerDi
 
   return (
     <AnimatePresence>
-      <motion.div 
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-      >
+      {isOpen && visible && (
         <motion.div 
-          ref={winnerRef}
-          className="bg-gray-800 border-2 border-yellow-500 rounded-lg p-6 max-w-2xl w-full mx-4 shadow-lg"
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          exit="exit"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
         >
+          <motion.div 
+            ref={winnerRef}
+            className="bg-gray-800 border-2 border-yellow-500 rounded-lg p-6 max-w-2xl w-full mx-4 shadow-lg"
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+          >
           <motion.div className="text-center mb-4" variants={itemVariants}>
             <motion.h2 
               className="text-2xl font-bold text-yellow-400"
@@ -248,6 +245,7 @@ const WinnerDisplay = ({ winners, showdown, isOpen, onClose, visible }: WinnerDi
           )}
         </motion.div>
       </motion.div>
+      )}
     </AnimatePresence>
   );
 };

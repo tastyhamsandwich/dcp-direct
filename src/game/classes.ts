@@ -1347,6 +1347,12 @@ export class Game {
         }
       }
     }
+
+    console.log(`Main pot: ${this.pot}`);
+    console.log(`Sidepots: ${this.sidepots.map(sp => sp.getAmount()).join(', ')}`);
+    winnerInfo.forEach(w => {
+      console.log(`Player ${w.playerName} won ${w.amount} from ${w.potType} with a `);
+    })
     
     // Reset pots
     this.pot = 0;

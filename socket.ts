@@ -814,11 +814,15 @@ function handleShowdown(game, io) {
         player.cards;
       
       const handEval = evaluateHand(hand);
+      
+      console.log(`Evaluating hand for player ${player.username}...`);
+      console.log(`Hand: ${handEval.hand}, Cards: ${hand.map(card => card.name)}`);
+
       return {
         playerId: player.id,
         playerName: player.username,
         hand: handEval.hand,
-        cards: player.cards.map(card => card.name)
+        cards: hand.map(card => card.name)
       };
     });
     

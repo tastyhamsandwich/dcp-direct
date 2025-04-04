@@ -110,7 +110,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     if (!unwrappedParams.gameId || !user || !profile) return;
     
     // Initialize WebSocket connection to the socket.io server
-    const socketInstance = io('http://localhost:3001', {
+    const socketInstance = io('http://randomencounter.ddns.net:3001', {
       transports: ['websocket', 'polling'],
       withCredentials: true
     });
@@ -210,6 +210,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
           showdown: data.showdown 
         }
       });
+      setIsWinnerOpen(true);
     });
     
     socketInstance.on('chat_message', (data) => {
@@ -273,6 +274,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   // Handler for closing the winner display
   const handleCloseWinnerDisplay = () => {
     dispatch({ type: 'CLEAR_WINNERS' });
+    setIsWinnerOpen(false);
   };
   
   return (
@@ -354,7 +356,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                     bigBlindIndex: gameState.bigBlindIndex,
                     roundActive: gameState.roundActive,
                   }}
-                  currentPlayerId={socket?.id}
+                  currentPlayerId={socket!.id}
                   onAction={handlePlayerAction}
                 />
                 <div className="deck-container absolute bottom-4 right-4">

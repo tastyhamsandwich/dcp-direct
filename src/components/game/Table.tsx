@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 interface TableProps {
   gameState: any;
-  currentPlayerId: string;
+  currentPlayerId?: string;
   onAction: any;
 }
 
