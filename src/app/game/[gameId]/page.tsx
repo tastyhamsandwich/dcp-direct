@@ -110,7 +110,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     if (!unwrappedParams.gameId || !user || !profile) return;
     
     // Initialize WebSocket connection to the socket.io server
-    const socketInstance = io('http://randomencounter.ddns.net:3001', {
+    const socketInstance = io('localhost:3001'/*'http://randomencounter.ddns.net:3001'*/, {
       transports: ['websocket', 'polling'],
       withCredentials: true
     });

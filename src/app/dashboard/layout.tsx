@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@contexts/authContext';
 import Link from 'next/link';
 import Image from 'next/image';
-import AvatarUpload from '@comps/AvatarUpload';
+import AvatarUpload from '@comps/tools/AvatarUploadOld';
 import { Pencil } from 'lucide-react';
 import ImageModal from '@comps/ui/ImageModal';
 

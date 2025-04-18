@@ -3,9 +3,11 @@
   "version": "0.2.1",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack -p 3003 -H 172.21.87.173",
+    "devnet": "next dev --turbopack -p 3003 -H 172.21.87.173",
+    "dev": "next dev --turbopack -p 3003",
     "devsock": "tsx src/server.ts",
     "dev:all": "concurrently \"pnpm dev\" \"pnpm devsock\"",
+    "dev:net": "concurrently \"pnpm devnet\" \"pnpm devsock\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -58,5 +60,5 @@
       "supabase"
     ]
   },
-  "packageManager": "pnpm@10.7.0"
+  "packageManager": "pnpm@10.8.1"
 }
