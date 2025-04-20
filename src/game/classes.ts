@@ -1,6 +1,6 @@
 
 import { Truculenta } from 'next/font/google';
-import { Stringable, Suit, Rank, RankValue, CardName, GamePhase, TableSeat, RoleIds, User, Hand, Action} from './types';
+import { Stringable, Suit, Rank, RankValue, CardName, GamePhase, EGamePhase, EGamePhaseCommon, EGamePhaseDraw, EGamePhaseHoldEm, EGamePhaseStud, GameVariant, TableSeat, RoleIds, User, CustomGameRules, Hand, Action} from './types';
 import { capitalize, valueToRank } from '@lib/utils';
 import { evaluateHand, evaluateHands } from '@game/utils';
 import { Socket } from 'socket.io';
@@ -152,11 +152,17 @@ export class Card implements Stringable {
    * @param faceUp - The third argument, defaults to 'false' if omitted, determines if card is shown or not.
    * @throws {Error} If the arguments are invalid.
    */
-  constructor(rank: RankValue | Rank, suit, faceUp = false) {
+  constructor(rank?: RankValue | Rank | CardName, suit?: Suit, faceUp = false) {
+    if (!rank)
+      rank = this.getRandomRank();
+    if (!suit)
+      suit = this.getRandomSuit();
     if (typeof rank === 'number')
       this.rank = this.rankFromValue(rank);
-    else
-      this.rank = rank;
+    else if (typeof rank === 'string' && rank.length === 2)
+      [this.rank, this.suit] = this.getRankAndSuitFromName(rank as CardName);
+    else if (typeof rank === 'string' && rank.length > 2)
+      this.rank = rank as Rank;
     this.suit = suit;
     this.rankValue = this.getValue();
     this.name = this.getNameFromRankAndSuit(rank as Rank, suit);
@@ -356,6 +362,39 @@ export class Card implements Stringable {
     const capSuit = this.suit.charAt(0).toUpperCase() + this.suit.slice(1);
     return `${capRank} of ${capSuit}`;
   }
+
+  private getRandomSuit() {
+    const rand = Math.floor(Math.random() * 4);
+
+    switch (rand) {
+      case 0: return 'hearts';
+      case 1: return 'diamonds';
+      case 2: return 'clubs';
+      case 3: return 'spades';
+      default: throw new Error(`Invalid random suit value: ${rand}`);
+    }
+  }
+
+  private getRandomRank() {
+    const rand = Math.floor(Math.random() * 13);
+
+    switch (rand) {
+      case 0: return 'two';
+      case 1: return 'three';
+      case 2: return 'four';
+      case 3: return 'five';
+      case 4: return 'six';
+      case 5: return 'seven';
+      case 6: return 'eight';
+      case 7: return 'nine';
+      case 8: return 'ten';
+      case 9: return 'jack';
+      case 10: return 'queen';
+      case 11: return 'king';
+      case 12: return 'ace';
+      default: throw new Error(`Invalid random rank alue: ${rand}`);
+    }
+  }
 }
 
 /** 
@@ -483,7 +522,7 @@ export class Game {
   creator: Player;        
   players: Player[];
   status: 'waiting' | 'playing' | 'paused';
-  phase: GamePhase;
+  phase: EGamePhaseCommon | EGamePhaseHoldEm | EGamePhaseDraw | EGamePhaseStud;
   maxPlayers: number;
   hasStarted: boolean;
   roundActive: boolean;
@@ -514,7 +553,7 @@ export class Game {
   variantSelectionActive: boolean;
   variantSelectionTimeout: NodeJS.Timeout | null;
 
-  constructor(id, name, creator, socket, maxPlayers?, smallBlind?, bigBlind?, gameVariant?: GameVariant, customRules?) {
+  constructor(id: string, name: string, creator: Player, socket: Socket, maxPlayers?: number, smallBlind?: number, bigBlind?: number, gameVariant?: GameVariant, customRules?: CustomGameRules) {
     this.id = id;
     this.name = name;
     this.creator = creator;
@@ -523,7 +562,7 @@ export class Game {
     this.bigBlind = bigBlind || 10;
     this.players = [creator];
     this.status = 'waiting';
-    this.phase = GamePhase.Waiting;
+    this.phase = EGamePhaseCommon.WAITING;
     this.hasStarted = false;
     this.roundActive = false;
     this.tablePositions = this.initTableSeats(this.maxPlayers);
@@ -818,12 +857,12 @@ export class Game {
         console.log(`Using dealer selected variant: ${this.dealerSelectedVariant}`);
         // Create a new deck after variant selection
         this.deck = new Deck(true);
-        this.phase = GamePhase.Preflop;
+        this.phase = EGamePhaseCommon.PREFLOP;
         this.status = 'playing';
       } else {
         // For standard games, create a new deck
         this.deck = new Deck(true);
-        this.phase = GamePhase.Preflop;
+        this.phase = EGamePhaseCommon.PREFLOP;
         this.status = 'playing';
       }
 
@@ -844,8 +883,8 @@ export class Game {
       this.dealCards();
 
       console.log(`...Taking blinds`)
-      const smallBlindPlayer = this.players[this.smallBlindIndex];
-      const bigBlindPlayer = this.players[this.bigBlindIndex];
+      const smallBlindPlayer = this.players[this.smallBlindIndex!];
+      const bigBlindPlayer = this.players[this.bigBlindIndex!];
       console.log(`Small blind: ${smallBlindPlayer.username}\nBig blind:${bigBlindPlayer.username}`);
 
       // Small blind posts blind bet
@@ -876,7 +915,7 @@ export class Game {
       this.currentBet = this.bigBlind;
 
       console.log(`...Setting active player`);
-      this.activePlayerIndex = (this.bigBlindIndex + 1) % this.players.length;
+      this.activePlayerIndex = (this.bigBlindIndex! + 1) % this.players.length;
       this.activePlayerId = this.players[this.activePlayerIndex].id;
       console.log(`...Active player set to: ${this.players[this.activePlayerIndex].username}`)
 
@@ -1116,15 +1155,31 @@ export class Game {
   private getPhaseName(addNum = 0) {
     const finalPhase = this.phase + addNum;
     switch (finalPhase) {
-      case GamePhase.Preflop:
+      case EGamePhaseHoldEm.PREFLOP:
         return 'Pre-Flop';
-      case GamePhase.Flop:
+      case EGamePhaseHoldEm.FLOP:
         return 'Flop';
-      case GamePhase.Turn:
+      case EGamePhaseHoldEm.TURN:
         return 'Turn';
-      case GamePhase.River:
+      case EGamePhaseHoldEm.RIVER:
         return 'River';
-      case GamePhase.Showdown:
+      case EGamePhaseStud.THIRDSTREET:
+        return 'Third Street';
+      case EGamePhaseStud.FOURTHSTREET:
+        return 'Fourth Street';
+      case EGamePhaseStud.FIFTHSTREET:
+        return 'Fifth Street';
+      case EGamePhaseStud.SIXTHSTREET:
+        return 'Sixth Street';
+      case EGamePhaseStud.SEVENTHSTREET:
+        return 'Seventh Street';
+      case EGamePhaseDraw.PREDRAW:
+        return 'Pre-Draw';
+      case EGamePhaseDraw.DRAW:
+        return 'Draw';
+      case EGamePhaseHoldEm.SHOWDOWN:
+      case EGamePhaseDraw.SHOWDOWN:
+      case EGamePhaseStud.SHOWDOWN:
         return 'Showdown';
     }
   }
@@ -1174,7 +1229,7 @@ export class Game {
     );
 
     // Special handling for the first round of betting
-    if (this.phase === GamePhase.Preflop && !allPlayersActed) {
+    if (this.phase === EGamePhaseHoldEm.PREFLOP && !allPlayersActed) {
       // If not all players have acted, find the next player
       return this.findNextActivePlayer();
     }
@@ -1204,19 +1259,19 @@ export class Game {
       
       // Deal community cards based on the new phase
       switch (this.phase) {
-        case GamePhase.Flop:
+        case EGamePhaseHoldEm.FLOP:
           console.log('Dealing the flop');
           this.dealCommunityCards(true); // Deal flop (3 cards)
           break;
-        case GamePhase.Turn:
+        case EGamePhaseHoldEm.TURN:
           console.log('Dealing the turn');
           this.dealCommunityCards(); // Deal turn (1 card)
           break;
-        case GamePhase.River:
+        case EGamePhaseHoldEm.RIVER:
           console.log('Dealing the river');
           this.dealCommunityCards(); // Deal river (1 card)
           break;
-        case GamePhase.Showdown:
+        case EGamePhaseHoldEm.SHOWDOWN:
           console.log('Moving to showdown');
           // Showdown logic will be handled elsewhere
           break;
@@ -1226,7 +1281,7 @@ export class Game {
       this.resetBets();
 
       // Only proceed to set active player if we're not in showdown
-      if (this.phase !== GamePhase.Showdown) {
+      if (this.phase !== EGamePhaseHoldEm.SHOWDOWN) {
         // Set active player to first non-folded player after dealer
         let startPos = (this.dealerIndex + 1) % this.players.length;
         let foundActive = false;
@@ -1245,7 +1300,7 @@ export class Game {
         // If no eligible player found (everyone all-in), go to showdown
         if (!foundActive) {
           console.log(`No active players found, going to showdown`);
-          this.phase = GamePhase.Showdown;
+          this.phase = EGamePhaseHoldEm.SHOWDOWN;
         }
       }
     }
@@ -1378,7 +1433,7 @@ export class Game {
     // Make sure we have valid player count
     const numPlayers = this.players.length;
     if (numPlayers === 0) {
-      this.phase = GamePhase.Waiting;
+      this.phase = 0;
       this.status = 'waiting';
       return true;
     }
@@ -1391,7 +1446,7 @@ export class Game {
     this.deck = null;
     this.burnPile = []; // Initialize as an empty array instead of null
     this.communityCards = []; // Initialize as an empty array instead of null
-    this.phase = GamePhase.Waiting;
+    this.phase = 0;
     this.roundCount++;
     
     // Reset dealer's choice variant for next round

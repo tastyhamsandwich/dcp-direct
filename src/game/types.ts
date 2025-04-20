@@ -22,25 +22,73 @@ export type BlackSuitSymbol = '♠' | '♣';
 export type RedSuitSymbol = '♦' | '♥';
 export type SuitSymbol = BlackSuitSymbol | RedSuitSymbol;
 
-export enum GamePhase {
-    Waiting,
-    // Hold'em/Omaha phases
-    Preflop,
-    Flop,
-    Turn,
-    River,
-    // Draw poker phases
-    PreDraw,
-    Draw,
-    // Stud poker phases
-    ThirdStreet,
-    FourthStreet,
-    FifthStreet,
-    SixthStreet,
-    SeventhStreet,
-    // Common final phase
-    Showdown
+export type FixedSizeArray<T, N extends number> = N extends 0 ? [] : {
+  0: T;
+  length: N;
+} & T[];
+
+export type FlopArray = FixedSizeArray<Card, 3>;
+export type TurnRiverArray = FixedSizeArray<Card, 2>;
+
+export type GamePhaseCommon = TGamePhaseCommon | EGamePhaseCommon;
+export type TGamePhaseCommon = TGamePhaseHoldEm | TGamePhaseDraw | TGamePhaseStud;
+export type TEGamePhaseCommon = EGamePhaseHoldEm | EGamePhaseDraw | EGamePhaseStud
+export enum EGamePhaseCommon {
+  // Common pre-game phase
+  WAITING,
+  // Hold'em/Omaha phases
+  PREFLOP,
+  FLOP,
+  TURN,
+  RIVER,
+  // Draw poker phases
+  PREDRAW,
+  DRAW,
+  // Stud poker phases
+  THIRDSTREET,
+  FOURTHSTREET,
+  FIFTHSTREET,
+  SIXTHSTREET,
+  SEVENTHSTREET,
+  // Common final phase
+  SHOWDOWN
 }
+
+export type GamePhaseHoldEm = TGamePhaseHoldEm | EGamePhaseHoldEm;
+export type TGamePhaseHoldEm = 'waiting' | 'preflop' | 'flop' | 'turn' | 'river' | 'showdown';
+export enum EGamePhaseHoldEm {
+  WAITING,
+  PREFLOP,
+  FLOP,
+  TURN,
+  RIVER,
+  SHOWDOWN
+}
+
+export type GamePhaseDraw = TGamePhaseDraw | EGamePhaseDraw;
+export type TGamePhaseDraw = 'waiting' | 'predraw' | 'draw' | 'showdown'
+export enum EGamePhaseDraw {
+  WAITING,
+  PREDRAW,
+  DRAW,
+  SHOWDOWN
+}
+
+export type GamePhaseStud = TGamePhaseStud | EGamePhaseStud;
+export type TGamePhaseStud = 'waiting' | 'thirdstreet' | 'fourthstreet' | 'fifthstreet' | 'sixthstreet' | 'seventhstreet' | 'showdown';
+export enum EGamePhaseStud {
+  WAITING,
+  THIRDSTREET,
+  FOURTHSTREET,
+  FIFTHSTREET,
+  SIXTHSTREET,
+  SEVENTHSTREET,
+  SHOWDOWN
+}
+
+export type GamePhase = GamePhaseHoldEm | GamePhaseStud | GamePhaseDraw
+export type EGamePhase = EGamePhaseHoldEm | EGamePhaseStud | EGamePhaseDraw
+export type TGamePhase = TGamePhaseHoldEm | TGamePhaseStud | TGamePhaseDraw
 
 export enum RoomStatus {
   WAITING = 'waiting',
@@ -55,7 +103,8 @@ export interface GameState {
   name: string;           
   creator: Player;
   players: Player[];
-  status: 'waiting' | 'playing' | 'paused';
+  status: RoomStatus;
+  gameVariant: GameVariant;
   phase: GamePhase;
   maxPlayers: number;
   hasStarted: boolean;
@@ -77,7 +126,6 @@ export interface GameState {
   activePlayerId: string;
   activePlayerIndex: number | null;
   currentBet: number;
-  gameVariant: GameVariant;
   currentSelectedVariant: GameVariant;
   cardsPerPlayer?: number; // Number of hole cards per player
   customRules?: CustomGameRules; // For custom game variants
