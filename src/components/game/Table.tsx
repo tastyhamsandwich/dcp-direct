@@ -111,7 +111,7 @@ const Table: React.FC<TableProps> = ({ gameState, currentPlayerId, onAction }) =
 
           return (
             <motion.div 
-              key={player.id} 
+              key={player.id}
               className={`player-${index} absolute`} 
               style={position}
               initial={{ opacity: 0, scale: 0.8 }}

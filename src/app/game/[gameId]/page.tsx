@@ -4,13 +4,14 @@ import React, { useEffect, useReducer, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@contexts/authContext';
 import { io, Socket } from 'socket.io-client';
-import { GameState, GamePhase } from '@game/types';
+import { GameState, GamePhase, GameVariant } from '@game/types';
 import Card from '@components/game/Card';
 import Deck from '@components/game/Deck';
 import Player from '@components/game/Player';
 import Table from '@components/game/Table';
 import Actions from '@components/game/Actions';
 import WinnerDisplay from '@components/game/WinnerDisplay';
+import DealerVariantSelector from '@components/game/DealerVariantSelector';
 import { Playwrite_ES } from 'next/font/google';
 
 // Define winner info interface
@@ -33,7 +34,9 @@ type GameAction =
   | { type: 'SET_MESSAGE'; payload: string }
   | { type: 'CLEAR_MESSAGE' }
   | { type: 'SET_WINNERS'; payload: { winners: WinnerInfo[], showdown: boolean } }
-  | { type: 'CLEAR_WINNERS' };
+  | { type: 'CLEAR_WINNERS' }
+  | { type: 'SET_VARIANT_SELECTION_ACTIVE'; payload: boolean }
+  | { type: 'SET_SELECTION_TIMEOUT'; payload: number };
 
 // Define state interface
 interface GamePageState {
@@ -44,6 +47,8 @@ interface GamePageState {
   message: string;
   winners: WinnerInfo[] | null;
   showdown: boolean;
+  variantSelectionActive: boolean;
+  variantSelectionTimeout: number;
 }
 
 // Initial state
@@ -54,7 +59,9 @@ const initialState: GamePageState = {
   socket: null,
   message: '',
   winners: null,
-  showdown: false
+  showdown: false,
+  variantSelectionActive: false,
+  variantSelectionTimeout: 15000
 };
 
 // Reducer function
@@ -82,6 +89,10 @@ function gameReducer(state: GamePageState, action: GameAction): GamePageState {
       };
     case 'CLEAR_WINNERS':
       return { ...state, winners: null, showdown: false };
+    case 'SET_VARIANT_SELECTION_ACTIVE':
+      return { ...state, variantSelectionActive: action.payload };
+    case 'SET_SELECTION_TIMEOUT':
+      return { ...state, variantSelectionTimeout: action.payload };
     default:
       return state;
   }
@@ -94,7 +105,27 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   const [isWinnerOpen, setIsWinnerOpen] = useState<boolean>(false);
   const [allowedActions, setAllowedActions] = useState<string[]>([]);
   const [state, dispatch] = useReducer(gameReducer, initialState);
-  const { gameState, chatMessages, isConnected, socket, message, winners, showdown } = state;
+  const { 
+    gameState, 
+    chatMessages, 
+    isConnected, 
+    socket, 
+    message, 
+    winners, 
+    showdown, 
+    variantSelectionActive, 
+    variantSelectionTimeout 
+  } = state;
+  
+  // Function to handle variant selection
+  const handleSelectVariant = (variant: GameVariant) => {
+    if (!socket || !isConnected || !unwrappedParams.gameId) return;
+    
+    socket.emit('select_variant', {
+      gameId: unwrappedParams.gameId,
+      variant
+    });
+  };
   
   const unwrappedParams = React.use(params);
   
@@ -229,10 +260,43 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     });
 
     socketInstance.on('your_turn', (data) => {
-    console.log('Your turn!', data);
-    setIsMyTurn(true);
-    setAllowedActions(data.allowedActions || []);
-  });
+      console.log('Your turn!', data);
+      setIsMyTurn(true);
+      setAllowedActions(data.allowedActions || []);
+    });
+    
+    // Handler for when variant selection begins
+    socketInstance.on('variant_selection_started', (data) => {
+      console.log('Variant selection started:', data);
+      dispatch({ type: 'SET_VARIANT_SELECTION_ACTIVE', payload: true });
+      if (data.timeoutMs) {
+        dispatch({ type: 'SET_SELECTION_TIMEOUT', payload: data.timeoutMs });
+      }
+      if (data.message) {
+        dispatch({ 
+          type: 'ADD_SYSTEM_MESSAGE', 
+          payload: { 
+            sender: 'SYSTEM:', 
+            message: `${data.message || 'The dealer is selecting the game variant.'}`, 
+            timestamp: new Date().toISOString() 
+          }
+        });
+      }
+    });
+    
+    // Handler for when variant selection is complete
+    socketInstance.on('variant_selected', (data) => {
+      console.log('Variant selected:', data);
+      dispatch({ type: 'SET_VARIANT_SELECTION_ACTIVE', payload: false });
+      dispatch({ 
+        type: 'ADD_SYSTEM_MESSAGE', 
+        payload: { 
+          sender: 'SYSTEM:', 
+          message: `The dealer selected ${data.selectedVariant}${data.defaulted ? ' (default)' : ''}.`, 
+          timestamp: new Date().toISOString() 
+        }
+      });
+    });
     
     return () => {
       socketInstance.disconnect();
@@ -277,8 +341,31 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     setIsWinnerOpen(false);
   };
   
+  const handleVariantSelected = () => {
+    // This just updates our local state when variant selection is complete
+    dispatch({ type: 'SET_VARIANT_SELECTION_ACTIVE', payload: false });
+    dispatch({ 
+      type: 'ADD_SYSTEM_MESSAGE', 
+      payload: { 
+        sender: 'SYSTEM:', 
+        message: 'Variant selection complete, the game will continue shortly.', 
+        timestamp: new Date().toISOString() 
+      }
+    });
+  };
+
   return (
     <div className="container mx-auto p-4 bg-gray-900 text-gray-200 min-h-screen">
+      {/* Dealer's Variant Selector */}
+      <DealerVariantSelector
+        isVisible={variantSelectionActive && gameState?.gameVariant === 'DealersChoice'}
+        dealerId={gameState?.dealerId}
+        currentPlayerId={socket?.id}
+        gameId={unwrappedParams.gameId}
+        onVariantSelected={handleVariantSelected}
+        timeoutMs={variantSelectionTimeout}
+      />
+      
       {/* Winner display modal */}
       {winners && (
         <WinnerDisplay 
@@ -324,6 +411,16 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                 <div className="bg-gray-700 p-3 rounded">
                   <span className="text-gray-400">Current Bet:</span> 
                   <span className="ml-2 text-gray-200">{gameState.currentBet}</span>
+                </div>
+                <div className="bg-gray-700 p-3 rounded col-span-2">
+                  <span className="text-gray-400">Game Variant:</span> 
+                  <span className="ml-2 text-gray-200">
+                    {gameState.gameVariant === 'DealersChoice' 
+                      ? (gameState.currentSelectedVariant 
+                          ? `Dealer's Choice (${gameState.currentSelectedVariant})` 
+                          : "Dealer's Choice (waiting for dealer)")
+                      : gameState.gameVariant}\
+                  </span>
                 </div>
               </div>
               

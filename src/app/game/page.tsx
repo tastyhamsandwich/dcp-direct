@@ -82,7 +82,8 @@ export default function GameLobby() {
       blinds: {
         small: gameData.smallBlind,
         big: gameData.smallBlind * 2
-      }
+      },
+      gameVariant: gameData.gameVariant || 'TexasHoldEm' // Include the selected game variant
     });
   };
   

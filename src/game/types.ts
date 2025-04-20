@@ -16,7 +16,7 @@ export type Hand = Card[];
 export type TableRole = 'Dealer' | 'SmallBlind' | 'BigBlind' | 'None';
 export type BlindType = 'small' | 'big';
 
-export type GameVariant = 'TexasHoldEm' | 'Omaha' ;
+export type GameVariant = 'TexasHoldEm' | 'Omaha' | 'FiveCardDraw' | 'SevenCardStud' | 'OmahaHiLo' | 'Chicago' | 'DealersChoice' | 'Custom';
 
 export type BlackSuitSymbol = '♠' | '♣';
 export type RedSuitSymbol = '♦' | '♥';
@@ -24,10 +24,21 @@ export type SuitSymbol = BlackSuitSymbol | RedSuitSymbol;
 
 export enum GamePhase {
     Waiting,
+    // Hold'em/Omaha phases
     Preflop,
     Flop,
     Turn,
     River,
+    // Draw poker phases
+    PreDraw,
+    Draw,
+    // Stud poker phases
+    ThirdStreet,
+    FourthStreet,
+    FifthStreet,
+    SixthStreet,
+    SeventhStreet,
+    // Common final phase
     Showdown
 }
 
@@ -66,10 +77,32 @@ export interface GameState {
   activePlayerId: string;
   activePlayerIndex: number | null;
   currentBet: number;
+  gameVariant: GameVariant;
+  currentSelectedVariant: GameVariant;
+  cardsPerPlayer?: number; // Number of hole cards per player
+  customRules?: CustomGameRules; // For custom game variants
 }
 
 export interface Stringable {
   toString: () => string;
+}
+
+export interface CustomGameRules {
+  name: string;
+  description: string;
+  creator: string;
+  cardsPerPlayer: number;
+  communityCardStructure: {
+    rounds: number;
+    cardsPerRound: number[];
+  };
+  handEvaluationRules: {
+    useHoleCards: number; // How many hole cards must be used (0 for any, 2 for Omaha, etc.)
+    useCommunityCards: number; // How many community cards must be used (0 for any)
+    isHiLo: boolean; // Does game use hi/lo evaluation
+  };
+  bettingRounds: number;
+  allowDiscards: boolean;
 }
 
 /**

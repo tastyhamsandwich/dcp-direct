@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Player } from '@game/types';
+import { Player, GameVariant } from '@game/types';
 
 interface CreateGameModalProps {
   onClose: () => void;
@@ -13,7 +13,8 @@ const CreateGameModal: React.FC<CreateGameModalProps> = ({ onClose, onSubmit, pl
   const [gameData, setGameData] = useState({
     name: '',
     maxPlayers: 6,
-    smallBlind: 5
+    smallBlind: 5,
+    gameVariant: 'TexasHoldEm' as GameVariant
   });
 
   const [errors, setErrors] = useState({
@@ -22,11 +23,11 @@ const CreateGameModal: React.FC<CreateGameModalProps> = ({ onClose, onSubmit, pl
     smallBlind: ''
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setGameData(prev => ({
       ...prev,
-      [name]: name === 'name' ? value : parseInt(value) || 0
+      [name]: name === 'name' || name === 'gameVariant' ? value : parseInt(value) || 0
     }));
 
     // Clear error when user starts typing
@@ -108,7 +109,7 @@ const CreateGameModal: React.FC<CreateGameModalProps> = ({ onClose, onSubmit, pl
             {errors.maxPlayers && <p className="text-red-500 text-sm mt-1">{errors.maxPlayers}</p>}
           </div>
           
-          <div className="mb-6">
+          <div className="mb-4">
             <label className="block text-gray-300 font-medium mb-2" htmlFor="smallBlind">
               Small Blind Amount
             </label>
@@ -123,6 +124,32 @@ const CreateGameModal: React.FC<CreateGameModalProps> = ({ onClose, onSubmit, pl
             />
             {errors.smallBlind && <p className="text-red-500 text-sm mt-1">{errors.smallBlind}</p>}
             <p className="text-gray-400 text-sm mt-1">Big blind will be {gameData.smallBlind * 2}</p>
+          </div>
+          
+          <div className="mb-6">
+            <label className="block text-gray-300 font-medium mb-2" htmlFor="gameVariant">
+              Game Variant
+            </label>
+            <select
+              id="gameVariant"
+              name="gameVariant"
+              value={gameData.gameVariant}
+              onChange={handleChange}
+              className="w-full border border-gray-600 bg-gray-700 text-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+            >
+              <option value="TexasHoldEm">Texas Hold'em</option>
+              <option value="Omaha">Omaha</option>
+              <option value="OmahaHiLo">Omaha Hi/Lo</option>
+              <option value="FiveCardDraw">Five Card Draw</option>
+              <option value="SevenCardStud">Seven Card Stud</option>
+              <option value="Chicago">Chicago</option>
+              <option value="DealersChoice">Dealer's Choice</option>
+            </select>
+            <p className="text-gray-400 text-sm mt-1">
+              {gameData.gameVariant === 'DealersChoice' ? 
+                "Dealer selects game variant each hand" : 
+                "All hands will use the selected variant"}
+            </p>
           </div>
           
           <div className="flex justify-end space-x-4">

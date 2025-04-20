@@ -380,7 +380,19 @@ export class Deck {
   }
 
   // Implement iterator for deck, so that it can be looped through easily
-  o
+  [Symbol.iterator]() {
+    let index = 0;
+    let cards = this.cards;
+    
+    return {
+      next: function() {
+        return {
+          value: cards[index++],
+          done: index > cards.length
+        };
+      }
+    };
+  }
 
 
   private generateDeck(): Card[] {
@@ -495,8 +507,14 @@ export class Game {
   currentBet: number;
   socket: Socket;
   roundCount: number;
+  gameVariant: GameVariant;
+  cardsPerPlayer: number;
+  customRules?: any;
+  dealerSelectedVariant: GameVariant | null;
+  variantSelectionActive: boolean;
+  variantSelectionTimeout: NodeJS.Timeout | null;
 
-  constructor(id, name, creator, socket, maxPlayers?, smallBlind?, bigBlind?) {
+  constructor(id, name, creator, socket, maxPlayers?, smallBlind?, bigBlind?, gameVariant?: GameVariant, customRules?) {
     this.id = id;
     this.name = name;
     this.creator = creator;
@@ -521,6 +539,32 @@ export class Game {
     this.dealerIndex = 0;
     this.socket = socket;
     this.roundCount = 0;
+    this.gameVariant = gameVariant || 'TexasHoldEm';
+    this.dealerSelectedVariant = null; // Storing dealer's selected variant
+    this.variantSelectionActive = false; // Flag for when variant selection is active
+    
+    // Set cards per player based on game variant
+    switch (this.gameVariant) {
+      case 'Omaha':
+      case 'OmahaHiLo':
+        this.cardsPerPlayer = 4;
+        break;
+      case 'FiveCardDraw':
+        this.cardsPerPlayer = 5;
+        break;
+      case 'SevenCardStud':
+        this.cardsPerPlayer = 7;
+        break;
+      case 'DealersChoice':
+        this.cardsPerPlayer = 2; // Default to Hold'Em until dealer selects
+        break;
+      case 'Custom':
+        this.customRules = customRules;
+        this.cardsPerPlayer = customRules?.cardsPerPlayer || 2;
+        break;
+      default:
+        this.cardsPerPlayer = 2; // Default for Texas Hold'Em
+    }
   }
 
   /**
@@ -600,8 +644,126 @@ export class Game {
    * @param {GameState} state - The current state of the game.
    * @returns {GameState} The updated game state.
    */
-  startRound() {
+  /**
+   * Handles dealer's selection of game variant for Dealer's Choice games
+   * @param variant The game variant selected by the dealer
+   * @returns Boolean indicating whether the selection was successful
+   */
+  setDealerVariant(variant: GameVariant): boolean {
+    // Only allow selection if this is a Dealer's Choice game
+    if (this.gameVariant !== 'DealersChoice') {
+      console.log('Cannot set dealer variant: not a Dealer\'s Choice game');
+      return false;
+    }
+    
+    // Only allow selection when variant selection is active
+    if (!this.variantSelectionActive) {
+      console.log('Cannot set dealer variant: selection not currently active');
+      return false;
+    }
 
+    // Validate that the selected variant is allowed
+    const allowedVariants: GameVariant[] = [
+      'TexasHoldEm', 'Omaha', 'FiveCardDraw', 'SevenCardStud', 'OmahaHiLo', 'Chicago'
+    ];
+    
+    if (!allowedVariants.includes(variant)) {
+      console.log(`Invalid variant selected: ${variant}`);
+      return false;
+    }
+
+    console.log(`Dealer selected variant: ${variant}`);
+    this.dealerSelectedVariant = variant;
+    
+    // Update cards per player based on the selected variant
+    switch (variant) {
+      case 'Omaha':
+      case 'OmahaHiLo':
+        this.cardsPerPlayer = 4;
+        break;
+      case 'FiveCardDraw':
+        this.cardsPerPlayer = 5;
+        break;
+      case 'SevenCardStud':
+        this.cardsPerPlayer = 7;
+        break;
+      default:
+        this.cardsPerPlayer = 2; // Default for Texas Hold'Em, Chicago
+    }
+    
+    // Cancel the selection timeout if it exists
+    if (this.variantSelectionTimeout) {
+      clearTimeout(this.variantSelectionTimeout);
+      this.variantSelectionTimeout = null;
+    }
+    
+    // End the selection phase
+    this.variantSelectionActive = false;
+    
+    // Notify all players of the selected variant
+    if (this.socket) {
+      this.socket.to(this.id).emit('variant_selected', {
+        dealerId: this.dealerId,
+        dealerName: this.players[this.dealerIndex].username,
+        selectedVariant: variant
+      });
+    }
+    
+    return true;
+  }
+
+  /**
+   * Starts the dealer's choice selection phase
+   * @param timeoutMs Time in milliseconds to wait for dealer selection before defaulting
+   * @returns Boolean indicating if selection started successfully
+   */
+  startDealerVariantSelection(timeoutMs = 15000): boolean {
+    // Only proceed if this is a Dealer's Choice game
+    if (this.gameVariant !== 'DealersChoice') {
+      return false;
+    }
+    
+    // Make sure we have a valid dealer
+    if (this.dealerIndex === undefined || !this.players[this.dealerIndex]) {
+      return false;
+    }
+    
+    console.log(`Starting dealer variant selection, dealer: ${this.players[this.dealerIndex].username}`);
+    this.variantSelectionActive = true;
+    
+    // Notify all players that selection is active
+    if (this.socket) {
+      this.socket.to(this.id).emit('variant_selection_started', {
+        dealerId: this.dealerId,
+        dealerName: this.players[this.dealerIndex].username,
+        timeoutMs: timeoutMs
+      });
+    }
+    
+    // Set a timeout to default to Texas Hold'em if no selection is made
+    this.variantSelectionTimeout = setTimeout(() => {
+      if (this.variantSelectionActive) {
+        console.log('Dealer variant selection timed out, defaulting to Texas Hold\'em');
+        this.dealerSelectedVariant = 'TexasHoldEm';
+        this.cardsPerPlayer = 2;
+        this.variantSelectionActive = false;
+        
+        // Notify all players of the default selection
+        if (this.socket) {
+          this.socket.to(this.id).emit('variant_selected', {
+            dealerId: this.dealerId,
+            dealerName: this.players[this.dealerIndex].username,
+            selectedVariant: 'TexasHoldEm',
+            defaulted: true
+          });
+        }
+      }
+    }, timeoutMs);
+    
+    return true;
+  }
+
+  startRound() {
     try {
       console.log(`Starting round!\n...Initializing values`);
       // Reset game flags & arrays, reset game objects
@@ -610,15 +772,14 @@ export class Game {
       this.pot = 0;
       this.sidepots = [];
       this.ineligiblePlayers = [];
-      this.deck = new Deck(true);
-      this.phase = GamePhase.Preflop;
-      this.status = 'playing';
+      
+      // Increment round count
       this.roundCount++;
 
+      // Advance dealer position (except for first round)
       if (this.roundCount > 1) this.dealerIndex = (this.dealerIndex + 1) % this.players.length;
 
-      // Dealer Index is advanced at end of a round, to avoid it being advanced
-      // on the first round of a game
+      // Set position indexes
       this.smallBlindIndex = (this.dealerIndex + 1) % this.players.length;
       this.bigBlindIndex = (this.smallBlindIndex + 1) % this.players.length;
 
@@ -626,6 +787,45 @@ export class Game {
       this.dealerId = this.players[this.dealerIndex].id;
       this.smallBlindId = this.players[this.smallBlindIndex].id;
       this.bigBlindId = this.players[this.bigBlindIndex].id;
+      
+      // For Dealer's Choice, start the variant selection phase
+      if (this.gameVariant === 'DealersChoice') {
+        console.log('Starting dealer variant selection before dealing cards');
+        this.startDealerVariantSelection();
+        
+        // We'll continue the round setup once the dealer makes a selection
+        // or when the selection timeout occurs (handled in those methods)
+        return true;
+      }
+      
+      // For regular games, continue with standard round setup
+      return this.continueRoundAfterVariantSelection();
+      
+    } catch (error) {
+      console.log(`Threw error: ${error}`);
+      throw new Error();
+    }
+  }
+  
+  /**
+   * Continues the round setup after variant selection for Dealer's Choice games
+   * @returns Boolean indicating if the setup was successful
+   */
+  continueRoundAfterVariantSelection(): boolean {
+    try {
+      // If this is a Dealer's Choice game, use the selected variant
+      if (this.gameVariant === 'DealersChoice' && this.dealerSelectedVariant) {
+        console.log(`Using dealer selected variant: ${this.dealerSelectedVariant}`);
+        // Create a new deck after variant selection
+        this.deck = new Deck(true);
+        this.phase = GamePhase.Preflop;
+        this.status = 'playing';
+      } else {
+        // For standard games, create a new deck
+        this.deck = new Deck(true);
+        this.phase = GamePhase.Preflop;
+        this.status = 'playing';
+      }
 
       console.log(`...Resetting player flags`);
       // Reset player flags, settings, and objects
@@ -703,24 +903,68 @@ export class Game {
 
     if (deck === null) return false;
 
-    const numCards = 2; // Can be made dynamic at a later date for other game types, like Omaha
+    // Determine which game variant to use
+    let effectiveVariant = this.gameVariant;
+    if (this.gameVariant === 'DealersChoice' && this.dealerSelectedVariant) {
+      effectiveVariant = this.dealerSelectedVariant;
+      console.log(`Using dealer selected variant for dealing: ${effectiveVariant}`);
+    }
 
-    for (let i = 0; i < numCards; i++) {
-      let currentPosition = (this.dealerIndex + 1) % this.players.length;  // Start left of dealer
-      let playersDealtTo = 0;  // Track how many players we've dealt to
-      
-      while (playersDealtTo < this.players.length) {  // Continue until all players have been dealt to
+    // Use the cardsPerPlayer property based on game variant
+    const numCards = this.cardsPerPlayer || 2;
+    console.log(`Dealing ${numCards} cards per player for ${effectiveVariant}`);
+
+    // Handle different dealing patterns based on game variant
+    if (effectiveVariant === 'SevenCardStud') {
+      // For Seven Card Stud, deal 2 face down, 1 face up initially (3rd Street)
+      this.dealStudCards(3);
+    } else {
+      // Standard dealing pattern for most games (Texas Hold'Em, Omaha, 5-Card Draw)
+      for (let i = 0; i < numCards; i++) {
+        let currentPosition = (this.dealerIndex + 1) % this.players.length;  // Start left of dealer
+        let playersDealtTo = 0;  // Track how many players we've dealt to
+        
+        while (playersDealtTo < this.players.length) {  // Continue until all players have been dealt to
           if (this.players[currentPosition] && this.players[currentPosition].active) {
-              const card = deck.draw();
-              this.players[currentPosition].cards.push(card);
-              console.log(`Dealt ${card.name} to player '${this.players[currentPosition].username}'`);
+            const card = deck.draw();
+            // In stud games, some cards are face up
+            if (effectiveVariant === 'Chicago' && i === numCards - 1) {
+              card.faceUp = true; // Last card in Chicago is face up
+            }
+            this.players[currentPosition].cards.push(card);
+            console.log(`Dealt ${card.name} to player '${this.players[currentPosition].username}'`);
           }
           
           currentPosition = (currentPosition + 1) % this.players.length;  // Move to next player, wrap around if needed
           playersDealtTo++;
+        }
       }
     }
 
+    return true;
+  }
+  
+  // Helper method for Seven-Card Stud dealing pattern
+  dealStudCards(count: number) {
+    for (let i = 0; i < count; i++) {
+      let currentPosition = (this.dealerIndex + 1) % this.players.length;
+      let playersDealtTo = 0;
+      
+      while (playersDealtTo < this.players.length) {
+        if (this.players[currentPosition] && this.players[currentPosition].active) {
+          const card = this.deck!.draw();
+          // In 7-card stud, first two cards are face down, rest are face up
+          if (i >= 2) {
+            card.faceUp = true;
+          }
+          this.players[currentPosition].cards.push(card);
+          console.log(`Dealt ${card.faceUp ? 'face up' : 'face down'} ${card.name} to player '${this.players[currentPosition].username}'`);
+        }
+        
+        currentPosition = (currentPosition + 1) % this.players.length;
+        playersDealtTo++;
+      }
+    }
     return true;
   }
 
@@ -738,9 +982,20 @@ export class Game {
   }
 
   dealCommunityCards(flop: boolean = false): boolean {
-
     // Check if deck is initialized and arrays exist
     if (this.deck === null || !Array.isArray(this.burnPile) || !Array.isArray(this.communityCards)) return false;
+
+    // Determine which game variant to use
+    let effectiveVariant = this.gameVariant;
+    if (this.gameVariant === 'DealersChoice' && this.dealerSelectedVariant) {
+      effectiveVariant = this.dealerSelectedVariant;
+    }
+
+    // Draw games like Five Card Draw don't use community cards
+    if (effectiveVariant === 'FiveCardDraw') {
+      console.log('Skipping community cards for Five Card Draw');
+      return true;
+    }
 
     const burnCard = this.deck.draw();
     this.burnPile.push(burnCard);
@@ -829,7 +1084,12 @@ export class Game {
       currentBet: this.currentBet,
       dealerIndex: this.dealerIndex,
       dealerId: this.dealerId,
-      currentPlayerId: this.socket?.id || null
+      currentPlayerId: this.socket?.id || null,
+      // Dealer's Choice specific properties
+      gameVariant: this.gameVariant,
+      variantSelectionActive: this.variantSelectionActive || false,
+      currentSelectedVariant: this.dealerSelectedVariant || null,
+      cardsPerPlayer: this.cardsPerPlayer
     }
 
     return gameState;
@@ -1075,6 +1335,42 @@ export class Game {
     else return false;
   }
 
+  /**
+   * Handles an incoming selection message from a player for Dealer's Choice games
+   * @param playerId The ID of the player making the selection
+   * @param variant The game variant they've selected
+   * @returns Boolean indicating if the selection was processed successfully
+   */
+  handleVariantSelection(playerId: string, variant: GameVariant): boolean {
+    // Validate that this is a Dealer's Choice game
+    if (this.gameVariant !== 'DealersChoice') {
+      console.log('Cannot handle variant selection: not a Dealer\'s Choice game');
+      return false;
+    }
+    
+    // Validate that selections are currently being accepted
+    if (!this.variantSelectionActive) {
+      console.log('Cannot handle variant selection: selection not currently active');
+      return false;
+    }
+    
+    // Validate that the player making the selection is the dealer
+    if (playerId !== this.dealerId) {
+      console.log(`Player ${playerId} cannot select variant: not the dealer`);
+      return false;
+    }
+    
+    // Use our existing method to set the dealer's variant
+    const result = this.setDealerVariant(variant);
+    
+    if (result) {
+      // Continue the round now that a variant has been selected
+      this.continueRoundAfterVariantSelection();
+    }
+    
+    return result;
+  }
+
   private resetRound(): boolean {
     // Sort players first to ensure consistent ordering
     this.sortPlayerList();
@@ -1097,6 +1393,16 @@ export class Game {
     this.communityCards = []; // Initialize as an empty array instead of null
     this.phase = GamePhase.Waiting;
     this.roundCount++;
+    
+    // Reset dealer's choice variant for next round
+    if (this.gameVariant === 'DealersChoice') {
+      this.dealerSelectedVariant = null;
+      this.variantSelectionActive = false;
+      if (this.variantSelectionTimeout) {
+        clearTimeout(this.variantSelectionTimeout);
+        this.variantSelectionTimeout = null;
+      }
+    }
 
     // Reset player state but don't change ready status here
     this.players.forEach(p => {
