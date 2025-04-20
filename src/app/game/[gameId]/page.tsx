@@ -419,7 +419,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                       ? (gameState.currentSelectedVariant 
                           ? `Dealer's Choice (${gameState.currentSelectedVariant})` 
                           : "Dealer's Choice (waiting for dealer)")
-                      : gameState.gameVariant}\
+                      : gameState.gameVariant}
                   </span>
                 </div>
               </div>
