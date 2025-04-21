@@ -247,44 +247,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Effect to handle auth state changes
   useEffect(() => {
-    let isMounted = true; // Helps prevent state updates after unmount
-    
     const initializeAuth = async () => {
-      if (!isMounted) return;
       setLoading(true);
-      setError(null);
       
       try {
-        console.log('Initializing auth state...');
-        // Force clear any cached state to ensure a fresh auth check
-        setUser(null);
-        setProfile(null);
-        setSession(null);
-        
-        // Check for existing session - intentionally await before proceeding
+        // Check for existing session - this is faster than waiting for onAuthStateChange
         const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
           console.error('Session error:', sessionError);
-          if (isMounted) {
-            setError(sessionError.message);
-            setLoading(false);
-          }
+          setError(sessionError.message);
+          setLoading(false);
           return;
         }
         
-        console.log('Session check result:', currentSession ? 'Has session' : 'No session');
-        
-        if (currentSession && isMounted) {
+        if (currentSession) {
           setSession(currentSession);
           setUser(currentSession.user);
           
-          // Fetch profile data if we have a user
+          // Keep loading true until we get the profile
+          // Fetch profile data
           if (currentSession.user) {
             const profileData = await fetchProfile(currentSession.user.id);
-            
-            if (!isMounted) return;
-            
             if (profileData) {
               setProfile(profileData);
             } else {
@@ -308,7 +292,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                   
                   if (profileError) {
                     console.error('Error creating profile for OAuth user:', profileError);
-                  } else if (isMounted) {
+                  } else {
                     // Fetch the newly created profile
                     const newProfileData = await fetchProfile(currentSession.user.id);
                     if (newProfileData) {
@@ -320,19 +304,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 }
               }
             }
+            // Now that we have both user and profile, we can stop loading
+            setLoading(false);
+          } else {
+            setLoading(false);
           }
-        }
-        
-        // Ensure loading finishes regardless of auth state
-        if (isMounted) {
+        } else {
+          // If no session, we can immediately show unauthenticated state
           setLoading(false);
         }
       } catch (err) {
         console.error('Error initializing auth:', err);
-        if (isMounted) {
-          setError('Failed to initialize authentication');
-          setLoading(false);
-        }
+        setError('Failed to initialize authentication');
+        setLoading(false);
       }
     };
 
@@ -343,24 +327,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       console.log('Auth state changed:', event, newSession);
       
-      if (!isMounted) return;
-      
-      // Reset error state on any auth state change
-      setError(null);
-      
       // Immediately update session and user state
       setSession(newSession);
       setUser(newSession?.user || null);
       
       // Handle login events (including OAuth signin completions)
       if (event === 'SIGNED_IN' && newSession?.user) {
-        // Keep loading state active while we fetch profile
-        setLoading(true);
-        
         // Fetch profile data
         const profileData = await fetchProfile(newSession.user.id);
-        
-        if (!isMounted) return;
         
         if (profileData) {
           setProfile(profileData);
@@ -384,7 +358,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             
             if (profileError) {
               console.error('Error creating profile for OAuth user:', profileError);
-            } else if (isMounted) {
+            } else {
               // Fetch the newly created profile
               const newProfileData = await fetchProfile(newSession.user.id);
               if (newProfileData) {
@@ -396,21 +370,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         }
       } else if (event === 'SIGNED_OUT') {
-        // Explicitly clear everything on sign out
         setProfile(null);
-        setUser(null);
-        setSession(null);
       }
       
-      // Clear loading state after handling the event
-      if (isMounted) {
-        setLoading(false);
-      }
+      // Clear loading state 
+      setLoading(false);
     });
 
     // Clean up listener on unmount
     return () => {
-      isMounted = false; // Prevent state updates after unmount
       authListener.subscription.unsubscribe();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps

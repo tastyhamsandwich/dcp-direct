@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
+// Define default cookie options to ensure consistency
+const DEFAULT_COOKIE_OPTIONS = {
+  maxAge: 60 * 60 * 24 * 7, // 1 week
+  path: "/",
+  sameSite: "lax" as const,
+};
+
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
@@ -9,23 +16,25 @@ export async function GET(request: NextRequest) {
   const response = NextResponse.redirect(new URL('/dashboard', request.url));
   
   if (code) {
-    // Create supabase client on the request
+    // Create supabase client on the request using consistent approach with getAll/setAll
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          get(name) {
-            return request.cookies.get(name)?.value;
+          getAll() {
+            return request.cookies.getAll();
           },
-          set(name, value, options) {
-            // Set on both the request and the response cookies
-            request.cookies.set({ name, value, ...options });
-            response.cookies.set({ name, value, ...options });
-          },
-          remove(name, options) {
-            request.cookies.set({ name, value: '', ...options });
-            response.cookies.set({ name, value: '', ...options });
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              // Apply consistent cookie options
+              response.cookies.set({
+                name,
+                value,
+                ...DEFAULT_COOKIE_OPTIONS,
+                ...options,
+              });
+            });
           },
         },
       }

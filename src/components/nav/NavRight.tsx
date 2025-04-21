@@ -14,25 +14,29 @@ export default function NavRight() {
   const router = useRouter();
   const pathname = usePathname();
 
-  // Simplify timeout handling to be more resilient
+  // Add a timeout to show a different message if loading takes too long
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
+    let fallbackTimer: NodeJS.Timeout | null = null;
 
-    // Set a single timeout - after 1.5 seconds of loading, 
-    // we'll force the UI to show the appropriate login/profile component
     if (loading) {
+      // Show extended message after 2 seconds instead of 5
       timer = setTimeout(() => {
         setLoadingTimeout(true);
+      }, 2000);
+
+      // After 3 seconds of loading, show fallback UI instead of 10
+      fallbackTimer = setTimeout(() => {
         setShowFallback(true);
-      }, 1500);
+      }, 3000);
     } else {
-      // Immediately reset states when loading is done
       setLoadingTimeout(false);
       setShowFallback(false);
     }
 
     return () => {
       if (timer) clearTimeout(timer);
+      if (fallbackTimer) clearTimeout(fallbackTimer);
     };
   }, [loading]);
 

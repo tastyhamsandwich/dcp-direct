@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Label } from '@comps/ui/Label';
 import { Input } from '@comps/ui/Input';
 import Link from 'next/link';
@@ -14,29 +14,6 @@ import './navstyles.css';
 const NavLogin = (props) => {
   const { signIn, error: authError, loading } = useAuth();
   const [error, setError] = useState<string | null>(null);
-  const [localLoading, setLocalLoading] = useState<boolean>(false);
-  
-  // Reset local loading state if auth context loading state changes
-  useEffect(() => {
-    if (!loading && localLoading) {
-      setLocalLoading(false);
-    }
-  }, [loading, localLoading]);
-
-  // Apply error timeout - if login fails, clear the error after 5 seconds
-  useEffect(() => {
-    let timer: NodeJS.Timeout | null = null;
-    
-    if (error || authError) {
-      timer = setTimeout(() => {
-        setError(null);
-      }, 5000);
-    }
-    
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [error, authError]);
 
   const {
     register,
@@ -48,18 +25,11 @@ const NavLogin = (props) => {
 
   const onSubmit = async (data: { email: string; password: string }) => {
     setError(null);
-    setLocalLoading(true);
     props.onLoginClicked();
-    
     try {
       await signIn(data.email, data.password);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
-    } finally {
-      // Set a timeout to reset loading if the auth context doesn't update
-      setTimeout(() => {
-        setLocalLoading(false);
-      }, 3000);
     }
   };
 
@@ -80,7 +50,7 @@ const NavLogin = (props) => {
             placeholder="Email" 
             aria-describedby="user-email"
             aria-invalid={!!errors.email}
-            disabled={loading || localLoading}
+            disabled={loading}
             required 
           />
           {errors.email?.message && <p className="text-red-500 text-xs">{errors.email?.message as string}</p>}
@@ -95,7 +65,7 @@ const NavLogin = (props) => {
             placeholder="Password"
             aria-describedby="user-password"
             aria-invalid={!!errors.password}
-            disabled={loading || localLoading}
+            disabled={loading}
             required
           />
           {errors.password?.message && <p className="text-red-500 text-xs">{errors.password?.message as string}</p>}
@@ -105,9 +75,9 @@ const NavLogin = (props) => {
           <button 
             type="submit"
             className="login-button bg-[#4caf50] hover:bg-[#45a049] text-white font-bold py-1 px-3 rounded mb-2 w-full"
-            disabled={loading || localLoading}
+            disabled={loading}
           >
-            {loading || localLoading ? 'Logging In...' : 'Log In'}
+            {loading ? 'Logging In...' : 'Log In'}
           </button>
           <div className="signup-container text-sm">
             <Link href="/register" className="signup-link text-[#8aff8e] hover:underline">New user? Sign up!</Link>
