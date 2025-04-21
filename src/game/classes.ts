@@ -550,6 +550,7 @@ export class Game {
   cardsPerPlayer: number;
   customRules?: any;
   dealerSelectedVariant: GameVariant | null;
+  nextRoundVariant: GameVariant | null;
   variantSelectionActive: boolean;
   variantSelectionTimeout: NodeJS.Timeout | null;
 
@@ -579,31 +580,38 @@ export class Game {
     this.socket = socket;
     this.roundCount = 0;
     this.gameVariant = gameVariant || 'TexasHoldEm';
-    this.dealerSelectedVariant = null; // Storing dealer's selected variant
-    this.variantSelectionActive = false; // Flag for when variant selection is active
-    
-    // Set cards per player based on game variant
-    switch (this.gameVariant) {
-      case 'Omaha':
-      case 'OmahaHiLo':
-        this.cardsPerPlayer = 4;
-        break;
-      case 'FiveCardDraw':
-        this.cardsPerPlayer = 5;
-        break;
-      case 'SevenCardStud':
-        this.cardsPerPlayer = 7;
-        break;
-      case 'DealersChoice':
-        this.cardsPerPlayer = 2; // Default to Hold'Em until dealer selects
-        break;
-      case 'Custom':
-        this.customRules = customRules;
-        this.cardsPerPlayer = customRules?.cardsPerPlayer || 2;
-        break;
-      default:
-        this.cardsPerPlayer = 2; // Default for Texas Hold'Em
-    }
+    this.dealerSelectedVariant = null;
+    this.nextRoundVariant = null; // *** INITIALIZE IT ***
+    this.variantSelectionActive = false;
+    this.variantSelectionTimeout = null;
+
+     this.updateCardsPerPlayer(this.gameVariant, customRules)
+  }
+
+  updateCardsPerPlayer(variant: GameVariant, customRules?: CustomGameRules): void {
+      switch (variant) {
+        case 'Omaha':
+        case 'OmahaHiLo':
+          this.cardsPerPlayer = 4;
+          break;
+        case 'FiveCardDraw':
+          this.cardsPerPlayer = 5;
+          break;
+        case 'SevenCardStud':
+          this.cardsPerPlayer = 3;
+          break;
+        case 'Custom':
+          this.customRules = customRules; // Ensure customRules are updated if variant changes to Custom
+          this.cardsPerPlayer = customRules?.cardsPerPlayer || 2; // Default for custom if not specified
+          break;
+        // Default for Texas Hold'Em, Chicago, potentially DealersChoice before selection
+        case 'TexasHoldEm':
+        case 'Chicago':
+        case 'DealersChoice': // Default until selected
+        default:
+          this.cardsPerPlayer = 2;
+      }
+      console.log(`Updated cardsPerPlayer to ${this.cardsPerPlayer} for variant ${variant}`);
   }
 
   /**
@@ -714,21 +722,7 @@ export class Game {
     console.log(`Dealer selected variant: ${variant}`);
     this.dealerSelectedVariant = variant;
     
-    // Update cards per player based on the selected variant
-    switch (variant) {
-      case 'Omaha':
-      case 'OmahaHiLo':
-        this.cardsPerPlayer = 4;
-        break;
-      case 'FiveCardDraw':
-        this.cardsPerPlayer = 5;
-        break;
-      case 'SevenCardStud':
-        this.cardsPerPlayer = 7;
-        break;
-      default:
-        this.cardsPerPlayer = 2; // Default for Texas Hold'Em, Chicago
-    }
+    this.updateCardsPerPlayer(variant);
     
     // Cancel the selection timeout if it exists
     if (this.variantSelectionTimeout) {
@@ -757,48 +751,35 @@ export class Game {
    * @returns Boolean indicating if selection started successfully
    */
   startDealerVariantSelection(timeoutMs = 15000): boolean {
-    // Only proceed if this is a Dealer's Choice game
-    if (this.gameVariant !== 'DealersChoice') {
+    if (this.gameVariant !== 'DealersChoice' || this.dealerIndex === undefined || !this.players[this.dealerIndex]) {
       return false;
     }
-    
-    // Make sure we have a valid dealer
-    if (this.dealerIndex === undefined || !this.players[this.dealerIndex]) {
-      return false;
-    }
-    
+
     console.log(`Starting dealer variant selection, dealer: ${this.players[this.dealerIndex].username}`);
     this.variantSelectionActive = true;
-    
-    // Notify all players that selection is active
-    if (this.socket) {
-      this.socket.to(this.id).emit('variant_selection_started', {
-        dealerId: this.dealerId,
-        dealerName: this.players[this.dealerIndex].username,
-        timeoutMs: timeoutMs
-      });
-    }
-    
-    // Set a timeout to default to Texas Hold'em if no selection is made
+    this.phase = EGamePhaseCommon.WAITING; // Ensure phase is waiting during selection
+    this.dealerSelectedVariant = null; // Clear previous selection
+
+    // ... (rest of notification and timeout logic remains the same)
+
+    // Handle timeout - it should now call continueRoundSetup with the default variant
     this.variantSelectionTimeout = setTimeout(() => {
       if (this.variantSelectionActive) {
         console.log('Dealer variant selection timed out, defaulting to Texas Hold\'em');
         this.dealerSelectedVariant = 'TexasHoldEm';
-        this.cardsPerPlayer = 2;
         this.variantSelectionActive = false;
-        
+        this.updateCardsPerPlayer(this.dealerSelectedVariant); // Update cardsPerPlayer
+
         // Notify all players of the default selection
         if (this.socket) {
-          this.socket.to(this.id).emit('variant_selected', {
-            dealerId: this.dealerId,
-            dealerName: this.players[this.dealerIndex].username,
-            selectedVariant: 'TexasHoldEm',
-            defaulted: true
-          });
+          // Emit via io instance in socket.ts
         }
+        // *** NOW CALL continueRoundSetup with the chosen variant ***
+        this.continueRoundSetup(this.dealerSelectedVariant);
+        // Trigger game_update from socket.ts after setup is complete
       }
     }, timeoutMs);
-    
+
     return true;
   }
 
@@ -826,9 +807,18 @@ export class Game {
       this.dealerId = this.players[this.dealerIndex].id;
       this.smallBlindId = this.players[this.smallBlindIndex].id;
       this.bigBlindId = this.players[this.bigBlindIndex].id;
+
+      let roundVariant = this.gameVariant; // Default to the game's base variant
       
+      if (this.nextRoundVariant) {
+        console.log(`Using pre-selected variant for this round: ${this.nextRoundVariant}`);
+        roundVariant = this.nextRoundVariant;
+        this.nextRoundVariant = null; // Consume the selection
+        // Update cardsPerPlayer based on the actual round variant
+        this.updateCardsPerPlayer(roundVariant, this.customRules);
+      }
       // For Dealer's Choice, start the variant selection phase
-      if (this.gameVariant === 'DealersChoice') {
+      else if (this.gameVariant === 'DealersChoice') {
         console.log('Starting dealer variant selection before dealing cards');
         this.startDealerVariantSelection();
         
@@ -836,16 +826,107 @@ export class Game {
         // or when the selection timeout occurs (handled in those methods)
         return true;
       }
+      // If no pre-selection and not Dealer's Choice, ensure cardsPerPlayer matches the game's default variant
+      else {
+        this.updateCardsPerPlayer(this.gameVariant, this.customRules);
+      }
       
-      // For regular games, continue with standard round setup
-      return this.continueRoundAfterVariantSelection();
+      // For regular games or post-selection, continue with standard round setup
+      // Pass the determined roundVariant to the continuation method
+      return this.continueRoundSetup(roundVariant);
       
     } catch (error) {
-      console.log(`Threw error: ${error}`);
-      throw new Error();
+      console.log(`Error starting round: ${error}`);
+      // Consider emitting an error state to clients
+      throw new Error("Failed to start round");
     }
   }
   
+   continueRoundSetup(currentRoundVariant: GameVariant): boolean {
+     try {
+        console.log(`Continuing round setup for variant: ${currentRoundVariant}`);
+        // Create a new deck
+        this.deck = new Deck(true);
+        // Set phase based on the variant type (this might need more refinement for Stud/Draw)
+        if (['TexasHoldEm', 'Omaha', 'OmahaHiLo', 'Chicago'].includes(currentRoundVariant)) {
+          this.phase = EGamePhaseHoldEm.PREFLOP;
+        } else if (currentRoundVariant === 'SevenCardStud') {
+          this.phase = EGamePhaseStud.THIRDSTREET; // Stud starts at 3rd street
+        } else if (currentRoundVariant === 'FiveCardDraw') {
+          this.phase = EGamePhaseDraw.PREDRAW;
+        } else {
+          this.phase = EGamePhaseCommon.PREFLOP; // Default fallback
+        }
+        this.status = 'playing';
+
+        console.log(`...Resetting player flags`);
+        // Reset player flags, settings, and objects
+        this.players.forEach(p => {
+          p.currentBet = 0;
+          p.active = true;
+          p.folded = false;
+          p.allIn = false;
+          p.previousAction = 'none';
+          p.cards = [];
+          // Keep player.ready status as is, don't reset here
+        });
+
+        console.log(`Dealer: ${this.players[this.dealerIndex].username}`);
+        console.log(`...Dealing cards using variant ${currentRoundVariant}`);
+        // Deal initial cards based on the ROUND variant
+        this.dealCards(currentRoundVariant); // Pass the variant to dealCards
+
+        console.log(`...Taking blinds`)
+        const smallBlindPlayer = this.players[this.smallBlindIndex!];
+        const bigBlindPlayer = this.players[this.bigBlindIndex!];
+        console.log(`Small blind: ${smallBlindPlayer.username}\nBig blind:${bigBlindPlayer.username}`);
+
+        // Post blinds (Handle all-in)
+        const sbAmount = Math.min(this.smallBlind, smallBlindPlayer.chips);
+        this.pot += sbAmount;
+        smallBlindPlayer.currentBet = sbAmount;
+        smallBlindPlayer.chips -= sbAmount;
+        smallBlindPlayer.allIn = smallBlindPlayer.chips === 0;
+        smallBlindPlayer.previousAction = 'bet'; // Blinds count as initial bet action
+
+        const bbAmount = Math.min(this.bigBlind, bigBlindPlayer.chips);
+        this.pot += bbAmount;
+        bigBlindPlayer.currentBet = bbAmount;
+        bigBlindPlayer.chips -= bbAmount;
+        bigBlindPlayer.allIn = bigBlindPlayer.chips === 0;
+        bigBlindPlayer.previousAction = 'bet'; // Blinds count as initial bet action
+
+        // Set current bet to big blind amount
+        this.currentBet = this.bigBlind;
+
+        console.log(`...Setting active player`);
+        // Active player logic might differ for Stud (usually highest card showing starts)
+        // For now, stick to standard UTG logic
+        this.activePlayerIndex = (this.bigBlindIndex! + 1) % this.players.length;
+        // Skip folded/all-in players when setting initial active player
+        while(this.players[this.activePlayerIndex].folded || this.players[this.activePlayerIndex].allIn) {
+            this.activePlayerIndex = (this.activePlayerIndex + 1) % this.players.length;
+            // Add a safety break if somehow all players are folded/all-in
+            if (this.activePlayerIndex === (this.bigBlindIndex! + 1) % this.players.length) break;
+        }
+        this.activePlayerId = this.players[this.activePlayerIndex].id;
+        console.log(`...Active player set to: ${this.players[this.activePlayerIndex].username}`)
+
+        // Emit game update AFTER all setup is complete
+        if (this.socket) {
+          // Use io.to(gameId).emit from socket.ts instead of this.socket.to().emit()
+          // This ensures the message goes through the central IO instance.
+          // We'll trigger this from the socket.ts handler after calling startRound.
+          // This class method should just return the state or true/false.
+        }
+        return true;
+
+      } catch (error) {
+        console.log(`Error continuing round setup: ${error}`);
+        throw new Error("Failed to continue round setup");
+      }
+  }
+
   /**
    * Continues the round setup after variant selection for Dealer's Choice games
    * @returns Boolean indicating if the setup was successful
@@ -880,7 +961,7 @@ export class Game {
       console.log(`Dealer: ${this.players[this.dealerIndex].username}`);
       console.log(`...Dealing cards`);
       // Deal initial cards
-      this.dealCards();
+      this.dealCards(this.gameVariant);
 
       console.log(`...Taking blinds`)
       const smallBlindPlayer = this.players[this.smallBlindIndex!];
@@ -937,71 +1018,88 @@ export class Game {
    * @param {GameState} state - The current state of the game.
    * @returns {boolean} - Returns true/false depending upon successful function execution.
    */
-  dealCards() {
-    const deck = this.deck;
+  dealCards(currentRoundVariant: GameVariant) {
+      const deck = this.deck;
 
-    if (deck === null) return false;
+      if (deck === null) return false;
 
-    // Determine which game variant to use
-    let effectiveVariant = this.gameVariant;
-    if (this.gameVariant === 'DealersChoice' && this.dealerSelectedVariant) {
-      effectiveVariant = this.dealerSelectedVariant;
-      console.log(`Using dealer selected variant for dealing: ${effectiveVariant}`);
-    }
+      // Use the cardsPerPlayer property which should be set correctly by updateCardsPerPlayer
+      const numCards = this.cardsPerPlayer;
+      console.log(`Dealing ${numCards} cards per player for ${currentRoundVariant}`);
 
-    // Use the cardsPerPlayer property based on game variant
-    const numCards = this.cardsPerPlayer || 2;
-    console.log(`Dealing ${numCards} cards per player for ${effectiveVariant}`);
-
-    // Handle different dealing patterns based on game variant
-    if (effectiveVariant === 'SevenCardStud') {
-      // For Seven Card Stud, deal 2 face down, 1 face up initially (3rd Street)
-      this.dealStudCards(3);
-    } else {
-      // Standard dealing pattern for most games (Texas Hold'Em, Omaha, 5-Card Draw)
-      for (let i = 0; i < numCards; i++) {
-        let currentPosition = (this.dealerIndex + 1) % this.players.length;  // Start left of dealer
-        let playersDealtTo = 0;  // Track how many players we've dealt to
-        
-        while (playersDealtTo < this.players.length) {  // Continue until all players have been dealt to
-          if (this.players[currentPosition] && this.players[currentPosition].active) {
-            const card = deck.draw();
-            // In stud games, some cards are face up
-            if (effectiveVariant === 'Chicago' && i === numCards - 1) {
-              card.faceUp = true; // Last card in Chicago is face up
-            }
-            this.players[currentPosition].cards.push(card);
-            console.log(`Dealt ${card.name} to player '${this.players[currentPosition].username}'`);
+      // Handle different dealing patterns based on game variant
+      if (currentRoundVariant === 'SevenCardStud') {
+          // Pass the current phase to determine how many/which cards to deal
+          this.dealStudCards(this.phase as EGamePhaseStud);
+      } else {
+          // Standard dealing pattern for most other games
+          for (let i = 0; i < numCards; i++) {
+              let currentPosition = (this.dealerIndex + 1) % this.players.length;
+              for (let p = 0; p < this.players.length; p++) {
+                  const playerIndex = (currentPosition + p) % this.players.length;
+                  const player = this.players[playerIndex];
+                  // Only deal to active (non-folded) players who don't have enough cards yet
+                  if (player && !player.folded && player.cards.length < numCards) {
+                      const card = deck.draw();
+                      // Handle face-up cards (e.g., Chicago's last card)
+                      if (currentRoundVariant === 'Chicago' && i === numCards - 1) {
+                          card.faceUp = true;
+                      } else {
+                          card.faceUp = false; // Ensure default is face down
+                      }
+                      player.cards.push(card);
+                      console.log(`Dealt ${card.faceUp ? 'face up ' : ''}${card.name} to player '${player.username}'`);
+                  }
+              }
           }
-          
-          currentPosition = (currentPosition + 1) % this.players.length;  // Move to next player, wrap around if needed
-          playersDealtTo++;
-        }
       }
-    }
-
-    return true;
+      return true;
   }
   
   // Helper method for Seven-Card Stud dealing pattern
-  dealStudCards(count: number) {
-    for (let i = 0; i < count; i++) {
+  dealStudCards(phase: EGamePhaseStud) {
+    if (!this.deck) return false;
+
+    let cardsToDeal = 0;
+    let faceUp = false;
+
+    switch(phase) {
+      case EGamePhaseStud.THIRDSTREET:
+        cardsToDeal = 3; // 2 down, 1 up
+        break;
+      case EGamePhaseStud.FOURTHSTREET:
+      case EGamePhaseStud.FIFTHSTREET:
+      case EGamePhaseStud.SIXTHSTREET:
+        cardsToDeal = 1;
+        faceUp = true;
+        break;
+      case EGamePhaseStud.SEVENTHSTREET: // River card in Stud
+        cardsToDeal = 1;
+        faceUp = false; // River card is dealt face down in Stud
+        break;
+      default:
+        console.error(`Invalid phase for Stud dealing: ${phase}`);
+        return false;
+    }
+
+    console.log(`Dealing Stud: Phase ${phase}, Cards ${cardsToDeal}, FaceUp ${faceUp}`);
+
+    for (let i = 0; i < cardsToDeal; i++) {
       let currentPosition = (this.dealerIndex + 1) % this.players.length;
-      let playersDealtTo = 0;
-      
-      while (playersDealtTo < this.players.length) {
-        if (this.players[currentPosition] && this.players[currentPosition].active) {
+      for (let p = 0; p < this.players.length; p++) {
+        const playerIndex = (currentPosition + p) % this.players.length;
+        const player = this.players[playerIndex];
+        if (player && !player.folded) {
           const card = this.deck!.draw();
-          // In 7-card stud, first two cards are face down, rest are face up
-          if (i >= 2) {
-            card.faceUp = true;
+          // Third street: first 2 down, 3rd up. Others depend on 'faceUp' flag.
+          if (phase === EGamePhaseStud.THIRDSTREET) {
+            card.faceUp = (i === 2); // Only the 3rd card is face up initially
+          } else {
+            card.faceUp = faceUp;
           }
-          this.players[currentPosition].cards.push(card);
-          console.log(`Dealt ${card.faceUp ? 'face up' : 'face down'} ${card.name} to player '${this.players[currentPosition].username}'`);
+          player.cards.push(card);
+          console.log(`Dealt ${card.faceUp ? 'face up' : 'face down'} ${card.name} to player '${player.username}'`);
         }
-        
-        currentPosition = (currentPosition + 1) % this.players.length;
-        playersDealtTo++;
       }
     }
     return true;
@@ -1053,6 +1151,11 @@ export class Game {
     }
 
     return true;
+  }
+
+  /** Returns the current dealer's username based on the current value of dealerId */
+  public getDealer(): string {
+    return this.players.find(p => p.id === this.dealerId)?.username || 'Unknown Dealer';
   }
 
   returnGameState() {
@@ -1128,7 +1231,9 @@ export class Game {
       gameVariant: this.gameVariant,
       variantSelectionActive: this.variantSelectionActive || false,
       currentSelectedVariant: this.dealerSelectedVariant || null,
-      cardsPerPlayer: this.cardsPerPlayer
+      cardsPerPlayer: this.cardsPerPlayer,
+      activeVariant: this.dealerSelectedVariant || this.gameVariant, // Variant currently in play if Dealer's Choice selected
+      nextRoundVariant: this.nextRoundVariant, // Variant selected for the *next* round
     }
 
     return gameState;
@@ -1216,7 +1321,7 @@ export class Game {
 
       // Handle round reset
       if (this.resetRound()) {
-        this.dealCards();
+        this.dealCards(this.gameVariant);
         return true;
       }
     }
@@ -1420,7 +1525,7 @@ export class Game {
     
     if (result) {
       // Continue the round now that a variant has been selected
-      this.continueRoundAfterVariantSelection();
+      this.continueRoundSetup(this.dealerSelectedVariant!);
     }
     
     return result;

@@ -1,5 +1,5 @@
 import { Server } from 'socket.io';
-import { User, GamePhase, ListEntry, Action } from '@game/types';
+import { User, GamePhase, ListEntry, Action, EGamePhaseCommon, EGamePhaseHoldEm } from '@game/types';
 import { Player, Game, Sidepot } from '@game/classes';
 import { evaluateHand } from '@game/utils';
 import { v4 as uuidv4 } from 'uuid';
@@ -210,7 +210,7 @@ export function initializeSocket(io: Server) {
       io.to(gameId).emit('game_state', { game: games[gameId].returnGameState() });
       
       // Check if we have at least 2 players and all are ready
-      if (game.players.length >= 2 && game.phase === GamePhase.Waiting) {
+      if (game.players.length >= 2 && game.phase === 0) {
         checkRoundStatus(game, io);
       }
       
@@ -408,7 +408,7 @@ export function initializeSocket(io: Server) {
               winners: [{
                 playerId: winner.id,
                 playerName: winner.username,
-                amount: previousPhase !== GamePhase.Waiting ? winner.chips - game.players.find(p => p.id === winner.id)!.chips : 0,
+                amount: previousPhase !== 0 ? winner.chips - game.players.find(p => p.id === winner.id)!.chips : 0,
                 potType: 'All pots (win by fold)'
               }],
               showdown: false
@@ -417,7 +417,7 @@ export function initializeSocket(io: Server) {
         }
 
         // If we've moved to showdown, handle the showdown
-        if (game.phase === GamePhase.Showdown && previousPhase !== GamePhase.Showdown) {
+        if (game.phase === EGamePhaseCommon.SHOWDOWN && previousPhase !== EGamePhaseCommon.SHOWDOWN) {
           handleShowdown(game, io);
         }
 
@@ -553,7 +553,7 @@ export function initializeSocket(io: Server) {
               if (game.players.length < 2) {
                 game.hasStarted = false;
                 // Not enough players, reset game
-                game.phase = GamePhase.Waiting;
+                game.phase = EGamePhaseCommon.WAITING;
                 game.status = 'waiting';
                 game.communityCards = [];
                 game.pot = 0;
@@ -664,7 +664,7 @@ function checkRoundStatus(game: Game, io) {
   }
 
   // If we're already playing and need to check player readiness between rounds
-  if (game.status === 'playing' && game.phase === GamePhase.Waiting && game.roundCount > 1) {
+  if (game.status === 'playing' && game.phase === 0 && game.roundCount > 1) {
     const allReady = game.players.every(isReady);
     const enoughPlayers = totalPlayers >= 2;
     
@@ -729,7 +729,7 @@ function getAllowedActions(game, playerId) {
   const actions: Action[] = [];
 
   // Always allow fold unless we're in preflop and player is big blind without additional bets
-  if (!(game.phase === GamePhase.Preflop && player.id === game.bigBlindId && game.currentBet === game.bigBlind)) {
+  if (!(game.phase === EGamePhaseHoldEm.PREFLOP && player.id === game.bigBlindId && game.currentBet === game.bigBlind)) {
     actions.push('fold');
   }
 
@@ -746,7 +746,7 @@ function getAllowedActions(game, playerId) {
 
   // Bet is allowed if there's no current bet and player has chips
   if ((game.currentBet === 0 || 
-      (game.phase === GamePhase.Preflop && player.id === game.bigBlindId && game.currentBet === game.bigBlind)) 
+      (game.phase === EGamePhaseHoldEm.PREFLOP && player.id === game.bigBlindId && game.currentBet === game.bigBlind)) 
       && player.chips > 0) {
     actions.push('bet');
   }
@@ -763,7 +763,7 @@ function getAllowedActions(game, playerId) {
 // Add a function to handle showdown
 function handleShowdown(game, io) {
   // If we're in showdown phase, determine winners
-  if (game.phase === GamePhase.Showdown) {
+  if (game.phase === EGamePhaseCommon.SHOWDOWN) {
     // If only one player remains (everyone else folded)
     const activePlayers = game.players.filter(p => !p.folded);
     if (activePlayers.length === 1) {
@@ -866,7 +866,7 @@ function resetForNextRound(game, io) {
 
   // Reset game state for next round
   game.roundActive = false;
-  game.phase = GamePhase.Waiting;
+  game.phase = EGamePhaseCommon.WAITING;
   game.pot = 0;
   game.currentBet = 0;
   game.communityCards = [];

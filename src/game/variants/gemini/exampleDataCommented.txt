@@ -1,0 +1,66 @@
+{
+  "variantId": "unique-variant-identifier-456",
+  "variantName": "Grid Runner Hold'em",
+  "description": "Standard Hold'em hole cards, but the community cards form a grid where players can use predefined rows OR any 5 orthogonally adjacent cards.",
+  "createdBy": "user-abc",
+  "creationDate": "2025-04-20T11:30:00Z", // Assuming current time
+
+  "gameRules": {
+    "holeCardsDealt": 2, // Like Hold'em
+    "allowDiscards": false,
+    "wildCardRule": "none"
+  },
+
+  "communityCards": {
+    "useCommunityCards": true,
+    "grid": [
+      // Example: A 3x3 area used within the 5x5 grid
+      [ { "type": "flop", "sectionId": "F1a" }, { "type": "flop", "sectionId": "F1b" }, { "type": "flop", "sectionId": "F1c" }, null, null ],
+      [ { "type": "turn", "sectionId": "T1" },  { "type": "river", "sectionId": "R1" }, { "type": "turn", "sectionId": "T2" }, null, null ],
+      [ { "type": "flop", "sectionId": "F2a" }, { "type": "flop", "sectionId": "F2b" }, { "type": "flop", "sectionId": "F2c" }, null, null ],
+      [ null, null, null, null, null ],
+      [ null, null, null, null, null ]
+    ],
+    "sections": [
+      // Define sections and reveal order (simplified example)
+      { "id": "F1a", "type": "flop", "cardCount": 1, "revealOrder": 1 },
+      { "id": "F1b", "type": "flop", "cardCount": 1, "revealOrder": 1 },
+      { "id": "F1c", "type": "flop", "cardCount": 1, "revealOrder": 1 },
+      { "id": "T1", "type": "turn", "cardCount": 1, "revealOrder": 2 },
+      { "id": "R1", "type": "river", "cardCount": 1, "revealOrder": 3 },
+      { "id": "T2", "type": "turn", "cardCount": 1, "revealOrder": 2 }, // Another Turn card
+      { "id": "F2a", "type": "flop", "cardCount": 1, "revealOrder": 1 }, // Another Flop group
+      { "id": "F2b", "type": "flop", "cardCount": 1, "revealOrder": 1 },
+      { "id": "F2c", "type": "flop", "cardCount": 1, "revealOrder": 1 }
+      // Note: Even with adjacency rules, defining sections and revealOrder is still needed for betting rounds.
+    ],
+    // --- MODIFIED Playable Groups ---
+    // This array now defines different *types* of rules for forming groups.
+    "playableGroupRules": [
+      {
+        "ruleType": "predefined_sections", // Rule based on specific section combos
+        "name": "Top Row Defined", // A name for this specific group option
+        "sectionIds": ["F1a", "F1b", "F1c", "T1", "R1"] // Example: Must use these 5 sections
+      },
+      {
+        "ruleType": "predefined_sections",
+        "name": "Bottom Row Defined",
+        "sectionIds": ["F2a", "F2b", "F2c", "T2", "R1"] // Example: Another specific combo
+      },
+      {
+        "ruleType": "adjacent_cells", // Rule based on spatial adjacency
+        "name": "Any 5 Adjacent", // A name for this general rule
+        "count": 5, // Must be a group of 5 cards
+        "adjacencyType": "orthogonal", // 'orthogonal' (up, down, left, right) or 'orthogonal_or_diagonal'
+        "appliesTo": "grid_wide" // Could potentially be restricted to sub-regions later if needed
+      }
+      // You could add more rules of either type
+    ]
+  },
+
+  "handFormationRule": {
+    "type": "holdem_best_5", // Make best 5-card hand
+    "maxHoleCardsToUse": 2 // Use 0, 1, or 2 hole cards
+    // requiredCommunityCards is implicitly (5 - hole cards used)
+  }
+}

@@ -16,7 +16,15 @@ export type Hand = Card[];
 export type TableRole = 'Dealer' | 'SmallBlind' | 'BigBlind' | 'None';
 export type BlindType = 'small' | 'big';
 
-export type GameVariant = 'TexasHoldEm' | 'Omaha' | 'FiveCardDraw' | 'SevenCardStud' | 'OmahaHiLo' | 'Chicago' | 'DealersChoice' | 'Custom';
+export type GameVariant =
+  | 'TexasHoldEm'
+  | 'Omaha'
+  | 'OmahaHiLo'
+  | 'SevenCardStud'
+  | 'FiveCardDraw'
+  | 'Chicago'
+  | 'DealersChoice' // Keep this if you want the dedicated mode
+  | 'Custom';
 
 export type BlackSuitSymbol = '♠' | '♣';
 export type RedSuitSymbol = '♦' | '♥';
