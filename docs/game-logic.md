@@ -4,260 +4,295 @@ The game logic in DCP Direct is implemented with a combination of client and ser
 
 ## Game Concepts
 
-The core game is a card game with the following concepts:
+The core game is a poker game with the following concepts:
 
 1. **Cards**: Standard playing cards with suit and value
 2. **Players**: Users participating in a game
 3. **Game Rooms**: Instances of games with unique IDs
 4. **Rounds**: Game play sessions within a game
-5. **Actions**: Player moves like playing cards
+5. **Actions**: Player moves like bet, call, fold, etc.
+6. **Variants**: Different types of poker games (Texas Hold'em, Omaha, etc.)
 
-## Data Structures
+## Poker Round Flow
 
-### Card
+A poker round follows a detailed sequence of method calls, function invocations, and events. Here's the complete flow:
 
+### 1. Round Start
+```
+startRound() → continueRoundSetup() → dealCards()
+```
+- Game rotates dealer position (except first round)
+- Sets blind positions (small blind = dealer + 1, big blind = dealer + 2)
+- For Dealer's Choice games, initiates variant selection with `startDealerVariantSelection()`
+- Creates new deck and deals initial cards based on variant
+- Posts blinds from small and big blind players
+- Sets initial active player (after big blind)
+
+### 2. Betting Rounds
+For each betting round, the following cycle occurs:
+```
+checkPhaseStatus() → findNextActivePlayer() → player actions → repeat
+```
+- Active player receives 'your_turn' event with allowed actions
+- Player can take one of these actions:
+  - fold: Player's hand discarded
+  - check: If no bets to call
+  - call: Match current bet
+  - bet: If no previous bets
+  - raise: Increase current bet
+- Each action triggers:
+  - Pot updates
+  - Player chip counts update
+  - All-in situations create sidepots via `createSidepot()`
+  - Game state broadcast to all players
+
+### 3. Phase Progression (Texas Hold'em example)
+```
+PREFLOP → FLOP → TURN → RIVER → SHOWDOWN
+```
+- After each betting round completes:
+  - `checkPhaseStatus()` advances the phase
+  - Community cards dealt via `dealCommunityCards()`
+  - New betting round begins
+  - For Flop: 3 cards dealt
+  - For Turn/River: 1 card dealt each
+
+### 4. Round End Conditions
+Two possible paths:
+```
+a) Everyone folds → immediate winner
+b) Reach showdown → evaluateHands() → distributePots()
+```
+- If all but one player folds:
+  - Last remaining player wins pot immediately
+  - No hand evaluation needed
+- At showdown:
+  - All remaining hands evaluated
+  - Pots distributed (main pot and any sidepots)
+  - Winners announced via 'round_winners' event
+  - Hand information displayed
+
+### 5. Round Reset
+```
+resetForNextRound() → wait for ready → new round
+```
+- Reset all game state:
+  - Clear cards, pots, bets
+  - Reset player actions and flags
+  - Rotate dealer position
+  - Players must ready up for next round
+  - New round begins when all players ready
+
+### WebSocket Events
+Throughout the round, these events are emitted:
+- 'game_update': After any game state change
+- 'your_turn': When it becomes a player's turn
+- 'phase_changed': When moving to new betting round
+- 'round_winners': When round ends
+- 'round_ended': When round completes and ready for next round
+
+All game state changes are managed through the Game class, with the WebSocket server (socket.ts) handling communication with clients and coordinating the game flow between players.
+
+## Class Documentation 
+
+### Game Class
 ```typescript
-// src/lib/utils/gameLogic.ts
-export interface Card {
-  id: number;
-  value: number;  // 1-13 (Ace=1, Jack=11, Queen=12, King=13)
-  suit: 'hearts' | 'diamonds' | 'clubs' | 'spades';
-  faceUp: boolean;
-}
+class Game
 ```
 
-### Player
+The `Game` class is the core class that manages game state and logic. It handles all aspects of a poker game including player management, dealing cards, managing bets, and game progression.
 
+### Properties
+
+- `id: string` - Unique identifier for the game instance
+- `name: string` - Display name of the game
+- `creator: Player` - The player who created the game
+- `players: Player[]` - Array of players in the game
+- `status: 'waiting' | 'playing' | 'paused'` - Current game status
+- `phase: EGamePhaseCommon | EGamePhaseHoldEm | EGamePhaseDraw | EGamePhaseStud` - Current phase of the game
+- `maxPlayers: number` - Maximum number of players allowed
+- `hasStarted: boolean` - Whether the game has started
+- `roundActive: boolean` - Whether a round is currently active
+- `tablePositions: TableSeat[]` - Array of table seats and their occupancy
+- `smallBlind: number` - Small blind amount
+- `bigBlind: number` - Big blind amount
+- `dealerIndex: number` - Index of the current dealer in players array
+- `smallBlindIndex?: number` - Index of small blind position
+- `bigBlindIndex?: number` - Index of big blind position
+- `dealerId?: string` - ID of current dealer
+- `smallBlindId?: string` - ID of player in small blind
+- `bigBlindId?: string` - ID of player in big blind
+- `pot: number` - Current pot amount
+- `sidepots: Sidepot[]` - Array of side pots
+- `ineligiblePlayers: Player[]` - Players not eligible for certain pots
+- `deck: Deck | null` - Current deck of cards
+- `communityCards: Card[] | null` - Community cards on the table
+- `burnPile: Card[] | null` - Burned cards
+- `activePlayerId: string` - ID of player whose turn it is
+- `activePlayerIndex: number | null` - Index of active player in players array
+- `currentBet: number` - Current bet amount
+- `socket: Socket` - WebSocket connection
+- `roundCount: number` - Number of rounds played
+- `gameVariant: GameVariant` - Type of poker being played
+- `cardsPerPlayer: number` - Number of cards dealt to each player
+- `customRules?: any` - Optional custom game rules
+- `dealerSelectedVariant: GameVariant | null` - Selected variant in Dealer's Choice games
+- `nextRoundVariant: GameVariant | null` - Variant selected for next round
+- `variantSelectionActive: boolean` - Whether variant selection is active
+- `variantSelectionTimeout: NodeJS.Timeout | null` - Timeout for variant selection
+
+### Methods
+
+#### Game Management
+- `constructor(id: string, name: string, creator: Player, socket: Socket, maxPlayers?: number, smallBlind?: number, bigBlind?: number, gameVariant?: GameVariant, customRules?: CustomGameRules)` - Initializes a new game
+- `sortPlayerList()` - Sorts players by seat number
+- `resetRound(): boolean` - Resets the game state for a new round
+- `returnGameState()` - Returns a safe version of the game state for client communication
+
+#### Dealer's Choice Methods
+- `updateCardsPerPlayer(variant: GameVariant, customRules?: CustomGameRules): void` - Updates cards per player based on variant
+- `setDealerVariant(variant: GameVariant): boolean` - Sets the dealer's chosen variant
+- `startDealerVariantSelection(timeoutMs?: number): boolean` - Initiates variant selection phase
+- `handleVariantSelection(playerId: string, variant: GameVariant): boolean` - Processes variant selection from dealer
+
+#### Card Dealing
+- `dealCards(currentRoundVariant: GameVariant): boolean` - Deals initial cards to players
+- `dealStudCards(phase: EGamePhaseStud): boolean` - Handles dealing for Seven-Card Stud
+- `dealCommunityCards(flop: boolean = false): boolean` - Deals community cards
+
+#### Game Flow Control
+- `startRound(): boolean` - Initiates a new round
+- `continueRoundSetup(currentRoundVariant: GameVariant): boolean` - Continues round setup after variant selection
+- `checkPhaseStatus()` - Checks and updates game phase
+- `findNextActivePlayer(): boolean` - Finds the next player who can act
+
+#### Pot Management
+- `createSidepot(allInPlayer: Player, allInAmount: number): void` - Creates a side pot when a player goes all-in
+- `distributePots(): { playerId: string, playerName: string, amount: number, potType: string }[]` - Distributes pots to winners
+
+#### Player Position Management
+- `getNextPlayerId(currentPlayerId: string): string` - Gets the next player's ID
+- `getRoleIds(isFirstRound: boolean): RoleIds` - Gets dealer and blind position IDs
+- `getDealer(): string` - Returns current dealer's username
+
+#### Hand Evaluation
+- `evaluateHands(players: Player[], communityCards: Card[])` - Evaluates player hands to determine winners
+
+### Player Class
 ```typescript
-// src/lib/utils/gameLogic.ts
-export interface Player {
-  id: string;        // User ID
-  name: string;      // Display name
-  score: number;     // Current score
-  hand: Card[];      // Cards in hand
-  isActive: boolean; // Still in the game
-  isReady: boolean;  // Ready to start
-}
+class Player implements User
 ```
 
-### Game State
+The `Player` class represents a player in the poker game.
 
+#### Properties
+- `id: string` - Unique identifier for the player
+- `seatNumber: number` - Player's seat position at the table
+- `username: string` - Player's display name
+- `chips: number` - Player's current chip count
+- `folded: boolean` - Whether player has folded current hand
+- `active: boolean` - Whether player is currently active in the game
+- `ready: boolean` - Whether player is ready for next round
+- `allIn: boolean` - Whether player has gone all-in
+- `cards: Card[]` - Player's hole cards
+- `currentBet: number` - Player's current bet in this round
+- `previousAction: Action` - Player's last action in the round
+- `avatar: string` - Player's avatar image URL
+- `handRank: HandRank` - Player's current hand ranking
+
+#### Methods
+- `constructor(id, username, seatNumber, chips, avatar)` - Creates new player instance
+- `getId()` - Returns player ID
+- `getChips()` - Returns chip count
+- `getCards()` - Returns hole cards
+- `getSeat()` - Returns seat number
+- `getActive()` - Returns active status
+- `getReady()` - Returns ready status
+- `getAllIn()` - Returns all-in status
+- `getCurrentBet()` - Returns current bet amount
+- `getPrevAction()` - Returns previous action
+- `setId(value)` - Sets player ID
+- `setChips(amount)` - Sets chip count
+- `addChips(amountToAdd)` - Adds chips to player's stack
+- `setSeat(seatNum)` - Sets seat number
+- `setActive(value)` - Sets active status
+- `setReady(value)` - Sets ready status
+- `toggleReady()` - Toggles ready status
+- `setAllIn(value)` - Sets all-in status
+- `setCurrentBet(value)` - Sets current bet amount
+- `setPrevAction(action)` - Sets previous action
+
+### Card Class
 ```typescript
-// src/lib/utils/gameLogic.ts
-export interface GameState {
-  id: string;             // Game ID
-  name?: string;          // Game room name
-  players: Player[];      // Players in the game
-  deck: Card[];           // Remaining deck
-  currentPlayerId: string | null; // Whose turn
-  phase: GamePhase;       // Current game phase
-  roundNumber: number;    // Current round
-  message: string;        // Game message
-  lastUpdate: number;     // Timestamp
-  maxPlayers?: number;    // Max players allowed
-  isStarted?: boolean;    // Game has started
-}
-
-export type GamePhase = 'waiting' | 'playing' | 'roundEnd' | 'gameOver';
+class Card implements Stringable
 ```
 
-## Core Game Functions
+The `Card` class represents a playing card in the deck.
 
-### Deck Management
+#### Properties
+- `suit: Suit` - The card's suit (hearts, diamonds, clubs, spades)
+- `rank: Rank` - The card's rank (two through ace)
+- `rankValue: RankValue` - Numeric value of the rank
+- `name: CardName` - Short name of card (e.g., "AH" for Ace of Hearts)
+- `faceUp: boolean` - Whether card is face-up or face-down
 
+#### Methods
+- `constructor(rank?: RankValue | Rank | CardName, suit?: Suit, faceUp = false)` - Creates new card instance
+- `getValue()` - Returns numeric rank value
+- `suitValue()` - Returns numeric suit value (hearts=1, diamonds=2, clubs=3, spades=4)
+- `printFullName()` - Returns full card name (e.g., "Ace of Hearts")
+- `rankFromValue(value)` - Converts numeric value to rank
+- `rankFromName(name)` - Converts short name to rank
+- `suitFromName(name)` - Converts short name to suit
+- `getRankAndSuitFromName(name)` - Splits CardName into rank and suit
+- `getNameFromRankAndSuit(rank, suit)` - Creates CardName from rank and suit
+- Private helper methods:
+  - `getRandomSuit()` - Generates random suit
+  - `getRandomRank()` - Generates random rank
+  - `rankToInitial(rank)` - Converts rank to single character
+  - `suitToInitial(suit)` - Converts suit to single character
+
+### Deck Class
 ```typescript
-// Create a standard deck of cards
-export function createDeck(): Card[] {
-  const deck: Card[] = [];
-  const suits: Array<'hearts' | 'diamonds' | 'clubs' | 'spades'> = ['hearts', 'diamonds', 'clubs', 'spades'];
-  
-  let id = 0;
-  for (const suit of suits) {
-    for (let value = 1; value <= 13; value++) {
-      deck.push({
-        id: id++,
-        value,
-        suit,
-        faceUp: false
-      });
-    }
-  }
-  
-  return deck;
-}
-
-// Shuffle the deck
-export function shuffleDeck(deck: Card[]): Card[] {
-  const shuffled = [...deck];
-  
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  
-  return shuffled;
-}
+class Deck
 ```
 
-### Game Initialization
+The `Deck` class represents a standard deck of 52 playing cards.
 
+#### Properties
+- `cards: Card[]` - Array of cards in the deck
+
+#### Methods
+- `constructor(autoShuffle: boolean = false)` - Creates new deck instance. Providing a parameter 'true' results in a deck that is shuffled immediately, rather than in-order.                               eeeeeeeeeeeeeqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
+- `[Symbol.iterator]()` - Makes deck iterable
+- `generateDeck()` - Creates standard 52-card deck
+- `regenerateDeck()` - Resets deck to new 52-card state
+- `shuffle()` - Randomizes card order using Fisher-Yates
+- `draw()` - Removes and returns top card
+
+### Sidepot Class
 ```typescript
-// Initialize a new game
-export function initializeGame(
-  gameId: string, 
-  players: Player[], 
-  options?: { name?: string; maxPlayers?: number; isStarted?: boolean }
-): GameState {
-  const deck = shuffleDeck(createDeck());
-  
-  return {
-    id: gameId,
-    name: options?.name,
-    players,
-    deck,
-    currentPlayerId: players.length > 0 ? players[0].id : null,
-    phase: 'waiting',
-    roundNumber: 0,
-    message: 'Waiting for players...',
-    lastUpdate: Date.now(),
-    maxPlayers: options?.maxPlayers || 8,
-    isStarted: options?.isStarted || false
-  };
-}
+class Sidepot
 ```
 
-### Game Actions
+The `Sidepot` class represents a side pot created when a player goes all-in.
 
-```typescript
-// Handle player turn action
-export function processPlayerAction(state: GameState, playerId: string, action: string, data?: any): GameState {
-  const newState = { ...state };
-  
-  // Example: Simple "play card" action
-  if (action === 'playCard' && typeof data?.cardId === 'number') {
-    const playerIndex = newState.players.findIndex(p => p.id === playerId);
-    
-    if (playerIndex >= 0 && newState.currentPlayerId === playerId) {
-      const player = newState.players[playerIndex];
-      const cardIndex = player.hand.findIndex(card => card.id === data.cardId);
-      
-      if (cardIndex >= 0) {
-        // Remove card from player's hand
-        player.hand.splice(cardIndex, 1);
-        
-        // Update player score
-        player.score += 1;
-        
-        // Move to next player
-        const nextPlayerIndex = (playerIndex + 1) % newState.players.length;
-        newState.currentPlayerId = newState.players[nextPlayerIndex].id;
-        
-        newState.message = `${player.name} played a card!`;
-      }
-    }
-  }
-  
-  return newState;
-}
-```
+#### Properties
+- `amount: number` - The amount of chips in the side pot
+- `eligiblePlayers: Player[]` - Players eligible to win this pot
 
-## Game Context
-
-The Game Context provides game state and actions to components:
-
-```typescript
-// src/contexts/gameContext.tsx (simplified)
-export const GameProvider: React.FC<GameProviderProps> = ({ gameId, children }) => {
-  const { user, profile } = useAuth();
-  const [gameState, setGameState] = useState<GameState | null>(null);
-  const [connected, setConnected] = useState(false);
-  
-  // Socket connection
-  // Game state updates
-  // Player actions
-  
-  const value = {
-    gameState,
-    connected,
-    playerReady,
-    playCard,
-    // Other actions
-  };
-  
-  return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
-};
-```
-
-## Server-Side Game Management
-
-Games are managed on the server through WebSockets:
-
-```typescript
-// From src/app/api/socket/route.ts
-
-// In-memory game state storage
-const gameRooms = new Map<string, GameRoom>();
-
-// Handle game creation
-const newGame = initializeGame(gameId, initialPlayers, {
-  name: `Game ${gameId}`,
-  maxPlayers: 8,
-  isStarted: false
-});
-
-gameRooms.set(gameId, {
-  game: newGame,
-  players: new Set([connectionId])
-});
-
-// Process player actions
-try {
-  // Process the player action
-  const updatedState = processPlayerAction(
-    room.game,
-    message.userId,
-    message.action.type,
-    message.action.data || {}
-  );
-  
-  // Check if the round is over
-  const finalState = checkRoundEnd(updatedState);
-  room.game = finalState;
-  
-  // Broadcast updated state
-  broadcastGameState(gameId);
-} catch (actionError) {
-  console.error('Action processing error:', actionError);
-}
-```
-
-## Game Flow
-
-1. **Game Creation**:
-   - User creates new game room
-   - Server initializes game state
-   - Client connects via WebSocket
-
-2. **Joining Games**:
-   - Users join existing game rooms
-   - Server adds player to game
-   - Game state broadcast to all players
-
-3. **Game Play**:
-   - Players perform actions on their turn
-   - Server validates and processes actions
-   - Updated state broadcast to all players
-
-4. **Round Completion**:
-   - Round ends based on game rules
-   - Scores updated
-   - New round can be started
+#### Methods
+- `constructor(amount: number, eligiblePlayers: Player[])` - Creates new side pot
+- `addAmount(value: number)` - Adds chips to pot
+- `getAmount()` - Returns pot amount
+- `getEligiblePlayers()` - Returns eligible players
+- `isPlayerEligible(player)` - Checks if player can win pot
+- `addEligiblePlayer(player)` - Adds player to eligible list
 
 ## Implementation Files
 
-- **Game Logic**: `src/lib/utils/gameLogic.ts`
-- **Game Context**: `src/contexts/gameContext.tsx`
-- **WebSocket API**: `src/app/api/socket/route.ts`
-- **Game Component**: `src/components/game/CardGame.tsx`
-- **Game Page**: `src/app/game/[gameId]/page.tsx`
-- **Game Lobby**: `src/app/game/page.tsx`
+Key files in the implementation:
+- **Game Classes**: `src/game/classes.ts` - Core game classes implementation
+- **Game Types**: `src/game/types.ts` - Type definitions
+- **WebSocket Handler**: `socket.ts` - Server-side WebSocket implementation
+- **Game Components**: `src/components/game/*` - React components for game UI
