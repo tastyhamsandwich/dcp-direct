@@ -1,4 +1,4 @@
-import type { Player, SuitSymbol, Suit, RankValue, SuitCapitalized, SuitInitial } from './types';
+import type { Player, SuitSymbol, Suit, RankValue, SuitCapitalized, SuitInitial, Winner, HandRank } from './types';
 import { Card } from '@game/classes';
 import { capitalize, valueToRank } from '@lib/utils';
 
@@ -104,9 +104,8 @@ export function suitToSymbol(suit: SuitInitial | Suit | SuitCapitalized): SuitSy
   }
 }
 
-
 // Evaluate poker hands
-export function evaluateHands(players: Player[], communityCards: Card[]) {
+export function evaluateHands(players: Player[], communityCards: Card[]): Winner[] {
   const evaluatedHands = players.map(player => {
     const allCards: Card[] = [...player.cards,...communityCards] as Card[];
     const handRank = evaluateHand(allCards);
@@ -127,7 +126,7 @@ export function evaluateHands(players: Player[], communityCards: Card[]) {
   return winners;
   }
   
-export function evaluateHand(allCards: Card[]): {hand: string, value: number} {
+export function evaluateHand(allCards: Card[]): HandRank {
   let winningHand = '';
   
   //* Check if hand is empty

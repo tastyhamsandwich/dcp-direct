@@ -1,5 +1,5 @@
 import { Server } from 'socket.io';
-import { User, GamePhase, ListEntry, Action, EGamePhaseCommon, EGamePhaseHoldEm } from '@game/types';
+import { User, TGamePhase, ListEntry, Action, TGamePhaseCommon, TGamePhaseHoldEm } from '@game/types';
 import { Player, Game, Sidepot } from '@game/classes';
 import { evaluateHand } from '@game/utils';
 import { v4 as uuidv4 } from 'uuid';
@@ -81,7 +81,7 @@ export function initializeSocket(io: Server) {
         creator.chips = 1000;
       }
       
-      games[gameId] = new Game(gameId, tableName, creator, socket, maxPlayers, blinds?.small || 5, blinds?.big || 10);
+      games[gameId] = new Game(gameId, tableName, creator, maxPlayers, blinds?.small || 5, blinds?.big || 10);
       
       const listEntry: ListEntry = {
         index: gamesArray.length,
@@ -210,7 +210,7 @@ export function initializeSocket(io: Server) {
       io.to(gameId).emit('game_state', { game: games[gameId].returnGameState() });
       
       // Check if we have at least 2 players and all are ready
-      if (game.players.length >= 2 && game.phase === 0) {
+      if (game.players.length >= 2 && game.phase === 'waiting') {
         checkRoundStatus(game, io);
       }
       
@@ -408,8 +408,10 @@ export function initializeSocket(io: Server) {
               winners: [{
                 playerId: winner.id,
                 playerName: winner.username,
-                amount: previousPhase !== 0 ? winner.chips - game.players.find(p => p.id === winner.id)!.chips : 0,
-                potType: 'All pots (win by fold)'
+                amount: previousPhase !== 'waiting' ? winner.chips - game.players.find(p => p.id === winner.id)!.chips : 0,
+                potType: 'All pots (win by fold)',
+                hand: 'Win by fold',
+                cards: winner.cards.map(card => card.name)
               }],
               showdown: false
             });
@@ -417,7 +419,7 @@ export function initializeSocket(io: Server) {
         }
 
         // If we've moved to showdown, handle the showdown
-        if (game.phase === EGamePhaseCommon.SHOWDOWN && previousPhase !== EGamePhaseCommon.SHOWDOWN) {
+        if (game.phase === 'showdown' && previousPhase !== 'showdown') {
           handleShowdown(game, io);
         }
 
@@ -553,7 +555,7 @@ export function initializeSocket(io: Server) {
               if (game.players.length < 2) {
                 game.hasStarted = false;
                 // Not enough players, reset game
-                game.phase = EGamePhaseCommon.WAITING;
+                game.phase = 'waiting';
                 game.status = 'waiting';
                 game.communityCards = [];
                 game.pot = 0;
@@ -664,7 +666,7 @@ function checkRoundStatus(game: Game, io) {
   }
 
   // If we're already playing and need to check player readiness between rounds
-  if (game.status === 'playing' && game.phase === 0 && game.roundCount > 1) {
+  if (game.status === 'playing' && game.phase === 'waiting' && game.roundCount > 1) {
     const allReady = game.players.every(isReady);
     const enoughPlayers = totalPlayers >= 2;
     
@@ -729,7 +731,7 @@ function getAllowedActions(game, playerId) {
   const actions: Action[] = [];
 
   // Always allow fold unless we're in preflop and player is big blind without additional bets
-  if (!(game.phase === EGamePhaseHoldEm.PREFLOP && player.id === game.bigBlindId && game.currentBet === game.bigBlind)) {
+  if (!(game.phaseOrder.indexOf(game.phase) === 1 && player.id === game.bigBlindId && game.currentBet === game.bigBlind)) {
     actions.push('fold');
   }
 
@@ -746,7 +748,7 @@ function getAllowedActions(game, playerId) {
 
   // Bet is allowed if there's no current bet and player has chips
   if ((game.currentBet === 0 || 
-      (game.phase === EGamePhaseHoldEm.PREFLOP && player.id === game.bigBlindId && game.currentBet === game.bigBlind)) 
+      (game.phaseOrder.indexOf(game.phase) === 1 && player.id === game.bigBlindId && game.currentBet === game.bigBlind)) 
       && player.chips > 0) {
     actions.push('bet');
   }
@@ -763,7 +765,7 @@ function getAllowedActions(game, playerId) {
 // Add a function to handle showdown
 function handleShowdown(game, io) {
   // If we're in showdown phase, determine winners
-  if (game.phase === EGamePhaseCommon.SHOWDOWN) {
+  if (game.phaseOrder.indexOf(game.phase) === game.phaseOrder.length) {
     // If only one player remains (everyone else folded)
     const activePlayers = game.players.filter(p => !p.folded);
     if (activePlayers.length === 1) {
@@ -791,7 +793,8 @@ function handleShowdown(game, io) {
           playerName: winner.username,
           amount: totalWinnings,
           potType: 'All pots (win by fold)',
-          // No hand info since the player won by fold
+          hand: 'Win by fold',
+          cards: winner.cards.map(card => card.name)
         }],
         showdown: false
       });
@@ -799,7 +802,7 @@ function handleShowdown(game, io) {
       // Reset the game for next round
       setTimeout(() => {
         resetForNextRound(game, io);
-      }, 5000); // Give players 5 seconds to see the result
+      }, 8000); // Give players 8 seconds to see the result
 
       return;
     }
@@ -866,7 +869,7 @@ function resetForNextRound(game, io) {
 
   // Reset game state for next round
   game.roundActive = false;
-  game.phase = EGamePhaseCommon.WAITING;
+  game.phase = 'waiting';
   game.pot = 0;
   game.currentBet = 0;
   game.communityCards = [];

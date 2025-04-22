@@ -1,4 +1,4 @@
-import { Card, Sidepot, Deck } from './classes';
+import { Card } from './classes';
 
 export type SuitInitial = 'C' | 'D' | 'H' | 'S';
 export type Suit = 'hearts' | 'diamonds' | 'clubs' | 'spades';
@@ -38,82 +38,59 @@ export type FixedSizeArray<T, N extends number> = N extends 0 ? [] : {
 export type FlopArray = FixedSizeArray<Card, 3>;
 export type TurnRiverArray = FixedSizeArray<Card, 2>;
 
-export type GamePhaseCommon = TGamePhaseCommon | EGamePhaseCommon;
 export type TGamePhaseCommon = TGamePhaseHoldEm | TGamePhaseDraw | TGamePhaseStud;
-export type TEGamePhaseCommon = EGamePhaseHoldEm | EGamePhaseDraw | EGamePhaseStud
-export enum EGamePhaseCommon {
-  // Common pre-game phase
-  WAITING,
-  // Hold'em/Omaha phases
-  PREFLOP,
-  FLOP,
-  TURN,
-  RIVER,
-  // Draw poker phases
-  PREDRAW,
-  DRAW,
-  // Stud poker phases
-  THIRDSTREET,
-  FOURTHSTREET,
-  FIFTHSTREET,
-  SIXTHSTREET,
-  SEVENTHSTREET,
-  // Common final phase
-  SHOWDOWN
-}
 
-export type GamePhaseHoldEm = TGamePhaseHoldEm | EGamePhaseHoldEm;
 export type TGamePhaseHoldEm = 'waiting' | 'preflop' | 'flop' | 'turn' | 'river' | 'showdown';
-export enum EGamePhaseHoldEm {
-  WAITING,
-  PREFLOP,
-  FLOP,
-  TURN,
-  RIVER,
-  SHOWDOWN
-}
+export type HoldEmPhases = ['waiting', 'preflop', 'flop', 'turn', 'river', 'showdown'];
 
-export type GamePhaseDraw = TGamePhaseDraw | EGamePhaseDraw;
 export type TGamePhaseDraw = 'waiting' | 'predraw' | 'draw' | 'showdown'
-export enum EGamePhaseDraw {
-  WAITING,
-  PREDRAW,
-  DRAW,
-  SHOWDOWN
-}
+export type DrawPhases = ['waiting', 'predraw', 'draw', 'showdown'];
 
-export type GamePhaseStud = TGamePhaseStud | EGamePhaseStud;
 export type TGamePhaseStud = 'waiting' | 'thirdstreet' | 'fourthstreet' | 'fifthstreet' | 'sixthstreet' | 'seventhstreet' | 'showdown';
-export enum EGamePhaseStud {
-  WAITING,
-  THIRDSTREET,
-  FOURTHSTREET,
-  FIFTHSTREET,
-  SIXTHSTREET,
-  SEVENTHSTREET,
-  SHOWDOWN
-}
+export type StudPhases = ['waiting', 'thirdstreet', 'fourthstreet', 'fifthstreet', 'sixthstreet', 'seventhstreet', 'showdown'];
 
-export type GamePhase = GamePhaseHoldEm | GamePhaseStud | GamePhaseDraw
-export type EGamePhase = EGamePhaseHoldEm | EGamePhaseStud | EGamePhaseDraw
-export type TGamePhase = TGamePhaseHoldEm | TGamePhaseStud | TGamePhaseDraw
+export type TGamePhase = TGamePhaseHoldEm | TGamePhaseStud | TGamePhaseDraw;
+export type GamePhases = HoldEmPhases | DrawPhases | StudPhases;
 
-export enum RoomStatus {
-  WAITING = 'waiting',
-  PLAYING = 'playing',
-  PAUSED = 'paused'
-}
+export type RoomStatus = 'waiting' | 'playing' | 'paused';
 
 export type Action = 'none' | 'fold' | 'check' | 'bet' | 'call' | 'raise' | 'win';
 
 export interface GameState {
   id: string;
   name: string;           
-  creator: Player;
-  players: Player[];
+  creator: {
+    id: string;
+    username: string;
+    seatNumber: number;
+    chips: number;
+    ready: boolean;
+    avatar: string;
+  };
+  players: {
+    id: string;
+    username: string;
+    seatNumber: number;
+    chips: number;
+    folded: boolean;
+    active: boolean;
+    ready: boolean;
+    allIn: boolean;
+    cards: {
+      suit: Suit;
+      rank: Rank;
+      rankValue: RankValue;
+      name: CardName;
+      faceUp: boolean;
+    }[],
+    currentBet: number;
+    previousAction: Action;
+    avatar: string;
+  }[];
   status: RoomStatus;
   gameVariant: GameVariant;
-  phase: GamePhase;
+  phase: TGamePhase;
+  phaseOrder: GamePhases;
   maxPlayers: number;
   hasStarted: boolean;
   roundActive: boolean;
@@ -127,14 +104,24 @@ export interface GameState {
   smallBlindId?: string;
   bigBlindId?: string;
   pot: number;
-  sidepots?: Sidepot[];
-  deck: Deck | null;
-  communityCards: Card[];
-  burnPile: Card[];
+  sidepots?: {
+    amount: number;
+    eligiblePlayers: string[];
+  }[];
+  communityCards: {
+    suit: Suit;
+    rank: Rank;
+    rankValue: RankValue;
+    name: CardName;
+    faceUp: boolean;
+  }[];
   activePlayerId: string;
   activePlayerIndex: number | null;
   currentBet: number;
-  currentSelectedVariant: GameVariant;
+  variantSelectionActive: boolean;
+  currentSelectedVariant: GameVariant | null;
+  activeVariant: GameVariant;
+  nextRoundVariant: GameVariant | null;
   cardsPerPlayer?: number; // Number of hole cards per player
   customRules?: CustomGameRules; // For custom game variants
 }
@@ -161,8 +148,7 @@ export interface CustomGameRules {
   allowDiscards: boolean;
 }
 
-/**
- * Represents an entry in the list of games.
+/** Represents an entry in the list of games.
  * 
  * @typedef {Object} ListEntry
  * @property {string} id - The unique identifier for the game.
@@ -180,8 +166,7 @@ export interface ListEntry {
   isStarted: boolean;
 }
 
-/**
- * Represents the role IDs of the players.
+/** Represents the role IDs of the players.
  * 
  * @interface RoleIds
  * @property {string} dealerId - The ID of the dealer.
@@ -194,8 +179,7 @@ export interface RoleIds {
   bigBlindId: string;
 }
 
-/**
- * Represents a seat at the table.
+/** Represents a seat at the table.
  * 
  * @interface TableSeat
  * @property {number} seatNumber - The number of the seat.
@@ -208,8 +192,16 @@ export interface TableSeat {
   playerId: string | null;
 }
 
-/**
- * Represents a Player object.
+export interface HandRank {
+  hand: string;
+  value: number;
+}
+
+export interface Winner extends Player {
+  handRank: HandRank;
+}
+
+/** Represents a Player object.
  * @object
  * @property sessionId - The player's sessionId for the game instance
  * @property username - The player's username

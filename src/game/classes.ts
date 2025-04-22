@@ -1,17 +1,16 @@
-
 import { Truculenta } from 'next/font/google';
-import { Stringable, Suit, Rank, RankValue, CardName, GamePhase, EGamePhase, EGamePhaseCommon, EGamePhaseDraw, EGamePhaseHoldEm, EGamePhaseStud, GameVariant, TableSeat, RoleIds, User, CustomGameRules, Hand, Action} from './types';
+import { Stringable, Suit, Rank, RankValue, CardName, RoomStatus, TGamePhase, TGamePhaseCommon, GamePhases, TGamePhaseStud, GameVariant, GameState, TableSeat, RoleIds, User, CustomGameRules, Hand, Action, Winner} from './types';
 import { capitalize, valueToRank } from '@lib/utils';
 import { evaluateHand, evaluateHands } from '@game/utils';
-import { Socket } from 'socket.io';
+import { Socket, Server } from 'socket.io';
+import { socketManager, type SocketManager } from '@lib/socketManager';
 
 type HandRank = {
   hand: string,
   value: number
 }
 
-/**
- * Represents a player in the game.
+/** Represents a player in the game.
  * Implements the `User` interface.
  * 
  * @class Player
@@ -126,8 +125,7 @@ export class Player implements User {
 
 }
 
-/** 
- * Represents a playing card.
+/** Represents a playing card.
  * @class
  * @param suit - The suit of the card
  * @param rank - The rank of the card
@@ -397,8 +395,7 @@ export class Card implements Stringable {
   }
 }
 
-/** 
- * Represents a deck of cards.
+/**  Represents a deck of cards.
  * @class
  * @param autoShuffle - Whether to shuffle the deck automatically.
  */
@@ -476,10 +473,8 @@ export class Deck {
 export function dealCards(deck: Deck, count: number) {
   return deck.cards.splice(0, count);
 }
-  
 
-/** 
- * Represents a sidepot.
+/** Represents a sidepot.
  * @class
  * @param amount - The amount of the sidepot.
  * @param possibleWinners - The players eligible to win this pot.
@@ -516,13 +511,27 @@ export class Sidepot {
   }
 }
 
+/** Represents the game and all necessary properties and objects necessary for play
+ * @class
+ * @param {string} id The unique ID of the game room
+ * @param {string} name The name of the game room
+ * @param {Player} creator The player object of the player who created the game room
+ * @param {Socket} socket
+ * @param {number} maxPlayers Maximum number of allowed players. Defaults to 6.
+ * @param {number} smallBlind Starting small blind amount. Defaults to 5.
+ * @param {number} bigBlind Starting big blind amount. Defaults to twice the small blind amount.
+ * @param {GameVariant} gameVariant The game variant for the first round of play. Defaults to Texas Hold 'Em.
+ * @param {CustomGameRules} CustomGameRules Any custom game rules for the custom variant chosen to start play
+ */
 export class Game {
   id: string;
   name: string;           
   creator: Player;        
   players: Player[];
-  status: 'waiting' | 'playing' | 'paused';
-  phase: EGamePhaseCommon | EGamePhaseHoldEm | EGamePhaseDraw | EGamePhaseStud;
+  status: RoomStatus;
+  socket: Server;
+  phase: TGamePhase;
+  phaseOrder: GamePhases;
   maxPlayers: number;
   hasStarted: boolean;
   roundActive: boolean;
@@ -544,7 +553,6 @@ export class Game {
   activePlayerId: string;
   activePlayerIndex: number | null;
   currentBet: number;
-  socket: Socket;
   roundCount: number;
   gameVariant: GameVariant;
   cardsPerPlayer: number;
@@ -554,16 +562,17 @@ export class Game {
   variantSelectionActive: boolean;
   variantSelectionTimeout: NodeJS.Timeout | null;
 
-  constructor(id: string, name: string, creator: Player, socket: Socket, maxPlayers?: number, smallBlind?: number, bigBlind?: number, gameVariant?: GameVariant, customRules?: CustomGameRules) {
+  constructor(id: string, name: string, creator: Player, maxPlayers?: number, smallBlind?: number, bigBlind?: number, gameVariant?: GameVariant, customRules?: CustomGameRules) {
     this.id = id;
     this.name = name;
     this.creator = creator;
     this.maxPlayers = maxPlayers || 6;
     this.smallBlind = smallBlind || 5;
-    this.bigBlind = bigBlind || 10;
+    this.bigBlind = bigBlind || this.smallBlind * 2;
     this.players = [creator];
+    this.socket = socketManager.getIO();
     this.status = 'waiting';
-    this.phase = EGamePhaseCommon.WAITING;
+    this.phase = 'waiting';
     this.hasStarted = false;
     this.roundActive = false;
     this.tablePositions = this.initTableSeats(this.maxPlayers);
@@ -577,17 +586,21 @@ export class Game {
     this.activePlayerIndex = null;
     this.currentBet = 0;
     this.dealerIndex = 0;
-    this.socket = socket;
     this.roundCount = 0;
     this.gameVariant = gameVariant || 'TexasHoldEm';
     this.dealerSelectedVariant = null;
-    this.nextRoundVariant = null; // *** INITIALIZE IT ***
+    this.nextRoundVariant = this.gameVariant;
     this.variantSelectionActive = false;
     this.variantSelectionTimeout = null;
 
-     this.updateCardsPerPlayer(this.gameVariant, customRules)
+    this.updateCardsPerPlayer(this.gameVariant, customRules)
   }
 
+  /** Sets cardsPerPlayer based on provided game variant and/or custom variant rule definitions.
+   * @function updateCardsPerPlayer
+   * @param {GameVariant} variant The game variant in use.
+   * @param {CustomGameRules} customRules Any potential custom game rules in use by custom game types.
+   */
   updateCardsPerPlayer(variant: GameVariant, customRules?: CustomGameRules): void {
       switch (variant) {
         case 'Omaha':
@@ -614,8 +627,7 @@ export class Game {
       console.log(`Updated cardsPerPlayer to ${this.cardsPerPlayer} for variant ${variant}`);
   }
 
-  /**
-   * Initializes the table seats.
+  /** Initializes the table seats.
    * 
    * @function initTableSeats
    * @param {number} maxPlayers - The maximum number of players.
@@ -631,8 +643,7 @@ export class Game {
     return tablePositions;
   }
 
-  /**
-   * Gets the ID of the next player around the table, ignoring empty seats.
+  /** Gets the ID of the next player around the table, ignoring empty seats.
    * 
    * @function getNextPlayerId
    * @param {string} currentPlayerId - The ID of the current player.
@@ -658,9 +669,7 @@ export class Game {
     throw new Error("Unknown error occurred finding Player Id");
   }
 
-
-  /**
-   * Gets the role IDs for the current round.
+  /** Gets the role IDs for the current round.
    * 
    * @function getRoleIds
    * @param {GameState} state - The current state of the game.
@@ -684,15 +693,7 @@ export class Game {
     }
   } 
 
-  /**
-   * Starts a new round.
-   * 
-   * @function startRound
-   * @param {GameState} state - The current state of the game.
-   * @returns {GameState} The updated game state.
-   */
-  /**
-   * Handles dealer's selection of game variant for Dealer's Choice games
+  /** Handles dealer's selection of game variant for Dealer's Choice games
    * @param variant The game variant selected by the dealer
    * @returns Boolean indicating whether the selection was successful
    */
@@ -745,8 +746,7 @@ export class Game {
     return true;
   }
 
-  /**
-   * Starts the dealer's choice selection phase
+  /** Starts the dealer's choice selection phase
    * @param timeoutMs Time in milliseconds to wait for dealer selection before defaulting
    * @returns Boolean indicating if selection started successfully
    */
@@ -757,7 +757,7 @@ export class Game {
 
     console.log(`Starting dealer variant selection, dealer: ${this.players[this.dealerIndex].username}`);
     this.variantSelectionActive = true;
-    this.phase = EGamePhaseCommon.WAITING; // Ensure phase is waiting during selection
+    this.phase = 'waiting'; // Ensure phase is waiting during selection
     this.dealerSelectedVariant = null; // Clear previous selection
 
     // ... (rest of notification and timeout logic remains the same)
@@ -773,7 +773,13 @@ export class Game {
         // Notify all players of the default selection
         if (this.socket) {
           // Emit via io instance in socket.ts
+          this.socket.to(this.id).emit('variant_selected', {
+            dealerId: this.dealerId,
+            dealerName: this.players[this.dealerIndex].username,
+            selectedVariant: this.dealerSelectedVariant
+          });
         }
+        
         // *** NOW CALL continueRoundSetup with the chosen variant ***
         this.continueRoundSetup(this.dealerSelectedVariant);
         // Trigger game_update from socket.ts after setup is complete
@@ -783,6 +789,12 @@ export class Game {
     return true;
   }
 
+  /** Starts a new round.
+   * 
+   * @function startRound
+   * @param {GameState} state - The current state of the game.
+   * @returns {GameState} The updated game state.
+   */
   startRound() {
     try {
       console.log(`Starting round!\n...Initializing values`);
@@ -842,94 +854,130 @@ export class Game {
     }
   }
   
-   continueRoundSetup(currentRoundVariant: GameVariant): boolean {
-     try {
-        console.log(`Continuing round setup for variant: ${currentRoundVariant}`);
-        // Create a new deck
-        this.deck = new Deck(true);
-        // Set phase based on the variant type (this might need more refinement for Stud/Draw)
-        if (['TexasHoldEm', 'Omaha', 'OmahaHiLo', 'Chicago'].includes(currentRoundVariant)) {
-          this.phase = EGamePhaseHoldEm.PREFLOP;
-        } else if (currentRoundVariant === 'SevenCardStud') {
-          this.phase = EGamePhaseStud.THIRDSTREET; // Stud starts at 3rd street
-        } else if (currentRoundVariant === 'FiveCardDraw') {
-          this.phase = EGamePhaseDraw.PREDRAW;
-        } else {
-          this.phase = EGamePhaseCommon.PREFLOP; // Default fallback
-        }
-        this.status = 'playing';
+  /** Finalizes round setup.
+   * @function continueRoundSetup
+   * @param {GameVariant} currentRoundVariant The current game variant in use.
+   * @returns {boolean} Returns true/false based on successful function execution.
+   */
+  continueRoundSetup(currentRoundVariant: GameVariant): boolean {
+    try {
+      console.log(`Continuing round setup for variant: ${currentRoundVariant}`);
+      // Create a new deck
+      this.deck = new Deck(true);
+      // Set phase based on the variant type
+      if (['TexasHoldEm', 'Omaha', 'OmahaHiLo', 'Chicago'].includes(currentRoundVariant))
+        this.phase = 'preflop';
+      else if (currentRoundVariant === 'SevenCardStud')
+        this.phase = 'thirdstreet';
+      else if (currentRoundVariant === 'FiveCardDraw')
+        this.phase = 'predraw';
+      else
+        this.phase = 'preflop';
 
-        console.log(`...Resetting player flags`);
-        // Reset player flags, settings, and objects
-        this.players.forEach(p => {
-          p.currentBet = 0;
-          p.active = true;
-          p.folded = false;
-          p.allIn = false;
-          p.previousAction = 'none';
-          p.cards = [];
-          // Keep player.ready status as is, don't reset here
-        });
+      this.status = 'playing';
 
-        console.log(`Dealer: ${this.players[this.dealerIndex].username}`);
-        console.log(`...Dealing cards using variant ${currentRoundVariant}`);
-        // Deal initial cards based on the ROUND variant
-        this.dealCards(currentRoundVariant); // Pass the variant to dealCards
+      console.log(`...Resetting player flags`);
+      // Reset player flags, settings, and objects
+      this.players.forEach(p => {
+        p.currentBet = 0;
+        p.active = true;
+        p.folded = false;
+        p.allIn = false;
+        p.previousAction = 'none';
+        p.cards = [];
+      });
 
-        console.log(`...Taking blinds`)
-        const smallBlindPlayer = this.players[this.smallBlindIndex!];
-        const bigBlindPlayer = this.players[this.bigBlindIndex!];
-        console.log(`Small blind: ${smallBlindPlayer.username}\nBig blind:${bigBlindPlayer.username}`);
+      console.log(`Dealer: ${this.players[this.dealerIndex].username}`);
+      console.log(`...Dealing cards using variant ${currentRoundVariant}`);
+      // Deal initial cards based on the ROUND variant
+      this.dealCards(currentRoundVariant);
 
-        // Post blinds (Handle all-in)
-        const sbAmount = Math.min(this.smallBlind, smallBlindPlayer.chips);
-        this.pot += sbAmount;
-        smallBlindPlayer.currentBet = sbAmount;
-        smallBlindPlayer.chips -= sbAmount;
-        smallBlindPlayer.allIn = smallBlindPlayer.chips === 0;
-        smallBlindPlayer.previousAction = 'bet'; // Blinds count as initial bet action
+      // Post blinds (Handle all-in)
+      this.postBlinds();
 
-        const bbAmount = Math.min(this.bigBlind, bigBlindPlayer.chips);
-        this.pot += bbAmount;
-        bigBlindPlayer.currentBet = bbAmount;
-        bigBlindPlayer.chips -= bbAmount;
-        bigBlindPlayer.allIn = bigBlindPlayer.chips === 0;
-        bigBlindPlayer.previousAction = 'bet'; // Blinds count as initial bet action
+      // Set current bet to big blind amount
+      this.currentBet = this.bigBlind;
 
-        // Set current bet to big blind amount
-        this.currentBet = this.bigBlind;
-
-        console.log(`...Setting active player`);
-        // Active player logic might differ for Stud (usually highest card showing starts)
-        // For now, stick to standard UTG logic
+      console.log(`...Setting active player`);
+      if (currentRoundVariant === 'SevenCardStud')
+        this.activePlayerIndex = this.players.indexOf(this.determineHighestShowingCard()[0]);
+      else
         this.activePlayerIndex = (this.bigBlindIndex! + 1) % this.players.length;
-        // Skip folded/all-in players when setting initial active player
-        while(this.players[this.activePlayerIndex].folded || this.players[this.activePlayerIndex].allIn) {
-            this.activePlayerIndex = (this.activePlayerIndex + 1) % this.players.length;
-            // Add a safety break if somehow all players are folded/all-in
-            if (this.activePlayerIndex === (this.bigBlindIndex! + 1) % this.players.length) break;
-        }
-        this.activePlayerId = this.players[this.activePlayerIndex].id;
-        console.log(`...Active player set to: ${this.players[this.activePlayerIndex].username}`)
+      
+      // Set active player ID
+      this.activePlayerId = this.players[this.activePlayerIndex].id;
+      console.log(`...Active player set to: ${this.players[this.activePlayerIndex].username}`)
 
-        // Emit game update AFTER all setup is complete
-        if (this.socket) {
-          // Use io.to(gameId).emit from socket.ts instead of this.socket.to().emit()
-          // This ensures the message goes through the central IO instance.
-          // We'll trigger this from the socket.ts handler after calling startRound.
-          // This class method should just return the state or true/false.
-        }
-        return true;
+      return true;
 
-      } catch (error) {
-        console.log(`Error continuing round setup: ${error}`);
-        throw new Error("Failed to continue round setup");
-      }
+    } catch (error) {
+      console.log(`Error continuing round setup: ${error}`);
+      throw new Error("Failed to continue round setup");
+    }
   }
 
-  /**
-   * Continues the round setup after variant selection for Dealer's Choice games
-   * @returns Boolean indicating if the setup was successful
+  /** Function for handling blind bets at the start of a round.
+   * @function postBlinds
+   * @returns {void}
+   */
+  private postBlinds(): void {
+
+    const smallBlindPlayer = this.players[this.smallBlindIndex!];
+    const bigBlindPlayer = this.players[this.bigBlindIndex!];
+
+    console.log(`Small blind: ${smallBlindPlayer.username}\nBig blind:${bigBlindPlayer.username}`);
+    console.log(`...Taking blinds`);
+
+    const sbAmount = Math.min(this.smallBlind, smallBlindPlayer.chips);
+    this.pot += sbAmount;
+    smallBlindPlayer.currentBet = sbAmount;
+    smallBlindPlayer.chips -= sbAmount;
+    smallBlindPlayer.allIn = smallBlindPlayer.chips === 0;
+    smallBlindPlayer.previousAction = 'bet'; 
+
+    const bbAmount = Math.min(this.bigBlind, bigBlindPlayer.chips);
+    this.pot += bbAmount;
+    bigBlindPlayer.currentBet = bbAmount;
+    bigBlindPlayer.chips -= bbAmount;
+    bigBlindPlayer.allIn = bigBlindPlayer.chips === 0;
+    bigBlindPlayer.previousAction = 'none'; 
+    // Big blind previous action is 'none' to allow the action to return to them in first round. 
+  }
+
+  /** Determines the player with the highest showing card to determine the first player to act in Stud games.
+   * @returns {[Player, Card]} An array containing the player with the highest showing card, and that card.
+   */
+  private determineHighestShowingCard(): [ Player, Card ] {
+    // Logic to determine the highest showing card for the first player
+    // This is specific to Seven Card Stud abd is used to determine who begins the round
+    let highestCard: Card | null = null;
+    let highestPlayer: Player | null = null;
+
+    for (let i = 0; i < this.players.length; i++) {
+      const player = this.players[i];
+      if (player.cards.length > 0 && !player.folded) {
+        const playerShowingCard = player.cards.find(c => c.faceUp);
+        if (!highestCard || playerShowingCard!.getValue() > highestCard.getValue()) {
+          highestCard = playerShowingCard!;
+          highestPlayer = player;
+        }
+        if (playerShowingCard?.getValue() === highestCard?.getValue() && highestPlayer && highestPlayer.username !== player.username) {
+          if (playerShowingCard.suitValue() > highestCard.suitValue()) {
+            highestCard = playerShowingCard;
+            highestPlayer = player;
+          }
+        }
+      }
+    };
+
+    if (!highestPlayer) throw new Error('Unknown error: Could not determine player with high card!');
+    if (!highestCard) throw new Error('Unknown error: Could not determine highest card!');
+    return [ highestPlayer, highestCard ];
+  }
+
+  /** Continues the round setup after variant selection for Dealer's Choice games.
+   * @function continueRoundAfterVariantSelection
+   * @returns {boolean} Boolean indicating if the setup was successful
    */
   continueRoundAfterVariantSelection(): boolean {
     try {
@@ -937,13 +985,13 @@ export class Game {
       if (this.gameVariant === 'DealersChoice' && this.dealerSelectedVariant) {
         console.log(`Using dealer selected variant: ${this.dealerSelectedVariant}`);
         // Create a new deck after variant selection
-        this.deck = new Deck(true);
-        this.phase = EGamePhaseCommon.PREFLOP;
+        this.deck = new Deck(true); // Auto-shuffled
+        this.phase = 'preflop';
         this.status = 'playing';
       } else {
         // For standard games, create a new deck
-        this.deck = new Deck(true);
-        this.phase = EGamePhaseCommon.PREFLOP;
+        this.deck = new Deck(true); // Auto-shuffled
+        this.phase = 'preflop'
         this.status = 'playing';
       }
 
@@ -1011,79 +1059,98 @@ export class Game {
     }
   }
 
-  /**
-   * Deal cards to players at start of round, accounting for progressive change in dealer position
-   * 
+  /** Parent function for dealing cards to players. Calls the appropriate dealing function based on game variant.
    * @function dealCards
-   * @param {GameState} state - The current state of the game.
+   * @param {GameVariant} currentRoundVariant The game variant in use.
+   * @returns {boolean} Returns true/false based on success of function execution. 
+   */
+  dealCards(currentRoundVariant: GameVariant): boolean {
+    let success = false;
+    switch (currentRoundVariant) {
+      case 'TexasHoldEm':
+      case 'Omaha':
+      case 'OmahaHiLo':
+      case 'Chicago':
+        success = this.dealHoldEmCards(currentRoundVariant);
+        break;
+      case 'SevenCardStud':
+        success = this.dealStudCards();
+        break;
+      case 'FiveCardDraw':
+        // TODO deal Five Card Draw function
+        break;
+      case 'Custom':
+      case 'DealersChoice':
+        // TODO handle these types of card deals
+        break;
+    }
+    return success;
+  }
+
+  /** Deal cards to players at start of round, starting from dealer's left position, according to Hold 'Em variant rules.
+   * @function dealHoldEmCards
+   * @param {GameVariant} currentRoundVariant The game variant in use.
    * @returns {boolean} - Returns true/false depending upon successful function execution.
    */
-  dealCards(currentRoundVariant: GameVariant) {
-      const deck = this.deck;
+  dealHoldEmCards(currentRoundVariant: GameVariant): boolean {
+    // Standard dealing pattern for most games
 
-      if (deck === null) return false;
-
-      // Use the cardsPerPlayer property which should be set correctly by updateCardsPerPlayer
-      const numCards = this.cardsPerPlayer;
-      console.log(`Dealing ${numCards} cards per player for ${currentRoundVariant}`);
-
-      // Handle different dealing patterns based on game variant
-      if (currentRoundVariant === 'SevenCardStud') {
-          // Pass the current phase to determine how many/which cards to deal
-          this.dealStudCards(this.phase as EGamePhaseStud);
-      } else {
-          // Standard dealing pattern for most other games
-          for (let i = 0; i < numCards; i++) {
-              let currentPosition = (this.dealerIndex + 1) % this.players.length;
-              for (let p = 0; p < this.players.length; p++) {
-                  const playerIndex = (currentPosition + p) % this.players.length;
-                  const player = this.players[playerIndex];
-                  // Only deal to active (non-folded) players who don't have enough cards yet
-                  if (player && !player.folded && player.cards.length < numCards) {
-                      const card = deck.draw();
-                      // Handle face-up cards (e.g., Chicago's last card)
-                      if (currentRoundVariant === 'Chicago' && i === numCards - 1) {
-                          card.faceUp = true;
-                      } else {
-                          card.faceUp = false; // Ensure default is face down
-                      }
-                      player.cards.push(card);
-                      console.log(`Dealt ${card.faceUp ? 'face up ' : ''}${card.name} to player '${player.username}'`);
-                  }
-              }
-          }
-      }
-      return true;
-  }
-  
-  // Helper method for Seven-Card Stud dealing pattern
-  dealStudCards(phase: EGamePhaseStud) {
     if (!this.deck) return false;
+    const numCards = this.cardsPerPlayer;
+    
+    for (let i = 0; i < numCards; i++) {
+      let currentPosition = (this.dealerIndex + 1) % this.players.length;
+      for (let p = 0; p < this.players.length; p++) {
+        const playerIndex = (currentPosition + p) % this.players.length;
+        const player = this.players[playerIndex];
+        // Only deal to active (non-folded) players who don't have enough cards yet
+        if (player && !player.folded && player.cards.length < numCards) {
+          const card = this.deck.draw();
+          // Handle face-up cards (e.g., Chicago's last card)
+          if (currentRoundVariant === 'Chicago' && i === numCards - 1)
+            card.faceUp = true;
+          else
+            card.faceUp = false; // Ensure default is face down
 
+          player.cards.push(card);
+          console.log(`Dealt ${card.faceUp ? 'face up ' : ''}${card.name} to player '${player.username}'`);
+        }
+      }
+    }
+    return true;
+  }
+
+  /** Deal cards to players per Stud variant rules, number and face up/face down depending on current round phase.
+   * @function dealStudCards
+   * @returns {boolean} - Returns true/false depending upon successful function execution.
+   */
+  dealStudCards(): boolean {
+    if (!this.deck) return false;
+    
     let cardsToDeal = 0;
     let faceUp = false;
-
-    switch(phase) {
-      case EGamePhaseStud.THIRDSTREET:
+    
+    switch(this.phase) {
+      case 'thirdstreet':
         cardsToDeal = 3; // 2 down, 1 up
         break;
-      case EGamePhaseStud.FOURTHSTREET:
-      case EGamePhaseStud.FIFTHSTREET:
-      case EGamePhaseStud.SIXTHSTREET:
+      case 'fourthstreet':
+      case 'fifthstreet':
+      case 'sixthstreet':
         cardsToDeal = 1;
         faceUp = true;
         break;
-      case EGamePhaseStud.SEVENTHSTREET: // River card in Stud
+      case 'seventhstreet': // River card in Stud
         cardsToDeal = 1;
         faceUp = false; // River card is dealt face down in Stud
         break;
       default:
-        console.error(`Invalid phase for Stud dealing: ${phase}`);
+        console.error(`Invalid phase for Stud dealing: ${this.phase}`);
         return false;
     }
-
-    console.log(`Dealing Stud: Phase ${phase}, Cards ${cardsToDeal}, FaceUp ${faceUp}`);
-
+    
+    console.log(`Dealing Stud: Phase ${this.phase}, Cards ${cardsToDeal}, FaceUp ${faceUp}`);
+    
     for (let i = 0; i < cardsToDeal; i++) {
       let currentPosition = (this.dealerIndex + 1) % this.players.length;
       for (let p = 0; p < this.players.length; p++) {
@@ -1092,11 +1159,11 @@ export class Game {
         if (player && !player.folded) {
           const card = this.deck!.draw();
           // Third street: first 2 down, 3rd up. Others depend on 'faceUp' flag.
-          if (phase === EGamePhaseStud.THIRDSTREET) {
+          if (this.phase === 'thirdstreet')
             card.faceUp = (i === 2); // Only the 3rd card is face up initially
-          } else {
+          else
             card.faceUp = faceUp;
-          }
+
           player.cards.push(card);
           console.log(`Dealt ${card.faceUp ? 'face up' : 'face down'} ${card.name} to player '${player.username}'`);
         }
@@ -1105,19 +1172,11 @@ export class Game {
     return true;
   }
 
-  /**
-   * Sort the player array by seat index.
-   * This is critical for allowing game logic to neatly loop through players in order.
-   * All sorts of processes would get out of order if we just appended new players to the array.
-   * 
-   * @function sortPlayerList
-   * @returns {void}
+  /** Deal out community cards from the active deck
+   * @function dealCommunityCards
+   * @param {boolean} [flop=false] Whether to deal out 3 cards for the flop, or just one
+   * @returns {boolean} Returns true or false based on fuction execution success
    */
-  sortPlayerList() {
-    this.players.sort((a, b) => a.seatNumber - b.seatNumber);
-    return;
-  }
-
   dealCommunityCards(flop: boolean = false): boolean {
     // Check if deck is initialized and arrays exist
     if (this.deck === null || !Array.isArray(this.burnPile) || !Array.isArray(this.communityCards)) return false;
@@ -1141,11 +1200,13 @@ export class Game {
     if (flop) {
       for (let i = 0; i < 3; i++) {
         const card = this.deck.draw();
+        card.faceUp = true;
         this.communityCards.push(card);
         console.log(`Dealt flop card #${i+1}: ${card.name}`);
       }
     } else {
       const card = this.deck.draw();
+      card.faceUp = true;
       this.communityCards.push(card);
       console.log(`Dealt turn/river card: ${card.name}`);
     }
@@ -1153,14 +1214,32 @@ export class Game {
     return true;
   }
 
-  /** Returns the current dealer's username based on the current value of dealerId */
+  /** Returns the current dealer's username based on the current value of dealerId 
+   * @function getDealer
+   * @returns {string} The username of the current dealer
+  */
   public getDealer(): string {
     return this.players.find(p => p.id === this.dealerId)?.username || 'Unknown Dealer';
   }
 
-  returnGameState() {
-    // Create a safe version without circular references
-    const gameState = {
+  /** Sort the player array by seat index.
+   * This is critical for allowing game logic to neatly loop through players in order.
+   * All sorts of processes would get out of order if we just appended new players to the array.
+   * 
+   * @function sortPlayerList
+   * @returns {void}
+   */
+  sortPlayerList(): void {
+    this.players.sort((a, b) => a.seatNumber - b.seatNumber);
+    return;
+  }
+
+  /** Return object containing state of Game class
+   * @function returnGameState
+   * @returns {GameState} GameState object
+   */
+  returnGameState(): GameState {
+    const gameState: GameState = {
       id: this.id,
       name: this.name,
       creator: {
@@ -1196,6 +1275,7 @@ export class Game {
       })),
       status: this.status,
       phase: this.phase,
+      phaseOrder: this.phaseOrder,
       hasStarted: this.hasStarted,
       roundActive: this.roundActive,
       tablePositions: this.tablePositions.map(pos => ({
@@ -1208,7 +1288,6 @@ export class Game {
         amount: sidepot.amount,
         eligiblePlayers: sidepot.eligiblePlayers.map(p => p.id)
       })),
-      // Don't send deck to client
       communityCards: this.communityCards ? this.communityCards.map(card => ({
         suit: card.suit,
         rank: card.rank,
@@ -1216,7 +1295,6 @@ export class Game {
         name: card.name,
         faceUp: card.faceUp
       })) : [],
-      // Don't send burn pile to client
       activePlayerId: this.activePlayerId,
       activePlayerIndex: this.activePlayerIndex,
       smallBlindIndex: this.smallBlindIndex,
@@ -1226,7 +1304,6 @@ export class Game {
       currentBet: this.currentBet,
       dealerIndex: this.dealerIndex,
       dealerId: this.dealerId,
-      currentPlayerId: this.socket?.id || null,
       // Dealer's Choice specific properties
       gameVariant: this.gameVariant,
       variantSelectionActive: this.variantSelectionActive || false,
@@ -1235,12 +1312,11 @@ export class Game {
       activeVariant: this.dealerSelectedVariant || this.gameVariant, // Variant currently in play if Dealer's Choice selected
       nextRoundVariant: this.nextRoundVariant, // Variant selected for the *next* round
     }
-
+    
     return gameState;
   }
 
-  /**
-   * Returns, and potentialy sets the activePlayerIndex, the value of the next player's index.
+  /** Returns, and potentialy sets the activePlayerIndex, the value of the next player's index.
    * @param {boolean} advanceActive If provided, and true, the function will set it's parent Game object's "activePlayerIndex" property to the value of the next player's index before returning it.
    * @returns {number} Returns the next player's index
    */
@@ -1257,39 +1333,71 @@ export class Game {
     return nextPlayerIndex;
   }
 
-  private getPhaseName(addNum = 0) {
-    const finalPhase = this.phase + addNum;
+  /** Gets the index of the current phase in the phase order list
+   * @function getPhaseIndex
+   * @returns {number} Index of the active phase in the phase order list
+   */
+  getPhaseIndex(): number {
+    return this.phaseOrder.indexOf(this.phase)
+  }
+
+  /** Returns the next phase from current phase, based on phase order list.
+   * @function getNextPhase
+   * @returns {TGamePhaseCommon} The next phase in the list of current game variant phases.
+   */
+  getNextPhase(): TGamePhaseCommon {
+    return this.phaseOrder[this.getPhaseIndex() + 1];
+  }
+
+  /** Returns the name of the current phase plus an optional index offset. 
+   * Clamps to final phase in list if computed value is outside the range. 
+   * @function getPhaseName
+   * @param {number} addNum Optional index offset from current phase to return.
+   * @returns {string} Formatted name of computed phase, e.g. 'Third Street' or 'Pre-Flop'.
+   */
+  private getPhaseName(addNum = 0): string {
+    const currPhaseIndex = this.phaseOrder.indexOf(this.phase);
+    let finalPhaseIndex = currPhaseIndex + addNum;
+    if (finalPhaseIndex >= this.phaseOrder.length)
+      finalPhaseIndex = this.phaseOrder.length - 1;
+    const finalPhase = this.phaseOrder[finalPhaseIndex];
+
     switch (finalPhase) {
-      case EGamePhaseHoldEm.PREFLOP:
+      case 'preflop':
         return 'Pre-Flop';
-      case EGamePhaseHoldEm.FLOP:
+      case 'flop':
         return 'Flop';
-      case EGamePhaseHoldEm.TURN:
+      case 'turn':
         return 'Turn';
-      case EGamePhaseHoldEm.RIVER:
+      case 'river':
         return 'River';
-      case EGamePhaseStud.THIRDSTREET:
+      case 'thirdstreet':
         return 'Third Street';
-      case EGamePhaseStud.FOURTHSTREET:
+      case 'fourthstreet':
         return 'Fourth Street';
-      case EGamePhaseStud.FIFTHSTREET:
+      case 'fifthstreet':
         return 'Fifth Street';
-      case EGamePhaseStud.SIXTHSTREET:
+      case 'sixthstreet':
         return 'Sixth Street';
-      case EGamePhaseStud.SEVENTHSTREET:
+      case 'seventhstreet':
         return 'Seventh Street';
-      case EGamePhaseDraw.PREDRAW:
+      case 'predraw':
         return 'Pre-Draw';
-      case EGamePhaseDraw.DRAW:
+      case 'draw':
         return 'Draw';
-      case EGamePhaseHoldEm.SHOWDOWN:
-      case EGamePhaseDraw.SHOWDOWN:
-      case EGamePhaseStud.SHOWDOWN:
+      case 'showdown':
         return 'Showdown';
+      default:
+        throw new Error('Could not determine phase name');
     }
   }
 
-  checkPhaseStatus() {
+  /** Check the status of the current phase and determine if we need to advance to the next phase.
+   * 
+   * @function checkPhaseStatus
+   * @returns {boolean} - Returns true if the phase was advanced, false otherwise.
+   */
+    checkPhaseStatus() {
     this.sortPlayerList();
 
     console.log(`Checking phase status in phase ${this.phase}`);
@@ -1326,15 +1434,19 @@ export class Game {
       }
     }
 
+    // If more than one active player remains,
     // Track if all players have had a chance to act in this betting round
     const allPlayersActed = this.players.every(p => 
       p.folded || 
-      p.allIn || 
-      p.previousAction !== 'none'
+      p.allIn  || 
+      p.previousAction !== 'none' ||
+      (p.currentBet > 0 && p.currentBet === this.currentBet)
     );
 
     // Special handling for the first round of betting
-    if (this.phase === EGamePhaseHoldEm.PREFLOP && !allPlayersActed) {
+    if ((this.phase === 'preflop' || 
+        this.phase === 'predraw' || 
+        this.phase === 'thirdstreet') && !allPlayersActed) {
       // If not all players have acted, find the next player
       return this.findNextActivePlayer();
     }
@@ -1359,24 +1471,25 @@ export class Game {
     if (!foundNextPlayer || bettingRoundComplete) {
       console.log(`Advancing to next phase (${this.getPhaseName(1)}) from ${this.getPhaseName()}`);
       
+      // Advance phase to next and track which phase we left
       const oldPhase = this.phase;
-      this.phase++;
+      this.phase = this.getNextPhase();
       
       // Deal community cards based on the new phase
       switch (this.phase) {
-        case EGamePhaseHoldEm.FLOP:
+        case 'flop':
           console.log('Dealing the flop');
           this.dealCommunityCards(true); // Deal flop (3 cards)
           break;
-        case EGamePhaseHoldEm.TURN:
+        case 'turn':
           console.log('Dealing the turn');
           this.dealCommunityCards(); // Deal turn (1 card)
           break;
-        case EGamePhaseHoldEm.RIVER:
+        case 'river':
           console.log('Dealing the river');
           this.dealCommunityCards(); // Deal river (1 card)
           break;
-        case EGamePhaseHoldEm.SHOWDOWN:
+        case 'showdown':
           console.log('Moving to showdown');
           // Showdown logic will be handled elsewhere
           break;
@@ -1386,11 +1499,11 @@ export class Game {
       this.resetBets();
 
       // Only proceed to set active player if we're not in showdown
-      if (this.phase !== EGamePhaseHoldEm.SHOWDOWN) {
+      if (this.phase !== 'showdown') {
         // Set active player to first non-folded player after dealer
         let startPos = (this.dealerIndex + 1) % this.players.length;
         let foundActive = false;
-
+        
         for (let i = 0; i < this.players.length; i++) {
           const idx = (startPos + i) % this.players.length;
           if (!this.players[idx].folded && !this.players[idx].allIn) {
@@ -1405,12 +1518,16 @@ export class Game {
         // If no eligible player found (everyone all-in), go to showdown
         if (!foundActive) {
           console.log(`No active players found, going to showdown`);
-          this.phase = EGamePhaseHoldEm.SHOWDOWN;
+          this.phase = 'showdown';
         }
       }
     }
   }
   
+  /** Sets activePlayerIndex and activePlayerId, returning true/false based on success or failure.
+   * @function findNextActivePlayer
+   * @returns {boolean} Returns true/false based on whether activePlayerIndex and activePlayerId were successfully set.
+   */
   private findNextActivePlayer(): boolean {
     if (this.activePlayerIndex === null) return false;
     
@@ -1480,6 +1597,10 @@ export class Game {
     return foundNextPlayer;
   }
 
+  /** Iterates through all players and sets their currentBet to 0 and previousAction to 'none'
+   * @function resetBets
+   * @returns {boolean} Returns true/false based on all players being successfully reset.
+   */
   private resetBets(): boolean {
 
     this.currentBet = 0;
@@ -1489,17 +1610,57 @@ export class Game {
     });
 
     if (this.currentBet === 0 && this.players.every(p => {
-      p.currentBet === 0 ||
+      p.currentBet === 0 &&
       p.previousAction === 'none'
     })) return true;
     else return false;
   }
 
-  /**
-   * Handles an incoming selection message from a player for Dealer's Choice games
+  /** Iterates through all players and sets currentBet t0 0, previousAction to 'none', 
+   * allIn & folded to false, and cards to an empty array 
+   * @function resetPlayers
+   * @returns {boolean} Returns true/false based on whether player properties were all successfully reset.
+   */
+  private resetPlayers(): boolean {
+    this.players.forEach(p => {
+      p.currentBet = 0;
+      p.previousAction = 'none';
+      p.allIn = false;
+      p.folded = false;
+      p.cards = [];
+    });
+
+    if (this.players.every(p => {
+      p.currentBet &&
+      p.previousAction === 'none' &&
+      p.allIn === false &&
+      p.folded === false &&
+      p.cards.length === 0
+    })) return true;
+    else return false;
+  }
+
+  /** Advances the ID & Index for dealer, small blind, big blind, and active player roles
+   * @function advanceRoleIndices
+   */
+  private advanceRoleIndices(): void {
+    const numPlayers = this.players.length;
+
+    this.dealerIndex        = (this.dealerIndex     + 1) % numPlayers;
+    this.smallBlindIndex    = (this.dealerIndex     + 1) % numPlayers;
+    this.bigBlindIndex      = (this.smallBlindIndex + 1) % numPlayers;
+    this.activePlayerIndex  = (this.bigBlindIndex   + 1) % numPlayers;
+
+    this.dealerId       = this.players[this.dealerIndex      ].id;
+    this.smallBlindId   = this.players[this.smallBlindIndex  ].id;
+    this.bigBlindId     = this.players[this.bigBlindIndex    ].id;
+    this.activePlayerId = this.players[this.activePlayerIndex].id;
+  }
+
+  /** Handles an incoming selection message from a player for Dealer's Choice games
    * @param playerId The ID of the player making the selection
    * @param variant The game variant they've selected
-   * @returns Boolean indicating if the selection was processed successfully
+   * @returns {boolean} Returns true/false, indicating if the selection was processed successfully
    */
   handleVariantSelection(playerId: string, variant: GameVariant): boolean {
     // Validate that this is a Dealer's Choice game
@@ -1531,17 +1692,18 @@ export class Game {
     return result;
   }
 
+  /** Resets all properties and objects to initial state to prepare for next round
+   * @function resetRound
+   * @returns {boolean} Returns true upon successful function execution.
+   */
   private resetRound(): boolean {
     // Sort players first to ensure consistent ordering
     this.sortPlayerList();
 
     // Make sure we have valid player count
     const numPlayers = this.players.length;
-    if (numPlayers === 0) {
-      this.phase = 0;
+    if (numPlayers <= 1)
       this.status = 'waiting';
-      return true;
-    }
 
     // Reset game state
     this.pot = 0;
@@ -1551,7 +1713,7 @@ export class Game {
     this.deck = null;
     this.burnPile = []; // Initialize as an empty array instead of null
     this.communityCards = []; // Initialize as an empty array instead of null
-    this.phase = 0;
+    this.phase = 'waiting';
     this.roundCount++;
     
     // Reset dealer's choice variant for next round
@@ -1565,31 +1727,10 @@ export class Game {
     }
 
     // Reset player state but don't change ready status here
-    this.players.forEach(p => {
-      p.currentBet = 0;
-      p.previousAction = 'none';
-      p.allIn = false;
-      p.folded = false;
-      p.cards = [];
-    });
-
-    // Make sure dealer index is valid after potential player changes
-    if (this.dealerIndex >= numPlayers) {
-      this.dealerIndex = 0;
-    }
+    this.resetPlayers();
 
     // Advance dealer position if we have enough players
-    if (numPlayers >= 2) {
-      this.dealerIndex = (this.dealerIndex + 1) % numPlayers;
-      this.smallBlindIndex = (this.dealerIndex + 1) % numPlayers;
-      this.bigBlindIndex = (this.smallBlindIndex + 1) % numPlayers;
-      this.activePlayerIndex = (this.bigBlindIndex + 1) % numPlayers;
-
-      this.dealerId = this.players[this.dealerIndex].id;
-      this.smallBlindId = this.players[this.smallBlindIndex].id;
-      this.bigBlindId = this.players[this.bigBlindIndex].id;
-      this.activePlayerId = this.players[this.activePlayerIndex].id;
-    }
+    if (numPlayers >= 2) this.advanceRoleIndices();
 
     // Verify player IDs in tablePositions match players array
     for (let i = 0; i < this.tablePositions.length; i++) {
@@ -1608,12 +1749,18 @@ export class Game {
     return true;
   }
 
-  evaluateHands(players: Player[], communityCards: Card[]) {
+  /** Evaluates poker hands for provided players, using their hole cards plus the community cards.
+   * Class method is just a reference to identical global function.
+   * @function evaluateHands
+   * @param {Player[]} players Array of players whose hands are to be evaluated.
+   * @param {Card[]} communityCards Array of cards that all players can use as part of their hand
+   * @returns {Winner[]} Returns an array of players with their winning HandRank included in object.
+   */
+  evaluateHands(players: Player[], communityCards: Card[]): Winner[] {
     return evaluateHands(players, communityCards);
   }
   
-  /**
-   * Creates a sidepot when a player goes all-in.
+  /** Creates a sidepot when a player goes all-in.
    * @param allInPlayer - The player who went all-in.
    * @param allInAmount - The amount the player went all-in for.
    */
@@ -1659,8 +1806,7 @@ export class Game {
     }
   }
   
-  /**
-   * Distributes pot(s) to winner(s) at showdown.
+  /** Distributes pot(s) to winner(s) at showdown.
    * Handles both main pot and sidepots.
    * @returns An array of winner information containing player IDs and amounts won
    */
@@ -1817,7 +1963,7 @@ export class Game {
     console.log(`Main pot: ${this.pot}`);
     console.log(`Sidepots: ${this.sidepots.map(sp => sp.getAmount()).join(', ')}`);
     winnerInfo.forEach(w => {
-      console.log(`Player ${w.playerName} won ${w.amount} from ${w.potType} with a `);
+      console.log(`Player ${w.playerName} won ${w.amount} from ${w.potType}`);
     })
     
     // Reset pots
