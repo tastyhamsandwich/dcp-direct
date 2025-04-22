@@ -4,7 +4,7 @@ import React, { useEffect, useReducer, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@contexts/authContext';
 import { io, Socket } from 'socket.io-client';
-import { GameState, GamePhase, GameVariant } from '@game/types';
+import { GameState, GameVariant } from '@game/types';
 import Card from '@components/game/Card';
 import Deck from '@components/game/Deck';
 import Player from '@components/game/Player';
@@ -337,8 +337,11 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   
   // Handler for closing the winner display
   const handleCloseWinnerDisplay = () => {
-    dispatch({ type: 'CLEAR_WINNERS' });
     setIsWinnerOpen(false);
+    // Delay clearing winner data to allow animation to complete
+    setTimeout(() => {
+      dispatch({ type: 'CLEAR_WINNERS' });
+    }, 300);
   };
   
   const handleVariantSelected = () => {
@@ -373,7 +376,6 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
           showdown={showdown}
           isOpen={isWinnerOpen} 
           onClose={handleCloseWinnerDisplay}
-          visible={winners !== null}
         />
       )}
     

@@ -17,15 +17,14 @@ interface WinnerDisplayProps {
   showdown: boolean;
   isOpen: boolean;
   onClose: () => void;
-  visible: boolean;
 }
 
-const WinnerDisplay = ({ winners, showdown, isOpen, onClose, visible }: WinnerDisplayProps) => {
+const WinnerDisplay = ({ winners, showdown, isOpen, onClose }: WinnerDisplayProps) => {
   const winnerRef = useRef(null);
   const [confettiActive, setConfettiActive] = useState(false);
 
   useEffect(() => {
-    if (isOpen && visible) {
+    if (isOpen) {
       // Play win sound
       const audio = new Audio('/assets/sounds/notification.mp3');
       audio.volume = 0.4;
@@ -36,7 +35,7 @@ const WinnerDisplay = ({ winners, showdown, isOpen, onClose, visible }: WinnerDi
       const timer = setTimeout(() => setConfettiActive(false), 3000);
       return () => clearTimeout(timer);
     }
-  }, [isOpen, visible]);
+  }, [isOpen]);
 
   useClickOutside(winnerRef, onClose);
 
@@ -98,7 +97,7 @@ const WinnerDisplay = ({ winners, showdown, isOpen, onClose, visible }: WinnerDi
 
   return (
     <AnimatePresence>
-      {isOpen && visible && (
+      {isOpen && (
         <motion.div 
           className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70"
           initial={{ opacity: 0 }}
@@ -154,7 +153,7 @@ const WinnerDisplay = ({ winners, showdown, isOpen, onClose, visible }: WinnerDi
                   <span className="text-gray-300 text-sm">{winner.potType}</span>
                 </div>
                 
-                {showdown && winner.hand && (
+                {winner.hand && (
                   <motion.div 
                     className="text-center md:text-right"
                     initial={{ opacity: 0, x: 20 }}
@@ -174,10 +173,15 @@ const WinnerDisplay = ({ winners, showdown, isOpen, onClose, visible }: WinnerDi
                           >
                             <Image 
                               src={`/assets/cards_en/${card}.png`}
-                              alt={card}
+                              alt={card || 'playing card'}
                               width={40}
                               height={56}
                               className="rounded"
+                              onError={(e) => {
+                                // Use fallback card if image fails to load
+                                const target = e.target as HTMLImageElement;
+                                target.src = '/assets/cardback.png';
+                              }}
                             />
                           </motion.div>
                         ))}
