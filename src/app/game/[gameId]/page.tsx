@@ -47,6 +47,7 @@ interface GamePageState {
   message: string;
   winners: WinnerInfo[] | null;
   showdown: boolean;
+  isShowdownPhase: boolean; // Flag to track if game is in showdown phase
   variantSelectionActive: boolean;
   variantSelectionTimeout: number;
 }
@@ -60,6 +61,7 @@ const initialState: GamePageState = {
   message: '',
   winners: null,
   showdown: false,
+  isShowdownPhase: false,
   variantSelectionActive: false,
   variantSelectionTimeout: 15000
 };
@@ -72,7 +74,12 @@ function gameReducer(state: GamePageState, action: GameAction): GamePageState {
     case 'SET_CONNECTED':
       return { ...state, isConnected: action.payload };
     case 'SET_GAME_STATE':
-      return { ...state, gameState: action.payload };
+      // Update isShowdownPhase when the game enters the showdown phase
+      return { 
+        ...state, 
+        gameState: action.payload,
+        isShowdownPhase: action.payload?.phase === 'showdown'
+      };
     case 'ADD_CHAT_MESSAGE':
       return { ...state, chatMessages: [...state.chatMessages, action.payload] };
     case 'ADD_SYSTEM_MESSAGE':
@@ -113,6 +120,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     message, 
     winners, 
     showdown, 
+    isShowdownPhase,
     variantSelectionActive, 
     variantSelectionTimeout 
   } = state;
@@ -486,7 +494,8 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                     <div className="text-sm text-gray-300">Chips: {player.chips}</div>
                     <div className="text-sm text-gray-300 flex gap-2 mt-2">
                       {player.cards.length > 0 ? (
-                        player.id === socket?.id ? 
+                        // Show all cards face up if it's the current player or during showdown
+                        player.id === socket?.id || isShowdownPhase ? 
                           player.cards.map((card, idx) => (
                             <Card
                               scaleFactor={1} 

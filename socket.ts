@@ -765,7 +765,7 @@ function getAllowedActions(game, playerId) {
 // Add a function to handle showdown
 function handleShowdown(game, io) {
   // If we're in showdown phase, determine winners
-  if (game.phaseOrder.indexOf(game.phase) === game.phaseOrder.length) {
+  if (game.phase === 'showdown') {
     // If only one player remains (everyone else folded)
     const activePlayers = game.players.filter(p => !p.folded);
     if (activePlayers.length === 1) {
@@ -807,7 +807,19 @@ function handleShowdown(game, io) {
       return;
     }
 
-    // Use the improved pot distribution logic that handles sidepots
+    // Set all active players' cards to face up for the showdown
+    activePlayers.forEach(player => {
+      player.cards.forEach(card => {
+        card.faceUp = true;
+      });
+    });
+
+    // Send an immediate game state update so clients can see the revealed cards
+    io.to(game.id).emit('game_update', { 
+      game: game.returnGameState(),
+      message: 'Showdown! All active players reveal their cards.'
+    });
+
     console.log(`Distributing pots at showdown with ${activePlayers.length} active players and ${game.sidepots.length} sidepots`);
     
     // Store winner information before distributing pots

@@ -779,7 +779,7 @@ export class Game {
             selectedVariant: this.dealerSelectedVariant
           });
         }
-        
+
         // *** NOW CALL continueRoundSetup with the chosen variant ***
         this.continueRoundSetup(this.dealerSelectedVariant);
         // Trigger game_update from socket.ts after setup is complete
@@ -805,6 +805,21 @@ export class Game {
       this.sidepots = [];
       this.ineligiblePlayers = [];
       
+      switch (this.gameVariant) {
+        case 'TexasHoldEm':
+        case 'Omaha':
+        case 'OmahaHiLo':
+        case 'Chicago':
+          this.phaseOrder = ['waiting', 'preflop', 'flop', 'turn', 'river', 'showdown'];
+          break;
+        case 'FiveCardDraw':
+          this.phaseOrder = ['waiting', 'predraw', 'draw', 'showdown'];
+          break;
+        case 'SevenCardStud':
+          this.phaseOrder = ['waiting', 'thirdstreet', 'fourthstreet', 'fifthstreet', 'sixthstreet', 'seventhstreet', 'showdown'];
+          break;
+      }
+
       // Increment round count
       this.roundCount++;
 
@@ -865,14 +880,7 @@ export class Game {
       // Create a new deck
       this.deck = new Deck(true);
       // Set phase based on the variant type
-      if (['TexasHoldEm', 'Omaha', 'OmahaHiLo', 'Chicago'].includes(currentRoundVariant))
-        this.phase = 'preflop';
-      else if (currentRoundVariant === 'SevenCardStud')
-        this.phase = 'thirdstreet';
-      else if (currentRoundVariant === 'FiveCardDraw')
-        this.phase = 'predraw';
-      else
-        this.phase = 'preflop';
+      this.phase = this.phaseOrder[1];
 
       this.status = 'playing';
 
