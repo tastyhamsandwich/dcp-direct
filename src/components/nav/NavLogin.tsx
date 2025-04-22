@@ -8,10 +8,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema } from '@lib/zod';
 import { useAuth } from '@contexts/authContext';
-import '@app/styles.module.css';
 import './navstyles.css';
 
-const NavLogin = (props) => {
+const NavLogin = ({ onLoginClicked }) => {
   const { signIn, error: authError, loading } = useAuth();
   const [error, setError] = useState<string | null>(null);
 
@@ -25,8 +24,8 @@ const NavLogin = (props) => {
 
   const onSubmit = async (data: { email: string; password: string }) => {
     setError(null);
-    props.onLoginClicked();
     try {
+      onLoginClicked();
       await signIn(data.email, data.password);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
