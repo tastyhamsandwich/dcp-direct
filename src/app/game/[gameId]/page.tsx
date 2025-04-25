@@ -314,10 +314,16 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   const handlePlayerAction = (actionType: string, amount: number = 0) => {
     if (!socket || !isConnected || !unwrappedParams.gameId) return;
     
-    socket.emit('player_action', {
-      gameId: unwrappedParams.gameId,
-      action: { type: actionType, amount }
-    });
+    if (actionType === 'player_ready') {
+      socket.emit('player_ready', {
+        gameId: unwrappedParams.gameId
+      });
+    } else {
+      socket.emit('player_action', {
+        gameId: unwrappedParams.gameId,
+        action: { type: actionType, amount }
+      });
+    }
   };
   
   const handleSendMessage = (e: React.FormEvent) => {

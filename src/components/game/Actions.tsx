@@ -51,9 +51,8 @@ const Actions: React.FC<ActionsProps> = ({
   }, [isActive, prevIsActive]);
 
   const toggleReady = () => {
-    onAction('toggleReady');
-    // Don't manually set isReady here - we'll let the server update it
-    // and then sync through props for consistency
+    // Changed from 'toggleReady' action to emit 'player_ready' directly
+    onAction('player_ready');
   }
 
   // Check if an action is allowed
@@ -123,7 +122,6 @@ const Actions: React.FC<ActionsProps> = ({
         className="player-actions bg-gray-900 p-2 rounded-lg mt-2"
         initial="hidden"
         animate="visible"
-        variants={containerVariants}
         variants={activePlayerHighlight}
       >
         <AnimatePresence>

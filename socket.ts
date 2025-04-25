@@ -3,6 +3,7 @@ import { User, TGamePhase, ListEntry, Action, TGamePhaseCommon, TGamePhaseHoldEm
 import { Player, Game, Sidepot } from '@game/classes';
 import { evaluateHand } from '@game/utils';
 import { v4 as uuidv4 } from 'uuid';
+import { Playwrite_TZ } from 'next/font/google';
 
 export function initializeSocket(io: Server) {
   // Store active games
@@ -63,7 +64,7 @@ export function initializeSocket(io: Server) {
     socket.on('create_game', (data) => {
       console.log(`Received socket event 'create_game'...`, data);
 
-      const { tableName, creator, maxPlayers, blinds } = data;
+      const { tableName, creator, maxPlayers, blinds, gameVariant } = data;
       const gameId = uuidv4();
       const userId = socket.id;
       
@@ -81,7 +82,7 @@ export function initializeSocket(io: Server) {
         creator.chips = 1000;
       }
       
-      games[gameId] = new Game(gameId, tableName, creator, maxPlayers, blinds?.small || 5, blinds?.big || 10);
+      games[gameId] = new Game(gameId, tableName, creator, maxPlayers, blinds?.small || 5, blinds?.big || 10, gameVariant);
       
       const listEntry: ListEntry = {
         index: gamesArray.length,
@@ -178,6 +179,8 @@ export function initializeSocket(io: Server) {
 
         // Create player object for new player
         const player: Player = new Player(userId, username, availableSeat, chips, avatar);
+        player.active = false;
+        player.folded = true;
                 
         // Add player to the game
         game.players.push(player);
@@ -222,7 +225,103 @@ export function initializeSocket(io: Server) {
         io.emit('games_list', gamesArray);
       }
     });
-    
+
+    // Handle player ready status separately from actions
+    socket.on('player_ready', (data) => {
+      if (!data || !data.gameId) {
+        socket.emit('error', { message: 'Invalid ready data' });
+        return;
+      }
+      
+      const { gameId } = data;
+      const game = games[gameId];
+      const userId = socket.id;
+      
+      if (!game) {
+        socket.emit('error', { message: 'Game not found' });
+        return;
+      }
+      
+      const player = game.players.find(p => p.id === userId);
+      if (!player) {
+        socket.emit('error', { message: 'Player not found' });
+        return;
+      }
+
+      // Toggle ready state
+      player.ready = !player.ready;
+      console.log(`${player.username}'s ready status is now set to '${player.ready}'`);
+      
+      // Send immediate update about this player's ready status
+      io.to(gameId).emit('player_ready_changed', {
+        playerId: player.id,
+        playerName: player.username,
+        isReady: player.ready,
+        game: game.returnGameState()
+      });
+
+      // Check if all players are ready to start game or next round
+      if (game.players.length >= 2) {
+        const allReady = game.players.every(p => p.ready);
+        
+        if (allReady) {
+          if (!game.hasStarted) {
+            // Initial game start
+            console.log('All players ready, starting game...');
+            game.status = 'playing';
+            game.hasStarted = true;
+            
+            io.to(gameId).emit('game_starting', {
+              message: 'All players ready! Game is starting...',
+              game: game.returnGameState()
+            });
+            
+            // Start the game after a short delay
+            setTimeout(() => {
+              game.startRound();
+              
+              io.to(gameId).emit('game_update', {
+                game: game.returnGameState(),
+                message: 'Game has started!'
+              });
+              
+              // Notify first player it's their turn
+              if (game.activePlayerId) {
+                io.to(game.activePlayerId).emit('your_turn', {
+                  gameId: game.id,
+                  allowedActions: getAllowedActions(game, game.activePlayerId)
+                });
+              }
+            }, 1000);
+          } else if (game.phase === 'waiting' && game.roundCount > 0) {
+            // Starting next round
+            console.log('All players ready for next round...');
+            
+            io.to(gameId).emit('round_starting', {
+              message: 'All players ready! New round is starting...',
+              game: game.returnGameState()
+            });
+            
+            setTimeout(() => {
+              game.startRound();
+              
+              io.to(gameId).emit('game_update', {
+                game: game.returnGameState(),
+                message: 'New round has started!'
+              });
+              
+              if (game.activePlayerId) {
+                io.to(game.activePlayerId).emit('your_turn', {
+                  gameId: game.id,
+                  allowedActions: getAllowedActions(game, game.activePlayerId)
+                });
+              }
+            }, 1000);
+          }
+        }
+      }
+    });
+
     // Handle player actions (fold, check, call, raise)
     socket.on('player_action', (data) => {
             
@@ -265,23 +364,6 @@ export function initializeSocket(io: Server) {
       let allIn = false;
 
       switch (actionType) {
-        case 'toggleReady':
-          player.ready = !player.ready;
-          console.log(`${player.username}'s ready status is now set to '${player.ready}'`);
-          
-          // Send immediate update to all clients about this player's ready status
-          io.to(gameId).emit('player_ready_changed', {
-            playerId: player.id,
-            playerName: player.username,
-            isReady: player.ready,
-            game: game.returnGameState()
-          });
-          
-          // Check if all players are ready to start the game
-          checkRoundStatus(game, io);
-          actionSuccess = true;
-          break;
-
         case 'fold':
           player.previousAction = 'fold';
           player.folded = true;
@@ -436,8 +518,8 @@ export function initializeSocket(io: Server) {
         }
 
         // Notify the new active player it's their turn
-        if (game.activePlayerId) {
-          console.log(`Notifying player ${game.activePlayerId} it's their turn`);
+        if (game.status === 'playing' && game.activePlayerId && game.activePlayerIndex) {
+          console.log(`Notifying player '${game.players[game.activePlayerIndex].username}' it's their turn`);
           const allowedActions = getAllowedActions(game, game.activePlayerId);
           io.to(game.activePlayerId).emit('your_turn', {
             gameId: game.id,
@@ -549,6 +631,8 @@ export function initializeSocket(io: Server) {
                   game.dealerId = game.players[game.dealerIndex].id;
                   game.smallBlindId = game.players[game.smallBlindIndex].id;
                   game.bigBlindId = game.players[game.bigBlindIndex].id;
+                  
+                  game.findNextActivePlayer();
                 }
               }
               
@@ -711,15 +795,17 @@ function isReady(player) {
 
 // Add a function to determine allowed actions for a player
 function getAllowedActions(game, playerId) {
-  console.log(`Getting allowed actions for player ${playerId} in game ${game.id}`);
-  console.log(`Current game phase: ${game.phase}, current bet: ${game.currentBet}`);
+
   
   const player: Player = game.players.find(p => p.id === playerId);
   if (!player) {
     console.log(`Player not found`);
     return [];
   }
-  
+
+  console.log(`Getting allowed actions for player '${player.username}' in game '${game.name}'`);
+  console.log(`Current game phase: ${game.phase}, current bet: ${game.currentBet}`);
+
   // Validate player chips
   if (typeof player.chips !== 'number' || isNaN(player.chips)) {
     console.warn(`Invalid chips value for player ${player.username}: ${player.chips}, fixing to 1000`);

@@ -594,6 +594,23 @@ export class Game {
     this.variantSelectionTimeout = null;
 
     this.updateCardsPerPlayer(this.gameVariant, customRules)
+    switch (gameVariant) {
+      case 'TexasHoldEm':
+      case 'Omaha':
+      case 'OmahaHiLo':
+      case 'Chicago':
+        this.phaseOrder = ['waiting', 'preflop', 'flop', 'turn', 'river', 'showdown'];
+        break;
+      case 'FiveCardDraw':
+        this.phaseOrder = ['waiting', 'predraw', 'draw', 'showdown'];
+        break;
+      case 'SevenCardStud':
+        this.phaseOrder = ['waiting', 'thirdstreet', 'fourthstreet', 'fifthstreet', 'sixthstreet', 'seventhstreet', 'showdown'];
+        break;
+      default:
+        this.phaseOrder = ['waiting', 'preflop', 'flop', 'turn', 'river', 'showdown'];
+        break;
+    }
   }
 
   /** Sets cardsPerPlayer based on provided game variant and/or custom variant rule definitions.
@@ -880,7 +897,8 @@ export class Game {
       // Create a new deck
       this.deck = new Deck(true);
       // Set phase based on the variant type
-      this.phase = this.phaseOrder[1];
+      if (this.phaseOrder && this.phaseOrder.length > 1)
+        this.phase = this.phaseOrder[1];
 
       this.status = 'playing';
 
@@ -1396,7 +1414,7 @@ export class Game {
       case 'showdown':
         return 'Showdown';
       default:
-        throw new Error('Could not determine phase name');
+        return 'Unknown Phase';
     }
   }
 
@@ -1442,7 +1460,6 @@ export class Game {
       }
     }
 
-    // If more than one active player remains,
     // Track if all players have had a chance to act in this betting round
     const allPlayersActed = this.players.every(p => 
       p.folded || 
@@ -1451,20 +1468,23 @@ export class Game {
       (p.currentBet > 0 && p.currentBet === this.currentBet)
     );
 
-    // Special handling for the first round of betting
-    if ((this.phase === 'preflop' || 
-        this.phase === 'predraw' || 
-        this.phase === 'thirdstreet') && !allPlayersActed) {
-      // If not all players have acted, find the next player
-      return this.findNextActivePlayer();
-    }
-
     // Enhanced tracking to determine if the betting round is complete
     const bettingRoundComplete = this.players.every(p =>
       p.folded || 
       p.allIn || 
       (p.previousAction !== 'none' && p.currentBet === this.currentBet)
     );
+
+    // Special handling for preflop - big blind must get final action
+    if (this.phase === 'preflop') {
+      const bigBlindPlayer = this.players.find(p => p.id === this.bigBlindId);
+      // If big blind hasn't acted yet and there was at least one raise/bet
+      if (bigBlindPlayer && !bigBlindPlayer.folded && !bigBlindPlayer.allIn && 
+          (bigBlindPlayer.previousAction === 'none' || this.currentBet > bigBlindPlayer.currentBet)) {
+        console.log('Big blind still needs to act');
+        return this.findNextActivePlayer();
+      }
+    }
 
     console.log(`All players acted: ${allPlayersActed}, Betting round complete: ${bettingRoundComplete}`);
 
@@ -1532,11 +1552,12 @@ export class Game {
     }
   }
   
+
   /** Sets activePlayerIndex and activePlayerId, returning true/false based on success or failure.
    * @function findNextActivePlayer
    * @returns {boolean} Returns true/false based on whether activePlayerIndex and activePlayerId were successfully set.
    */
-  private findNextActivePlayer(): boolean {
+  findNextActivePlayer(): boolean {
     if (this.activePlayerIndex === null) return false;
     
     // Ensure players are properly sorted before finding the next player
@@ -1605,11 +1626,12 @@ export class Game {
     return foundNextPlayer;
   }
 
-  /** Iterates through all players and sets their currentBet to 0 and previousAction to 'none'
+
+  /** Resets the current bet to 0 and all players' bets to 0, and previousAction to 'none'
    * @function resetBets
    * @returns {boolean} Returns true/false based on all players being successfully reset.
    */
-  private resetBets(): boolean {
+  resetBets(): boolean {
 
     this.currentBet = 0;
     this.players.forEach(p => {
@@ -1757,16 +1779,14 @@ export class Game {
     return true;
   }
 
-  /** Evaluates poker hands for provided players, using their hole cards plus the community cards.
-   * Class method is just a reference to identical global function.
-   * @function evaluateHands
-   * @param {Player[]} players Array of players whose hands are to be evaluated.
-   * @param {Card[]} communityCards Array of cards that all players can use as part of their hand
-   * @returns {Winner[]} Returns an array of players with their winning HandRank included in object.
+
+  /** Evaluates the hands of the players against the community cards.
+   * @param players - The array of players to evaluate.
+   * @param communityCards - The community cards to use for evaluation.
+   * @returns An array of winners with their respective hands.
    */
-  evaluateHands(players: Player[], communityCards: Card[]): Winner[] {
-    return evaluateHands(players, communityCards);
-  }
+  evaluateHands(players: Player[], communityCards: Card[]): Winner[] { return evaluateHands(players, communityCards); }
+
   
   /** Creates a sidepot when a player goes all-in.
    * @param allInPlayer - The player who went all-in.

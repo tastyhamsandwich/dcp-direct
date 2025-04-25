@@ -49,8 +49,10 @@ export type DrawPhases = ['waiting', 'predraw', 'draw', 'showdown'];
 export type TGamePhaseStud = 'waiting' | 'thirdstreet' | 'fourthstreet' | 'fifthstreet' | 'sixthstreet' | 'seventhstreet' | 'showdown';
 export type StudPhases = ['waiting', 'thirdstreet', 'fourthstreet', 'fifthstreet', 'sixthstreet', 'seventhstreet', 'showdown'];
 
+export type InitPhase = ['waiting', 'preflop'];
+
 export type TGamePhase = TGamePhaseHoldEm | TGamePhaseStud | TGamePhaseDraw;
-export type GamePhases = HoldEmPhases | DrawPhases | StudPhases;
+export type GamePhases = HoldEmPhases | DrawPhases | StudPhases | InitPhase;
 
 export type RoomStatus = 'waiting' | 'playing' | 'paused';
 
