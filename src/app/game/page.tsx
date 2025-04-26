@@ -6,6 +6,7 @@ import { useAuth } from '@contexts/authContext';
 import Lobby from '@comps/game/lobby/Lobby';
 import { User, ListEntry } from '@game/types';
 import { io, type Socket } from 'socket.io-client';
+import { SeatSelector } from '@comps/game/SeatSelector';
 
 export default function GameLobby() {
   const { user, profile, loading } = useAuth();
@@ -25,8 +26,9 @@ export default function GameLobby() {
     if (!user || !profile) return;
     
     // Initialize WebSocket connection to the socket.io server running on port 3001
-    const socketInstance = io('localhost:3001'/*'http://randomencounter.ddns.net:3001'*/, {
-      transports: ['websocket', 'polling'],
+    // const socketInstance = io('http://randomencounter.ddns.net:3001', {
+    const socketInstance = io('localhost:3001', {
+      transports: ['websocket'],
       withCredentials: true
     });
     setSocket(socketInstance);
@@ -88,7 +90,22 @@ export default function GameLobby() {
   };
   
   const handleJoinGame = (gameId) => {
-    if (!gameId || !profile) return;
+    if (!gameId || !profile || !socket) return;
+
+    /*socket.emit('get_seat_info', { gameId });
+
+    socketInstance.on('seat_info', (seatInfo) => {
+      console.log('Seat info received:', seatInfo);
+      const occupiedSeats = seatInfo.seats.map((seat, index) => ({
+        seatNumber: index,
+        occupied: seat.occupied,
+        playerName: seat.playerName || null
+      }));
+      
+      // Open the seat selector dialog
+      setSeatSelectorOpen(true);
+      setOccupiedSeats(occupiedSeats);
+    })*/
     router.push(`/game/${gameId}`);
   };
   

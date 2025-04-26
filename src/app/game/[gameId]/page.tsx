@@ -12,6 +12,7 @@ import Table from '@components/game/Table';
 import Actions from '@components/game/Actions';
 import WinnerDisplay from '@components/game/WinnerDisplay';
 import DealerVariantSelector from '@components/game/DealerVariantSelector';
+import { SeatSelector } from '@components/game/SeatSelector';
 import { Playwrite_ES } from 'next/font/google';
 
 // Define winner info interface
@@ -112,6 +113,13 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
   const [isWinnerOpen, setIsWinnerOpen] = useState<boolean>(false);
   const [allowedActions, setAllowedActions] = useState<string[]>([]);
   const [state, dispatch] = useReducer(gameReducer, initialState);
+  /*const [showSeatSelector, setShowSeatSelector] = useState<boolean>(false);
+  const [occupiedSeats, setOccupiedSeats] = useState<Array<{
+    seatNumber: number;
+    occupied: boolean;
+    playerName: string | null;
+  }>>([]);*/
+  
   const { 
     gameState, 
     chatMessages, 
@@ -149,8 +157,9 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     if (!unwrappedParams.gameId || !user || !profile) return;
     
     // Initialize WebSocket connection to the socket.io server
-    const socketInstance = io('localhost:3001'/*'http://randomencounter.ddns.net:3001'*/, {
-      transports: ['websocket', 'polling'],
+    // const socketInstance = io('http://randomencounter.ddns.net:3001', {
+    const socketInstance = io('localhost:3001', {
+      transports: ['websocket'],
       withCredentials: true
     });
     
@@ -169,7 +178,14 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
         profile 
       });
     });
-    
+
+    // Add handler for seat selection request
+    /*socketInstance.on('select_seat', (data) => {
+      console.log('Received seat selection request:', data);
+      setOccupiedSeats(data.occupiedSeats);
+      setShowSeatSelector(true);
+    });*/
+
     socketInstance.on('game_state', (data) => {
       console.log('Game state received:', data);
       dispatch({ type: 'SET_GAME_STATE', payload: data.game });
@@ -311,6 +327,19 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     };
   }, [unwrappedParams.gameId, user, profile, router]);
   
+  /*const handleSeatSelect = (seatNumber: number) => {
+    if (!socket || !isConnected || !unwrappedParams.gameId) return;
+    
+    // Join the game with selected seat
+    socket.emit('join_game', { 
+      gameId: unwrappedParams.gameId,
+      profile,
+      seatNumber
+    });
+    
+    setShowSeatSelector(false);
+  };*/
+
   const handlePlayerAction = (actionType: string, amount: number = 0) => {
     if (!socket || !isConnected || !unwrappedParams.gameId) return;
     
@@ -373,6 +402,16 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
 
   return (
     <div className="container mx-auto p-4 bg-gray-900 text-gray-200 min-h-screen">
+      {/* Add SeatSelector component 
+      <SeatSelector
+        isOpen={showSeatSelector}
+        onClose={() => setShowSeatSelector(false)}
+        onSeatSelect={handleSeatSelect}
+        maxPlayers={gameState?.maxPlayers || 9}
+        occupiedSeats={occupiedSeats}
+      />
+      */}
+
       {/* Dealer's Variant Selector */}
       <DealerVariantSelector
         isVisible={variantSelectionActive && gameState?.gameVariant === 'DealersChoice'}
