@@ -1,5 +1,5 @@
 import { Server } from 'socket.io';
-import { User, TGamePhase, ListEntry, Action, TGamePhaseCommon, TGamePhaseHoldEm } from '@game/types';
+import { User, TGamePhase, ListEntry, Action, TGamePhaseCommon, TGamePhaseHoldEm, TableSeat } from '@game/types';
 import { Player, Game, Sidepot } from '@game/classes';
 import { evaluateHand } from '@game/utils';
 import { v4 as uuidv4 } from 'uuid';
@@ -107,6 +107,21 @@ export function initializeSocket(io: Server) {
       io.emit('games_list', gamesArray);
     });
     
+    socket.on('get_seat_info', (data) => {
+      const gameId = data.gameId;
+      const game = games[gameId];
+      const seatInfo: Array<number> = [];
+      game.tablePositions.forEach((pos, index) => {
+        if (pos.occupied) {
+          seatInfo.push(pos.seatNumber)
+        }
+      });
+
+      socket.emit('seat_info', { seatInfo });
+      console.log(`Emitting socket event 'seat_info'...`, seatInfo);
+    });
+    
+
     // Join an existing game
     socket.on('join_game', (data) => {
       console.log(`Received socket event 'join_game'...`, data);
@@ -156,6 +171,35 @@ export function initializeSocket(io: Server) {
         game.players[existingPlayerIndex].id = userId;
         console.log(`Player ${users[userId].username} reconnected to game '${game.name}' with new socket ID ${userId}`);
       } else {
+        /*// First, send available seats info to the client
+        if (!data.seatNumber && data.seatNumber !== 0) {
+          // Get currently occupied seats
+          const occupiedSeats = game.tablePositions.map((pos, index) => ({
+            seatNumber: index,
+            occupied: pos.occupied,
+            playerName: pos.occupied ? game.players.find(p => p.id === pos.playerId)?.username : null
+          }));
+
+          // Send seat selection request to client
+          socket.emit('select_seat', {
+            gameId,
+            maxPlayers: game.maxPlayers,
+            occupiedSeats
+          });
+          return;
+        }
+
+        // Validate selected seat
+        if (data.seatNumber < 0 || data.seatNumber >= game.maxPlayers) {
+          socket.emit('error', { message: 'Invalid seat number' });
+          return;
+        }
+
+        if (game.tablePositions[data.seatNumber].occupied) {
+          socket.emit('error', { message: 'Selected seat is already occupied' });
+          return;
+        }*/
+
         const username = profile.username;
         // Fix: Use profile.balance instead of profile.chips
         const chips = profile.balance || 1000; // Fallback to 1000 if balance is undefined
@@ -961,9 +1005,6 @@ function resetForNextRound(game, io) {
   if (game.dealerIndex >= game.players.length) {
     game.dealerIndex = 0;
   }
-  
-  // Advance dealer position
-  game.dealerIndex = (game.dealerIndex + 1) % game.players.length;
 
   // Reset game state for next round
   game.roundActive = false;
@@ -980,30 +1021,32 @@ function resetForNextRound(game, io) {
     p.cards = [];
     p.currentBet = 0;
     p.previousAction = 'none';
-  });
-
-  // Set all players to not ready for next round
-  // This is critical - players must actively opt-in to the next round
-  // CURRENTLY DISABLED, ALL PLAYERS SET TO READY AUTOMATICALLY
-  game.players.forEach(p => {
+    // Automatically set players ready for next round
     p.ready = true;
   });
   
   // Also update roles based on new dealer position
   if (game.players.length >= 2) {
-    game.smallBlindIndex = (game.dealerIndex + 1) % game.players.length;
-    game.bigBlindIndex = (game.smallBlindIndex + 1) % game.players.length;
-    game.dealerId = game.players[game.dealerIndex].id;
-    game.smallBlindId = game.players[game.smallBlindIndex].id;
-    game.bigBlindId = game.players[game.bigBlindIndex].id;
-  }
-
-  // Emit round ended event and wait for players to ready up again
-  if (game.players.length >= 2) {
-    // Notify all players that the round has ended and they need to ready up again
+    game.startRound(); // Start the new round immediately since players are auto-ready
+    
+    // Emit game update with new state
+    io.to(game.id).emit('game_update', { 
+      game: game.returnGameState(),
+      message: 'New round started!'
+    });
+    
+    // Notify first active player it's their turn
+    if (game.activePlayerId) {
+      io.to(game.activePlayerId).emit('your_turn', {
+        gameId: game.id,
+        allowedActions: getAllowedActions(game, game.activePlayerId)
+      });
+    }
+  } else {
+    // Not enough players, just emit round ended
     io.to(game.id).emit('round_ended', { 
       game: game.returnGameState(),
-      message: 'Round ended. Click Ready to play the next round.'
+      message: 'Not enough players to start next round.'
     });
   }
 }

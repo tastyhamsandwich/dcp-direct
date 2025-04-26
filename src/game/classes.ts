@@ -645,7 +645,6 @@ export class Game {
   }
 
   /** Initializes the table seats.
-   * 
    * @function initTableSeats
    * @param {number} maxPlayers - The maximum number of players.
    * @returns {TableSeat[]} The initialized table seats.
@@ -661,7 +660,6 @@ export class Game {
   }
 
   /** Gets the ID of the next player around the table, ignoring empty seats.
-   * 
    * @function getNextPlayerId
    * @param {string} currentPlayerId - The ID of the current player.
    * @returns {string} The ID of the next player.
@@ -687,7 +685,6 @@ export class Game {
   }
 
   /** Gets the role IDs for the current round.
-   * 
    * @function getRoleIds
    * @param {GameState} state - The current state of the game.
    * @param {boolean} isFirstRound - Indicates whether it is the first round.
@@ -807,7 +804,6 @@ export class Game {
   }
 
   /** Starts a new round.
-   * 
    * @function startRound
    * @param {GameState} state - The current state of the game.
    * @returns {GameState} The updated game state.
@@ -1251,7 +1247,6 @@ export class Game {
   /** Sort the player array by seat index.
    * This is critical for allowing game logic to neatly loop through players in order.
    * All sorts of processes would get out of order if we just appended new players to the array.
-   * 
    * @function sortPlayerList
    * @returns {void}
    */
@@ -1423,7 +1418,7 @@ export class Game {
    * @function checkPhaseStatus
    * @returns {boolean} - Returns true if the phase was advanced, false otherwise.
    */
-    checkPhaseStatus() {
+  checkPhaseStatus() {
     this.sortPlayerList();
 
     console.log(`Checking phase status in phase ${this.phase}`);
@@ -1553,20 +1548,24 @@ export class Game {
   }
   
 
+
+
   /** Sets activePlayerIndex and activePlayerId, returning true/false based on success or failure.
    * @function findNextActivePlayer
    * @returns {boolean} Returns true/false based on whether activePlayerIndex and activePlayerId were successfully set.
    */
   findNextActivePlayer(): boolean {
-    if (this.activePlayerIndex === null) return false;
+    if (this.activePlayerIndex === null) {
+      console.log('FUNC: findNextActivePlayer() - No active player index set, cannot find next player');
+      return false;
+    }
     
     // Ensure players are properly sorted before finding the next player
     this.sortPlayerList();
     
     // Validate the active player index is within bounds
-    if (this.activePlayerIndex >= this.players.length) {
+    if (this.activePlayerIndex >= this.players.length)
       this.activePlayerIndex = 0;
-    }
     
     let foundNextPlayer = false;
     let currentPlayerIndex = this.activePlayerIndex;
@@ -1592,7 +1591,7 @@ export class Game {
     });
     
     if (eligiblePlayers.length === 0) {
-      console.log('No eligible players found who can act');
+      console.log('FUNC: findNextActivePlayer() - No eligible players found who can act');
       return false;
     }
 
@@ -1600,7 +1599,7 @@ export class Game {
     const startingIndex = nextPlayerIndex;
     do {
       if (nextPlayerIndex >= this.players.length) {
-        console.log(`Invalid player index: ${nextPlayerIndex}, resetting to 0`);
+        console.log(`FUNC: findNextActivePlayer() - Invalid player index: ${nextPlayerIndex}, resetting to 0`);
         nextPlayerIndex = 0;
       }
       
