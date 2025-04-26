@@ -115,7 +115,11 @@ export default function AvatarUpload() {
             )}
 
             {selectedFile && (
-                <ImageCropper />
+                <ImageCropper 
+                  file={selectedFile} 
+                  onCropComplete={handleCropComplete}
+                  onCancel={handleCancelCrop}
+                />
             )}
         </>
     );

@@ -1,12 +1,12 @@
 import React from 'react'
 import NavLinks from './NavLinks';
 import NavRight from './NavRight';
-import '@app/styles.module.css';
+import './navstyles.css';
 
 const NavBar = () => {
 
   return (
-    <div className="navbar-container">
+    <div className="container-container">
       <div className="left-container">
         <NavLinks/>
       </div>

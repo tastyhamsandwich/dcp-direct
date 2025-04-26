@@ -57,7 +57,7 @@ export default function DashboardLayout({
             {/* Sidebar */}
             <div className="w-64 bg-[#333] text-white shadow-xl">
                 {/* Profile Section */}
-                <div className="p-6 pt-10 border-b border-gray-700">
+                <div className="p-6 pt-10 mt-20 border-b border-gray-700">
                     <div className="flex flex-col items-center">
                         <div 
                             className="relative w-32 h-32 mb-4 cursor-pointer group"
