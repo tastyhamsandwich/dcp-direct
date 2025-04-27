@@ -1,12 +1,12 @@
-# Dealer's Choice Poker
+# 🃏 Dealer's Choice Poker
 
-## Overview
+## 🃏 Overview
 
 DCP is a real-time multiplayer card game application built with Next.js and WebSockets. The application features user authentication, real-time gameplay, and a responsive UI.
 
 Initial documentation has been created over the following subjects:
 
-## Documentation Structure
+## 🃏 Documentation Structure
 
 1. **Project Overview** (`/docs/project-overview.md`)
    - Application architecture and organization
@@ -44,7 +44,7 @@ Initial documentation has been created over the following subjects:
    - Request and response examples
    - Error handling
 
-## Key Architecture Points
+## 🃏 Key Architecture Points
 
 - **Next.js App Router**: Pages and API routes organized in the `/app` directory
 - **React Context**: Used for authentication and game state management
@@ -52,11 +52,11 @@ Initial documentation has been created over the following subjects:
 - **WebSockets**: Real-time communication between clients and server
 - **Tailwind CSS**: Utility-first styling approach
 
-## Getting Started
+## 🃏 Getting Started
 
 For setup instructions and developer guides, please see the individual documentation files in the `/docs` directory.
 
-## Code Conventions
+## 🃏 Code Conventions
 
 The project follows these key conventions:
 
@@ -65,7 +65,7 @@ The project follows these key conventions:
 - **Context API for State**: Global state managed with React Context
 - **Feature-Based Organization**: Code organized by feature rather than type
 
-## Future Development
+## 🃏 Future Development
 
 Areas for future development and improvement include:
 
@@ -74,7 +74,7 @@ Areas for future development and improvement include:
 - Enhancing the lobby system with game filtering and searching
 - Adding social features like friends lists and private games
 
-## Tasks and Milestones
+## 🃏 Tasks and Milestones
 
 A checklist for ongoing development:
 
@@ -87,23 +87,35 @@ A checklist for ongoing development:
  [✔️] Poker object classes and logic  
  [✔️] Working game sequence  
  [✔️] Animations and sound effects  
+ [✖️] Support for multiple poker variant rulesets  
+  ----[✖️] Hold 'Em Styles  
+  --------[✔️] Texas  
+  --------[➖] Omaha  
+  --------[➖] Omaha Hi/Lo  
+  --------[➖] Chicago  
+  ----[✖️] Stud Styles  
+  --------[➖] Seven Card Stud  
+  ----[✖️] Draw Styles  
+  --------[➖] Five Card Draw  
+ [➖] Wildcard Support  
+ [➖] Support for custom community board setups  
  [➕] **Full Dashboard feature set**  
- ➖ [  ] Change display name  
- ➖ [  ] Password reset  
- ➖ [  ] Change e-mail   
- ➖ [  ] Light/Dark theme  
- ➖ [  ] Daily tips  
- ➖ [  ] Statistics tracking  
- ➖ [  ] Strategy guide  
- ➖ [  ] New player guide  
- [  ] Changelog / Announcements page  
- [  ] Forums  
- [  ] Multi-Factor Authentication  
+  ----[➖] Change display name  
+  ----[➖] Password reset  
+  ----[➖] Change e-mail   
+  ----[➖] Light/Dark theme  
+  ----[➖] Daily tips  
+  ----[➖] Statistics tracking  
+  ----[➖] Strategy guide  
+  ----[➖] New player guide  
+ [➖] Changelog / Announcements page  
+ [➖] Forums  
+ [➖] Multi-Factor Authentication  
  [➕] **Full login provider sets**  
- ➖  [✔️] Discord  
- ➖ [  ] Facebook  
- ➖ [  ] Google  
- ➖ [  ] Phone  
- ➖  [✔️] E-mail  
- [  ] AI players   
- [  ] Extras   
+  ----[✔️] Discord  
+  ----[➖] Facebook  
+  ----[➖] Google  
+  ----[➖] Phone  
+  ----[✔️] E-mail  
+ [➖] AI players   
+ [➖] Extras   

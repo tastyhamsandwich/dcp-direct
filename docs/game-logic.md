@@ -109,7 +109,9 @@ The `Game` class is the core class that manages game state and logic. It handles
 - `creator: Player` - The player who created the game
 - `players: Player[]` - Array of players in the game
 - `status: 'waiting' | 'playing' | 'paused'` - Current game status
-- `phase: EGamePhaseCommon | EGamePhaseHoldEm | EGamePhaseDraw | EGamePhaseStud` - Current phase of the game
+- `socket: Server` - WebSocket server instance
+- `phase: TGamePhase` - Current phase of the game
+- `phaseOrder: GamePhases` - Ordered array of phases for current variant
 - `maxPlayers: number` - Maximum number of players allowed
 - `hasStarted: boolean` - Whether the game has started
 - `roundActive: boolean` - Whether a round is currently active
@@ -131,7 +133,6 @@ The `Game` class is the core class that manages game state and logic. It handles
 - `activePlayerId: string` - ID of player whose turn it is
 - `activePlayerIndex: number | null` - Index of active player in players array
 - `currentBet: number` - Current bet amount
-- `socket: Socket` - WebSocket connection
 - `roundCount: number` - Number of rounds played
 - `gameVariant: GameVariant` - Type of poker being played
 - `cardsPerPlayer: number` - Number of cards dealt to each player
@@ -141,42 +142,77 @@ The `Game` class is the core class that manages game state and logic. It handles
 - `variantSelectionActive: boolean` - Whether variant selection is active
 - `variantSelectionTimeout: NodeJS.Timeout | null` - Timeout for variant selection
 
+### Game Flow By Variant
+
+The game flow varies depending on the selected variant:
+
+#### Texas Hold'em/Omaha/Chicago
+Phases: `['waiting', 'preflop', 'flop', 'turn', 'river', 'showdown']`
+- **Preflop**: Deal hole cards (2 for Hold'em/Chicago, 4 for Omaha)
+- **Flop**: Deal 3 community cards
+- **Turn**: Deal 1 community card
+- **River**: Deal 1 community card
+- **Showdown**: Evaluate hands
+
+#### Five Card Draw
+Phases: `['waiting', 'predraw', 'draw', 'showdown']`
+- **Predraw**: Initial 5 cards dealt
+- **Draw**: Players can discard and draw new cards
+- **Showdown**: Evaluate hands
+
+#### Seven Card Stud
+Phases: `['waiting', 'thirdstreet', 'fourthstreet', 'fifthstreet', 'sixthstreet', 'seventhstreet', 'showdown']`
+- **Third Street**: 2 hole cards + 1 up card
+- **Fourth Street**: Deal 1 up card
+- **Fifth Street**: Deal 1 up card
+- **Sixth Street**: Deal 1 up card
+- **Seventh Street**: Deal 1 down card
+- **Showdown**: Evaluate hands
+
 ### Methods
 
-#### Game Management
-- `constructor(id: string, name: string, creator: Player, socket: Socket, maxPlayers?: number, smallBlind?: number, bigBlind?: number, gameVariant?: GameVariant, customRules?: CustomGameRules)` - Initializes a new game
-- `sortPlayerList()` - Sorts players by seat number
-- `resetRound(): boolean` - Resets the game state for a new round
-- `returnGameState()` - Returns a safe version of the game state for client communication
-
-#### Dealer's Choice Methods
-- `updateCardsPerPlayer(variant: GameVariant, customRules?: CustomGameRules): void` - Updates cards per player based on variant
-- `setDealerVariant(variant: GameVariant): boolean` - Sets the dealer's chosen variant
-- `startDealerVariantSelection(timeoutMs?: number): boolean` - Initiates variant selection phase
-- `handleVariantSelection(playerId: string, variant: GameVariant): boolean` - Processes variant selection from dealer
-
-#### Card Dealing
-- `dealCards(currentRoundVariant: GameVariant): boolean` - Deals initial cards to players
-- `dealStudCards(phase: EGamePhaseStud): boolean` - Handles dealing for Seven-Card Stud
-- `dealCommunityCards(flop: boolean = false): boolean` - Deals community cards
-
-#### Game Flow Control
+#### Core Game Management
+- `constructor(id: string, name: string, creator: Player, maxPlayers?: number, smallBlind?: number, bigBlind?: number, gameVariant?: GameVariant, customRules?: CustomGameRules)` - Creates new game instance
 - `startRound(): boolean` - Initiates a new round
-- `continueRoundSetup(currentRoundVariant: GameVariant): boolean` - Continues round setup after variant selection
-- `checkPhaseStatus()` - Checks and updates game phase
-- `findNextActivePlayer(): boolean` - Finds the next player who can act
+- `continueRoundSetup(currentRoundVariant: GameVariant): boolean` - Finalizes round setup process
+- `resetRound(): boolean` - Resets game state for next round
+- `returnGameState(): GameState` - Returns safe version of game state for clients
+- `sortPlayerList(): void` - Sorts players by seat number
+- `checkPhaseProgress(): void` - Checks and updates game phase
+
+#### Card Management
+- `determineHighestShowingCard(): [ Player, Card ]` - Determines who has the highest showing card after deal, and what card, for 7-Card Stud and variants
+- `dealCards(currentRoundVariant: GameVariant): boolean` - Parent dealing function
+- `dealHoldEmCards(currentRoundVariant: GameVariant): boolean` - Deals Hold'em style cards
+- `dealStudCards(): boolean` - Deals Seven Card Stud cards
+- `dealCommunityCards(flop: boolean = false): boolean` - Deals community cards
+- `dealCommunityCardsByPhase(): boolean` - Deals appropriate cards for current phase
+
+#### Player Management
+- `findNextActivePlayer(): boolean` - Sets next active player
+- `setActivePlayerForNewPhase(): void` - Sets first active player for new phase
+- `getAllowedActionsForPlayer(playerId?: string): string[]` - Gets allowed actions
+- `getNextPlayerId(currentPlayerId: string): string` - Gets next player's ID
+- `getRoleIds(isFirstRound: boolean): RoleIds` - Gets dealer/blind position IDs
 
 #### Pot Management
-- `createSidepot(allInPlayer: Player, allInAmount: number): void` - Creates a side pot when a player goes all-in
+- `createSidepot(allInPlayer: Player, allInAmount: number): void` - Creates side pot
 - `distributePots(): { playerId: string, playerName: string, amount: number, potType: string }[]` - Distributes pots to winners
+- `postBlinds(): void` - Handles blind bets
 
-#### Player Position Management
-- `getNextPlayerId(currentPlayerId: string): string` - Gets the next player's ID
-- `getRoleIds(isFirstRound: boolean): RoleIds` - Gets dealer and blind position IDs
-- `getDealer(): string` - Returns current dealer's username
+#### Dealer's Choice Management
+- `updateCardsPerPlayer(variant: GameVariant, customRules?: CustomGameRules): void` - Updates cards per player
+- `setDealerVariant(variant: GameVariant): boolean` - Sets dealer's chosen variant
+- `startDealerVariantSelection(timeoutMs?: number): boolean` - Starts variant selection
+- `handleVariantSelection(playerId: string, variant: GameVariant): boolean` - Processes variant selection
 
 #### Hand Evaluation
 - `evaluateHands(players: Player[], communityCards: Card[])` - Evaluates player hands to determine winners
+
+#### Informative / Information Determination
+- `getPhaseIndex()` - Returns the index value of the current phase as it lies within the phaseOrder array
+- `getNextPhase()` - Returns the next phase in sequence as determined by the current phase and phaseOrder
+- `getDealer()` - Returns the username of the player who is currently the dealer
 
 ### Player Class
 ```typescript
@@ -263,7 +299,7 @@ The `Deck` class represents a standard deck of 52 playing cards.
 - `cards: Card[]` - Array of cards in the deck
 
 #### Methods
-- `constructor(autoShuffle: boolean = false)` - Creates new deck instance. Providing a parameter 'true' results in a deck that is shuffled immediately, rather than in-order.                               eeeeeeeeeeeeeqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
+- `constructor(autoShuffle: boolean = false)` - Creates new deck instance. Providing a parameter 'true' results in a deck that is shuffled immediately, rather than in-order.
 - `[Symbol.iterator]()` - Makes deck iterable
 - `generateDeck()` - Creates standard 52-card deck
 - `regenerateDeck()` - Resets deck to new 52-card state

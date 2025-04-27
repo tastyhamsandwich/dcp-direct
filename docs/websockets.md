@@ -1,370 +1,130 @@
-# WebSockets Implementation
+# WebSocket Events Documentation
 
-DCP Direct uses WebSockets for real-time communication between clients and the server. This allows for immediate game state updates, player actions, and chat messages.
+## Client to Server Events
 
-## Overview
+### Authentication & Registration
+- `register` - Register a new user with profile information
+  - Data: `{ profile: { username: string, balance?: number, avatar?: string } }`
 
-The WebSocket implementation consists of:
+### Game Management
+- `get_games_list` - Request list of available games
+- `create_game` - Create a new game room
+  - Data: `{ tableName: string, creator: User, maxPlayers: number, blinds: { small: number, big: number }, gameVariant: GameVariant }`
+- `join_game` - Join an existing game
+  - Data: `{ gameId: string, profile: UserProfile }`
+- `get_seat_info` - Get information about occupied seats
+  - Data: `{ gameId: string }`
 
-1. **Server-side WebSocket handler**: API route that manages connections and game state
-2. **Client-side WebSocket connections**: Browser WebSocket API with connection management
-3. **Message protocol**: JSON-based message format for different types of events
+### Game Actions
+- `player_ready` - Toggle player ready status
+  - Data: `{ gameId: string }`
+- `player_action` - Perform a game action (fold, check, call, bet, raise)
+  - Data: `{ gameId: string, action: { type: Action, amount?: number } }`
 
-## Server-Side Implementation
+### Communication
+- `chat_message` - Send a chat message to all players in a game
+  - Data: `{ gameId: string, message: string }`
+- `private_message` - Send a private message to specific player
+  - Data: `targetSocketId: string, message: string`
 
-The server-side WebSocket is implemented in `/src/app/api/socket/route.ts` as a Next.js API route.
+## Server to Client Events
 
-### Connection Management
+### Authentication & Registration
+- `registration_success` - Confirms successful user registration
+  - Data: `{ user: User }`
+- `error` - Reports any error condition
+  - Data: `{ message: string }`
+### Game Management
+- `games_list` - Returns list of available games
+  - Data: `ListEntry[]`
+- `game_created` - Confirms successful game creation
+  - Data: `{ gameId: string }`
+- `seat_info` - Returns information about occupied seats
+  - Data: `{ seatInfo: number[] }`
+- `game_state` - Current state of the game
+  - Data: `{ game: GameState }`
 
-```typescript
-// In-memory state storage
-const gameRooms = new Map<string, GameRoom>();
-const activeConnections = new Map<string, ExtendedWebSocket>();
+### Game Flow
+- `game_starting` - Announces game is about to start
+  - Data: `{ message: string, game: GameState }`
+- `round_starting` - Announces new round is about to start
+  - Data: `{ message: string, game: GameState }`
+- `game_update` - General game state update
+  - Data: `{ game: GameState, message?: string }`
+- `phase_changed` - Announces change in game phase
+  - Data: `{ previousPhase: string, newPhase: string, game: GameState }`
+- `your_turn` - Notifies player it's their turn
+  - Data: `{ gameId: string, allowedActions: Action[] }`
+- `round_winners` - Announces round winners
+  - Data: `{ winners: WinnerInfo[], showdown: boolean }`
+- `round_ended` - Announces end of round
+  - Data: `{ game: GameState, message: string }`
 
-// Connection setup
-export async function GET(request: Request): Promise<NextResponse> {
-  // Extract path and parameters
-  const url = new URL(request.url);
-  const path = url.pathname;
-  
-  // Determine if lobby or game connection
-  const isLobby = path.includes('/socket/lobby');
-  let gameId: string | null = null;
-  
-  if (!isLobby) {
-    gameId = url.pathname.split('/').pop();
-    // ...validate gameId
-  }
-  
-  // Authentication
-  const { data, error: sessionError } = await supabase.auth.getSession();
-  const session = data.session;
-  
-  if (!session) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
-  
-  // Get profile
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', session.user.id)
-    .single();
-  
-  // WebSocket upgrade
-  const { socket, response } = await upgradePromise;
-  
-  // Connection tracking
-  const connectionId = Math.random().toString(36).substring(2, 15);
-  socket.connectionId = connectionId;
-  socket.userId = session.user.id;
-  socket.username = profile?.username || 'Player';
-  socket.isAlive = true;
-  
-  // Store connection
-  activeConnections.set(connectionId, socket);
-  
-  // Setup ping/pong
-  // Handle messages
-  // ...
-}
-```
+### Player Events
+- `player_joined` - Announces new player joining
+  - Data: `{ player: User, game: GameState }`
+- `player_left` - Announces player leaving
+  - Data: `{ playerId: string, game: GameState }`
+- `player_ready_changed` - Announces change in player ready status
+  - Data: `{ playerId: string, playerName: string, isReady: boolean, game: GameState }`
+- `active_player_changed` - Announces change in active player
+  - Data: `{ activePlayerId: string, activePlayerName: string }`
 
-### Message Handling
+### Communication
+- `chat_message` - Broadcasts chat message to game room
+  - Data: `{ sender: string, message: string, timestamp: string }`
+- `private_message` - Delivers private message to specific player
+  - Data: `senderId: string, message: string`
 
-```typescript
-// Message handling
-socket.on('message', async (data: Buffer | string) => {
-  try {
-    // Parse message
-    const message = JSON.parse(dataStr) as WSMessage;
-    
-    // Handle different message types
-    switch (message.type) {
-      case 'join_game':
-        // ...
-      case 'player_action':
-        // Process action
-        const updatedState = processPlayerAction(
-          room.game,
-          message.userId,
-          message.action.type,
-          message.action.data || {}
-        );
-        // ...
-      case 'chat_message':
-        // Handle chat
-        // ...
-    }
-  } catch (error) {
-    console.error('Error processing WebSocket message:', error);
-  }
-});
-```
+## Special Features
 
-### Broadcasting
+### Reconnection Handling
+The server implements a 10-second grace period for disconnected players to allow for page navigation without losing their game position. During this period:
+- Player's seat is reserved
+- Game state is preserved
+- Player can rejoin the same game with their previous state
 
-```typescript
-// Helper function to broadcast to all connections in a room
-function broadcastToRoom(gameId: string, message: Record<string, any>): void {
-  const room = gameRooms.get(gameId);
-  if (!room) return;
-  
-  const data = JSON.stringify(message);
-  
-  // Send to all connected clients in the room
-  [...room.players].forEach(connectionId => {
-    const socket = getSocketByConnectionId(connectionId);
-    if (socket && socket.readyState === 1) {
-      try {
-        socket.send(data);
-      } catch (error) {
-        console.error(`Error sending to socket ${connectionId}:`, error);
-      }
-    }
-  });
-}
+### Action Validation
+The server validates all player actions against the current game state:
+- Checks if it's the player's turn
+- Validates bet amounts against player's chip stack
+- Ensures action is allowed in current game phase
+- Handles all-in situations and sidepot creation automatically
 
-// Helper function to broadcast game state
-function broadcastGameState(gameId: string): void {
-  const room = gameRooms.get(gameId);
-  if (!room) return;
-  
-  // Create sanitized state
-  const sanitizedGame = {
-    ...room.game,
-    players: room.game.players.map(player => ({
-      id: player.id,
-      name: player.name,
-      score: player.score,
-      hand: player.isActive ? player.hand : [],
-      isActive: player.isActive,
-      isReady: player.isReady
-    }))
-  };
-  
-  broadcastToRoom(gameId, {
-    type: 'game_update',
-    game: sanitizedGame
-  });
-}
-```
+### Game State Management
+The server maintains game state integrity by:
+- Tracking player roles (dealer, small blind, big blind)
+- Managing betting rounds and phase progression
+- Handling showdown evaluation and pot distribution
+- Automatically resetting for new rounds
 
-### Connection Health Monitoring
+### Error Handling
+The server provides robust error handling:
+- Invalid actions are rejected with appropriate error messages
+- Connection errors are logged and handled gracefully
+- Game state inconsistencies are automatically corrected
+- Player disconnections are managed with timeouts and cleanup
 
-```typescript
-// Set up interval ping for this connection
-const pingInterval = setInterval(() => {
-  if (!socket.isAlive) {
-    console.log(`Connection ${connectionId} timed out, closing`);
-    socket.terminate();
-    clearInterval(pingInterval);
-    return;
-  }
-  
-  socket.isAlive = false;
-  try {
-    socket.ping();
-  } catch (pingError) {
-    socket.terminate();
-    clearInterval(pingInterval);
-  }
-}, PING_INTERVAL);
+## Event Flow Examples
 
-// Handle connection close
-socket.on('close', () => {
-  cleanupConnection(connectionId, gameId);
-});
+### Typical Game Start Flow
+1. Players join via `join_game`
+2. Players signal ready via `player_ready`
+3. Server emits `game_starting`
+4. Server emits `game_update` with initial state
+5. Server emits `your_turn` to first player
 
-// Handle errors
-socket.on('error', (error) => {
-  console.error(`Socket error for connection ${connectionId}:`, error);
-  cleanupConnection(connectionId, gameId);
-});
-```
+### Typical Betting Round Flow
+1. Active player receives `your_turn`
+2. Player sends `player_action`
+3. Server emits `game_update`
+4. Server emits `active_player_changed`
+5. Next player receives `your_turn`
 
-## Client-Side Implementation
-
-On the client side, WebSockets are used in the game pages.
-
-### Game Room Connection
-
-```typescript
-// From src/app/game/[gameId]/page.tsx
-useEffect(() => {
-  if (!params.gameId || !user) return;
-  
-  // Create WebSocket connection
-  const ws = new WebSocket(`ws://${window.location.host}/api/socket/${params.gameId}`);
-  setSocket(ws);
-  
-  // Connection opened
-  ws.addEventListener('open', () => {
-    setIsConnected(true);
-    
-    // Join the game room
-    ws.send(JSON.stringify({
-      type: 'join_game',
-      gameId: params.gameId,
-      userId: user.id,
-      username: profile?.username || 'Player'
-    }));
-  });
-  
-  // Listen for messages
-  ws.addEventListener('message', (event) => {
-    const data = JSON.parse(event.data);
-    
-    switch (data.type) {
-      case 'game_update':
-        setGameState(data.game);
-        break;
-      case 'chat_message':
-        setChatMessages(prev => [...prev, data.message]);
-        break;
-      case 'error':
-        alert(data.message);
-        router.push('/');
-        break;
-    }
-  });
-  
-  // Handle errors and cleanup
-  // ...
-}, [params.gameId, user, profile, router]);
-```
-
-### Sending Actions
-
-```typescript
-// Handle player actions
-const handlePlayerAction = useCallback((actionType: string, amount: number = 0) => {
-  if (!socket || !isConnected) return;
-  
-  socket.send(JSON.stringify({
-    type: 'player_action',
-    gameId: params.gameId,
-    userId: user?.id,
-    action: { type: actionType, amount }
-  }));
-}, [socket, isConnected, params.gameId, user]);
-
-// Handle sending chat messages
-const handleSendMessage = useCallback((message: string) => {
-  if (!socket || !isConnected || !message.trim()) return;
-  
-  socket.send(JSON.stringify({
-    type: 'chat_message',
-    gameId: params.gameId,
-    userId: user?.id,
-    username: profile?.username || 'Player',
-    message: message.trim()
-  }));
-}, [socket, isConnected, params.gameId, user, profile]);
-```
-
-## Message Protocol
-
-### Message Interface
-
-```typescript
-// From src/app/api/socket/route.ts
-interface WSMessage {
-  type: 'join_game' | 'player_action' | 'start_round' | 'chat_message' | 'get_games_list' | 'create_game';
-  userId?: string;
-  username?: string;
-  gameId?: string;
-  action?: {
-    type: string;
-    data?: Record<string, any>;
-  };
-  message?: string;
-  settings?: Record<string, any>;
-}
-```
-
-### Message Types
-
-1. **join_game**: Join a game room
-   ```json
-   { "type": "join_game", "gameId": "game123", "userId": "user456", "username": "Player1" }
-   ```
-
-2. **player_action**: Perform a game action
-   ```json
-   { 
-     "type": "player_action", 
-     "gameId": "game123", 
-     "userId": "user456", 
-     "action": { 
-       "type": "playCard", 
-       "data": { "cardId": 42 } 
-     } 
-   }
-   ```
-
-3. **game_update**: Server sends updated game state
-   ```json
-   { 
-     "type": "game_update", 
-     "game": { /* full game state */ } 
-   }
-   ```
-
-4. **chat_message**: Send/receive chat message
-   ```json
-   { 
-     "type": "chat_message", 
-     "gameId": "game123", 
-     "userId": "user456", 
-     "username": "Player1", 
-     "message": "Hello everyone!" 
-   }
-   ```
-
-5. **get_games_list**: Request list of available games
-   ```json
-   { "type": "get_games_list" }
-   ```
-
-6. **create_game**: Create a new game room
-   ```json
-   { 
-     "type": "create_game", 
-     "userId": "user456", 
-     "username": "Player1", 
-     "settings": { 
-       "name": "My Game", 
-       "maxPlayers": 4 
-     } 
-   }
-   ```
-
-## Error Handling
-
-The WebSocket implementation includes robust error handling:
-
-1. **Connection errors**: Handled with error events and reconnection logic
-2. **Message parsing errors**: Try/catch around JSON parsing
-3. **Action validation**: Server validates all actions before processing
-4. **Authentication errors**: WebSocket connections require valid session
-5. **Rate limiting**: Large messages are rejected
-6. **Input sanitization**: Chat messages are sanitized to prevent XSS
-
-## Security Considerations
-
-Several security measures are implemented:
-
-1. **Authentication**: All connections require valid Supabase session
-2. **Authorization**: Actions validated against user ID
-3. **Input validation**: All message fields validated before processing
-4. **Rate limiting**: Basic protection against message floods
-5. **Connection limits**: Maximum connections per game room enforced
-6. **Sanitization**: Content sanitized to prevent XSS
-
-## Implementation Files
-
-- **WebSocket Server**: `/src/app/api/socket/route.ts`
-- **Game Page Client**: `/src/app/game/[gameId]/page.tsx`
-- **Lobby Page Client**: `/src/app/game/page.tsx`
-- **WebSocket Hook**: `/src/hooks/useWebSocket.ts`
+### Showdown Flow
+1. Server emits `phase_changed` to 'showdown'
+2. Server evaluates hands
+3. Server emits `round_winners`
+4. Server waits 8 seconds
+5. Server emits `round_ended`
+6. Server automatically starts new round
