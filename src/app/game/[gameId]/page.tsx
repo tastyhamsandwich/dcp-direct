@@ -228,11 +228,17 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     socketInstance.on('game_update', (data) => {
       console.log('Game update received:', data);
       dispatch({ type: 'SET_GAME_STATE', payload: data.game });
-      setIsMyTurn(data.game.activePlayerId === socketInstance.id);
-      // Reset allowed actions unless this is the active player
-      if (data.game.activePlayerId !== socketInstance.id) {
-        setAllowedActions([]);
+      
+      // Only update turn status if it has changed
+      const isNowMyTurn = data.game.activePlayerId === socketInstance.id;
+      if (isNowMyTurn !== isMyTurn) {
+        setIsMyTurn(isNowMyTurn);
+        // Only reset allowed actions if we're no longer the active player
+        if (!isNowMyTurn) {
+          setAllowedActions([]);
+        }
       }
+      
       // Show message if provided
       if (data.message) {
         dispatch({ type: 'ADD_SYSTEM_MESSAGE', payload: data.message });
@@ -286,7 +292,10 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
     socketInstance.on('your_turn', (data) => {
       console.log('Your turn!', data);
       setIsMyTurn(true);
-      setAllowedActions(data.allowedActions || []);
+      if (data.allowedActions) {
+        console.log('Setting allowed actions:', data.allowedActions);
+        setAllowedActions(data.allowedActions);
+      }
     });
     
     // Handler for when variant selection begins

@@ -861,43 +861,51 @@ function getAllowedActions(game, playerId) {
     return actions;
   }
 
-  // Always allow fold unless it's preflop and player is big blind with no additional bets
-  const isPreflop = game.phaseOrder.indexOf(game.phase) === 1;
+  // Check if it's this player's turn
+  if (game.activePlayerId !== player.id) {
+    console.log(`Not ${player.username}'s turn`);
+    return actions;
+  }
+
+  const isPreflop = game.phase === 'preflop';
   const isBigBlind = player.id === game.bigBlindId;
   const noAdditionalBets = game.currentBet === game.bigBlind;
 
-  // Always allow fold
-  actions.push('fold');
+  // Player can always fold (except big blind when no raises)
+  if (!(isPreflop && isBigBlind && noAdditionalBets)) {
+    actions.push('fold');
+  }
 
   // Check is allowed if:
-  // 1. Player's current bet matches the game's current bet OR
-  // 2. It's preflop, player is big blind, and no one has raised
-  if ((game.currentBet === 0 && player.currentBet === 0) || 
+  // 1. Player has matched the current bet OR
+  // 2. It's preflop and player is big blind with no raises
+  if (game.currentBet === player.currentBet || 
       (isPreflop && isBigBlind && noAdditionalBets)) {
     actions.push('check');
   }
 
   // Call is allowed if:
-  // 1. There's a bet to call
-  // 2. Player has enough chips
-  // 3. Player hasn't already matched the current bet
-  if (game.currentBet > player.currentBet && player.chips > (game.currentBet - player.currentBet)) {
+  // 1. There's a bet to call AND
+  // 2. Player has enough chips AND
+  // 3. Player hasn't matched the current bet
+  const callAmount = game.currentBet - player.currentBet;
+  if (callAmount > 0 && player.chips >= callAmount) {
     actions.push('call');
   }
 
   // Bet is allowed if:
-  // 1. No current bet (except big blind in preflop) AND
-  // 2. Player has chips to bet
-  if ((game.currentBet === 0 || (isPreflop && isBigBlind && noAdditionalBets)) && 
-      player.chips > 0) {
+  // 1. No current bet AND
+  // 2. Player has enough chips for minimum bet
+  const minBet = game.bigBlind;
+  if (game.currentBet === 0 && player.chips >= minBet) {
     actions.push('bet');
   }
 
   // Raise is allowed if:
-  // 1. There's a current bet
-  // 2. Player has enough chips to raise
-  // 3. Not limited by max raises (if implemented)
-  if (game.currentBet > 0 && player.chips > game.currentBet) {
+  // 1. There's a current bet AND
+  // 2. Player has enough chips for minimum raise
+  const minRaise = game.currentBet * 2 - player.currentBet;
+  if (game.currentBet > 0 && player.chips >= minRaise) {
     actions.push('raise');
   }
 

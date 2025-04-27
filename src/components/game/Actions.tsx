@@ -51,14 +51,43 @@ const Actions: React.FC<ActionsProps> = ({
   }, [isActive, prevIsActive]);
 
   const toggleReady = () => {
-    // Changed from 'toggleReady' action to emit 'player_ready' directly
     onAction('player_ready');
   }
 
-  // Check if an action is allowed
+  // Enhanced action validation
   const isActionAllowed = (action: string) => {
-    return allowedActions.includes(action);
-  }
+    // First check if we're the active player
+    if (!isActive) return false;
+    
+    // Then check if the action is in our allowed actions list
+    if (!allowedActions.includes(action)) return false;
+
+    // Additional validation based on game state
+    switch (action) {
+      case 'fold':
+        // Can always fold if it's our turn
+        return true;
+      
+      case 'check':
+        // Can only check if we've matched the current bet
+        return gameCurrentBet === playerCurrentBet;
+      
+      case 'call':
+        // Can only call if there's a bet to call and we haven't matched it
+        return gameCurrentBet > playerCurrentBet && playerChips > 0;
+      
+      case 'bet':
+        // Can only bet if there's no current bet and we have chips
+        return gameCurrentBet === 0 && playerChips > 0;
+      
+      case 'raise':
+        // Can only raise if there's a current bet and we have enough chips
+        return gameCurrentBet > 0 && playerChips > (gameCurrentBet * 2 - playerCurrentBet);
+      
+      default:
+        return false;
+    }
+  };
 
   // Animation variants
   const containerVariants = {
