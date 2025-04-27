@@ -551,7 +551,7 @@ export default function GamePage({ params }: { params: Promise<{ gameId: string 
                           )) : 
                           Array(player.cards.length).fill(0).map((_, idx) => (
                             <Card
-                              scaleFactor={0.5} 
+                              scaleFactor={1} 
                               key={idx} 
                               rank="2" 
                               suit="hearts" 

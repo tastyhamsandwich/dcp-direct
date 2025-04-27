@@ -1194,6 +1194,29 @@ export class Game {
     return true;
   }
 
+  dealCommunityCardsByPhase(): boolean {
+    switch (this.phase) {
+      case 'flop':
+        console.log('Dealing the flop');
+        return this.dealCommunityCards(true); // Deal flop (3 cards)
+        break;
+      case 'turn':
+        console.log('Dealing the turn');
+        return this.dealCommunityCards(); // Deal turn (1 card)
+        break;
+      case 'river':
+        console.log('Dealing the river');
+        return this.dealCommunityCards(); // Deal river (1 card)
+        break;
+      case 'showdown':
+        break;
+      default:
+        console.log(`Unknown phase: ${this.phase}`);
+        break;
+      }
+      return false;
+  }
+
   /** Deal out community cards from the active deck
    * @function dealCommunityCards
    * @param {boolean} [flop=false] Whether to deal out 3 cards for the flop, or just one
@@ -1215,6 +1238,7 @@ export class Game {
       return true;
     }
 
+    const faceUp = this.gameVariant === 'Chicago' && flop === false;
     const burnCard = this.deck.draw();
     this.burnPile.push(burnCard);
     console.log(`Burned card: ${burnCard.name}`);
@@ -1222,13 +1246,13 @@ export class Game {
     if (flop) {
       for (let i = 0; i < 3; i++) {
         const card = this.deck.draw();
-        card.faceUp = true;
+        card.faceUp = faceUp;
         this.communityCards.push(card);
         console.log(`Dealt flop card #${i+1}: ${card.name}`);
       }
     } else {
       const card = this.deck.draw();
-      card.faceUp = true;
+      card.faceUp = faceUp;
       this.communityCards.push(card);
       console.log(`Dealt turn/river card: ${card.name}`);
     }
@@ -1413,8 +1437,79 @@ export class Game {
     }
   }
 
-  /** Check the status of the current phase and determine if we need to advance to the next phase.
-   * 
+  checkPhaseProgress() {
+
+    const activePlaers = this.players.filter(p => !p.folded);
+    if (activePlaers.length === 1) {
+      console.log(`Only one active player remains: ${activePlaers[0].username}`);
+      // Award pot to the last remaining player
+      const winner = activePlaers[0];
+      let totalWinnings = this.pot;
+      winner.chips += this.pot;
+      winner.previousAction = 'win';
+      
+      // Handle any sidepots
+      if (this.sidepots.length > 0) {
+        this.sidepots.forEach(sidepot => {
+          const sidepotAmount = sidepot.getAmount();
+          winner.chips += sidepotAmount;
+          totalWinnings += sidepotAmount;
+        });
+      }
+      
+      // Socket will handle emitting the win announcement outside this method
+      this.pot = 0;
+      this.sidepots = [];
+
+      // Handle round reset
+      if (this.resetRound()) {
+        this.dealCards(this.gameVariant);
+        return true;
+      }
+    } else {
+
+      const allPlayersActed = this.players.every(p =>
+        p.folded || // Folded
+        p.allIn  || // All-in
+        (p.previousAction !== 'none' && p.currentBet === this.currentBet) // They've acted and their bet matches the current bet
+      )
+
+      // Special handling for preflop - big blind must get final action
+      if (this.phase === 'preflop') {
+        const bigBlindPlayer = this.players.find(p => p.id === this.bigBlindId);
+        // If big blind hasn't acted yet and there was at least one raise/bet
+        if (bigBlindPlayer && !bigBlindPlayer.folded && !bigBlindPlayer.allIn && 
+            (bigBlindPlayer.previousAction === 'none' || this.currentBet > bigBlindPlayer.currentBet)) {
+          console.log('Big blind still needs to act');
+          this.findNextActivePlayer();
+          return;
+        }
+      }
+      if (allPlayersActed) {
+        // Advance to next phase
+
+        if (this.phase !== 'showdown') {
+          const oldPhase = this.phase;
+          this.phase = this.getNextPhase();
+          console.log(`${oldPhase} phase complete, advancing to ${this.phase} phase`);
+
+          // Deal community cards based on the new phase
+          this.dealCommunityCardsByPhase();
+          // Reset player bets for the new phase
+          this.resetBets();
+          // Set active player to first non-folded player after dealer
+          this.setActivePlayerForNewPhase();
+          return;
+        } else {
+          // Handle showdown
+          // TODO this.handleShowdown();
+          return;
+        }
+      }
+    }
+  } 
+  /** DEPRECATED VERSION - USE 'checkPhaseProgress()' INSTEAD
+   * Check the status of the current phase and determine if we need to advance to the next phase.
    * @function checkPhaseStatus
    * @returns {boolean} - Returns true if the phase was advanced, false otherwise.
    */
@@ -1455,13 +1550,13 @@ export class Game {
       }
     }
 
-    // Track if all players have had a chance to act in this betting round
+    /*// Track if all players have had a chance to act in this betting round
     const allPlayersActed = this.players.every(p => 
       p.folded || 
       p.allIn  || 
       p.previousAction !== 'none' ||
       (p.currentBet > 0 && p.currentBet === this.currentBet)
-    );
+    );*/
 
     // Enhanced tracking to determine if the betting round is complete
     const bettingRoundComplete = this.players.every(p =>
@@ -1481,8 +1576,6 @@ export class Game {
       }
     }
 
-    console.log(`All players acted: ${allPlayersActed}, Betting round complete: ${bettingRoundComplete}`);
-
     // Find next active player if the betting round isn't complete
     let foundNextPlayer = !bettingRoundComplete ? this.findNextActivePlayer() : false;
 
@@ -1492,11 +1585,12 @@ export class Game {
     // 1. We can't find next eligible player, OR
     // 2. Betting round is complete (everyone has acted and matched or folded)
     if (!foundNextPlayer || bettingRoundComplete) {
-      console.log(`Advancing to next phase (${this.getPhaseName(1)}) from ${this.getPhaseName()}`);
       
       // Advance phase to next and track which phase we left
       const oldPhase = this.phase;
       this.phase = this.getNextPhase();
+
+      console.log(`${oldPhase} phase complete, advancing to ${this.phase} phase`);
       
       // Deal community cards based on the new phase
       switch (this.phase) {
@@ -1547,8 +1641,105 @@ export class Game {
     }
   }
   
+  /** Returns an array of the allowed actions for a given player. If no playerId parameter is provided, defaults to active player.
+   * @function getAllowedActionsForPlayer
+   * @param {string} [playerId] The ID of the player to check actions for. Defaults to the active player.
+   * @returns {string[]} An array of allowed actions for the player. Returns an empty array if player not found.
+   */
+  getAllowedActionsForPlayer(playerId: string = this.activePlayerId): string[] {
+    const player = this.players.find(p => p.id === playerId);
+    if (!player) return [];
+    
+    const actions: string[] = [];
 
+    // Player can always fold
+    actions.push('fold');
 
+    // Check if player can check
+    if (this.currentBet === 0 && player.currentBet === 0)
+      actions.push('check');
+
+    // Check if player can bet
+    if (this.currentBet === 0 && player.chips > 0)
+      actions.push('bet');
+
+    // Check if player can call
+    if (this.currentBet > 0 && player.chips > (this.currentBet - player.currentBet))
+      actions.push('call');
+
+    // Check if player can raise
+    if (this.currentBet > 0 && player.chips > this.currentBet)
+      actions.push('raise');
+
+    // Add all-in action if player has chips
+    if (player.chips > 0)
+      actions.push('all-in');
+
+    console.log(`Allowed actions for ${player.username}: ${actions.join(', ')}`);
+    return actions;
+  }
+
+  /** Sets the active player index and ID - Starts from the position to the left of the dealer in its search.
+   * This is used to set the active player for a new phase of the game.
+   * @function setActivePlayerForNewPhase
+   * @returns {void}
+   */
+  setActivePlayerForNewPhase() {
+    let startPos = (this.dealerIndex + 1) % this.players.length;
+    let foundActive = false;
+    
+    for (let i = 0; i < this.players.length; i++) {
+      const idx = (startPos + i) % this.players.length;
+      if (!this.players[idx].folded && !this.players[idx].allIn) {
+        this.activePlayerIndex = idx;
+        this.activePlayerId = this.players[idx].id;
+        foundActive = true;
+        console.log(`Set active player to ${this.players[idx].username} for new phase`);
+        break;
+      }
+    }
+  }
+
+  findNextActivePlayer2(): boolean {
+    if (this.activePlayerIndex === null) {
+      console.log('FUNC: findNextActivePlayer() - No active player index set, cannot find next player');
+      return false;
+    } else if (this.activePlayerIndex >= this.players.length) {
+      console.log('FUNC: findNextActivePlayer() - Invalid active player index, resetting to 0');
+      this.activePlayerIndex = 0;
+    }
+
+    const currentActiveIndex = this.activePlayerIndex;
+    let nextPlayerIndex = (currentActiveIndex + 1) % this.players.length;
+    const startingIndex = nextPlayerIndex;
+
+    // Track if there's any betting action in this round
+    const hasBettingAction = this.currentBet > 0;
+
+    do {
+      const nextPlayer = this.players[nextPlayerIndex];
+      
+      // Skip players who are folded, all-in, or inactive
+      if (!nextPlayer.folded && !nextPlayer.allIn && nextPlayer.active) {
+        // Player is eligible if:
+        // 1. They haven't acted yet in this round (previousAction === 'none')
+        // 2. OR there's betting action and they haven't matched the current bet
+        // 3. OR it's their first action in a new betting round
+        if (nextPlayer.previousAction === 'none' || 
+            (hasBettingAction && nextPlayer.currentBet < this.currentBet)) {
+          this.activePlayerIndex = nextPlayerIndex;
+          this.activePlayerId = nextPlayer.id;
+          console.log(`FUNC: findNextActivePlayer() - Found next active player: ${nextPlayer.username}`);
+          return true;
+        }
+      }
+      
+      nextPlayerIndex = (nextPlayerIndex + 1) % this.players.length;
+    } while (nextPlayerIndex !== startingIndex);
+
+    console.log('FUNC: findNextActivePlayer() - No active player found');
+    return false;
+  }
 
   /** Sets activePlayerIndex and activePlayerId, returning true/false based on success or failure.
    * @function findNextActivePlayer
@@ -1560,6 +1751,8 @@ export class Game {
       return false;
     }
     
+    const previousActivePlayer = this.players[this.activePlayerIndex];
+
     // Ensure players are properly sorted before finding the next player
     this.sortPlayerList();
     
@@ -1579,13 +1772,10 @@ export class Game {
     const eligiblePlayers = this.players.filter(p => {
       // Basic player status checks
       if (p.folded || p.allIn || !p.active) return false;
-      
       // If player hasn't acted at all this round, they're eligible
       if (p.previousAction === 'none') return true;
-      
       // If there are bets and player hasn't matched, they're eligible
-      if (p.currentBet < this.currentBet) return true;
-      
+      if (this.currentBet > 0 && p.currentBet < this.currentBet) return true;
       // Otherwise, player has already fully acted in this round
       return false;
     });
@@ -1610,6 +1800,12 @@ export class Game {
       if (!player.folded && !player.allIn && player.active) {
         // Modified eligibility check to handle checked players correctly
         if (player.previousAction === 'none' || (bettingRound && player.currentBet < this.currentBet)) {
+          if (player.username === previousActivePlayer.username) {
+            console.log(`Skipping player ${player.username} as they are the previous active player`);
+            nextPlayerIndex = (nextPlayerIndex + 1) % this.players.length;
+            continue;
+          }
+          // Set the active player index and ID
           this.activePlayerIndex = nextPlayerIndex;
           this.activePlayerId = player.id;
           foundNextPlayer = true;
@@ -1624,7 +1820,6 @@ export class Game {
     
     return foundNextPlayer;
   }
-
 
   /** Resets the current bet to 0 and all players' bets to 0, and previousAction to 'none'
    * @function resetBets

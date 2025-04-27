@@ -522,7 +522,7 @@ export function initializeSocket(io: Server) {
         const activeBefore = game.players.filter(p => !p.folded).length;
 
         // Advance to next player or phase
-        game.checkPhaseStatus();
+        game.checkPhaseProgress();
         
         // Check if someone won by everyone else folding
         const activeAfter = game.players.filter(p => !p.folded).length;
@@ -564,10 +564,9 @@ export function initializeSocket(io: Server) {
         // Notify the new active player it's their turn
         if (game.status === 'playing' && game.activePlayerId && game.activePlayerIndex) {
           console.log(`Notifying player '${game.players[game.activePlayerIndex].username}' it's their turn`);
-          const allowedActions = getAllowedActions(game, game.activePlayerId);
           io.to(game.activePlayerId).emit('your_turn', {
             gameId: game.id,
-            allowedActions: allowedActions
+            allowedActions: getAllowedActions(game, game.activePlayerId)
           });
           
           // Also broadcast a message to everyone about whose turn it is
@@ -839,8 +838,6 @@ function isReady(player) {
 
 // Add a function to determine allowed actions for a player
 function getAllowedActions(game, playerId) {
-
-  
   const player: Player = game.players.find(p => p.id === playerId);
   if (!player) {
     console.log(`Player not found`);
@@ -849,6 +846,7 @@ function getAllowedActions(game, playerId) {
 
   console.log(`Getting allowed actions for player '${player.username}' in game '${game.name}'`);
   console.log(`Current game phase: ${game.phase}, current bet: ${game.currentBet}`);
+  console.log(`Player bet: ${player.currentBet}, Player chips: ${player.chips}`);
 
   // Validate player chips
   if (typeof player.chips !== 'number' || isNaN(player.chips)) {
@@ -856,34 +854,49 @@ function getAllowedActions(game, playerId) {
     player.chips = 1000;
   }
   
-  console.log(`Player ${player.username} has ${player.chips} chips`);
-  
   const actions: Action[] = [];
 
-  // Always allow fold unless we're in preflop and player is big blind without additional bets
-  if (!(game.phaseOrder.indexOf(game.phase) === 1 && player.id === game.bigBlindId && game.currentBet === game.bigBlind)) {
-    actions.push('fold');
+  // Don't allow any actions if player is folded or all-in
+  if (player.folded || player.allIn) {
+    return actions;
   }
 
-  // Check if player can check - They can check if their current bet matches the highest bet
-  // and there's no additional betting (or they're the big blind in preflop with no raises)
-  if (player.currentBet === game.currentBet) {
+  // Always allow fold unless it's preflop and player is big blind with no additional bets
+  const isPreflop = game.phaseOrder.indexOf(game.phase) === 1;
+  const isBigBlind = player.id === game.bigBlindId;
+  const noAdditionalBets = game.currentBet === game.bigBlind;
+
+  // Always allow fold
+  actions.push('fold');
+
+  // Check is allowed if:
+  // 1. Player's current bet matches the game's current bet OR
+  // 2. It's preflop, player is big blind, and no one has raised
+  if ((game.currentBet === 0 && player.currentBet === 0) || 
+      (isPreflop && isBigBlind && noAdditionalBets)) {
     actions.push('check');
   }
 
-  // Call is allowed if there's a bet to call and player has enough chips
-  if (game.currentBet > player.currentBet && player.chips > 0) {
+  // Call is allowed if:
+  // 1. There's a bet to call
+  // 2. Player has enough chips
+  // 3. Player hasn't already matched the current bet
+  if (game.currentBet > player.currentBet && player.chips > (game.currentBet - player.currentBet)) {
     actions.push('call');
   }
 
-  // Bet is allowed if there's no current bet and player has chips
-  if ((game.currentBet === 0 || 
-      (game.phaseOrder.indexOf(game.phase) === 1 && player.id === game.bigBlindId && game.currentBet === game.bigBlind)) 
-      && player.chips > 0) {
+  // Bet is allowed if:
+  // 1. No current bet (except big blind in preflop) AND
+  // 2. Player has chips to bet
+  if ((game.currentBet === 0 || (isPreflop && isBigBlind && noAdditionalBets)) && 
+      player.chips > 0) {
     actions.push('bet');
   }
 
-  // Raise is allowed if there's a current bet and player has enough chips to raise
+  // Raise is allowed if:
+  // 1. There's a current bet
+  // 2. Player has enough chips to raise
+  // 3. Not limited by max raises (if implemented)
   if (game.currentBet > 0 && player.chips > game.currentBet) {
     actions.push('raise');
   }
