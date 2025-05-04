@@ -232,6 +232,8 @@ export interface Player extends User {
   previousAction: Action
   avatar: string;
   name?: string; // Fallback for name if displayName is not available
+  joinedAt?: string;
+  leftAt?: string | null;
 }
 
 export interface User {

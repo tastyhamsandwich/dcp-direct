@@ -928,7 +928,14 @@ export class Game {
       
       // Set active player ID
       this.activePlayerId = this.players[this.activePlayerIndex].id;
-      console.log(`...Active player set to: ${this.players[this.activePlayerIndex].username}`)
+      console.log(
+				"[DEBUG continueRoundSetup] Set activePlayerIndex:",
+				this.activePlayerIndex,
+				"activePlayerId:",
+				this.activePlayerId,
+				"username:",
+				this.players[this.activePlayerIndex].username
+			);
 
       return true;
 
@@ -1068,7 +1075,14 @@ export class Game {
       console.log(`...Setting active player`);
       this.activePlayerIndex = (this.bigBlindIndex! + 1) % this.players.length;
       this.activePlayerId = this.players[this.activePlayerIndex].id;
-      console.log(`...Active player set to: ${this.players[this.activePlayerIndex].username}`)
+      console.log(
+				"[DEBUG continueRoundAfterVariantSelection] Set activePlayerIndex:",
+				this.activePlayerIndex,
+				"activePlayerId:",
+				this.activePlayerId,
+				"username:",
+				this.players[this.activePlayerIndex].username
+			);
 
       if (this.socket) {
         this.socket.to(this.id).emit('game_update', { game: this.returnGameState() });
@@ -1502,9 +1516,10 @@ export class Game {
       this.dealCommunityCardsByPhase();
       
       // Reset bets and set active player for new phase
-      this.resetBets();
-      this.setActivePlayerForNewPhase();
-      return;
+      if (this.resetBets()) {
+				this.setActivePlayerForNewPhase();
+				return;
+			}
     } else {
       // Handle showdown
       // TODO: Implement showdown logic
@@ -1518,60 +1533,83 @@ export class Game {
    * @returns {string[]} An array of allowed actions for the player. Returns an empty array if player not found.
    */
   getAllowedActionsForPlayer(playerId: string = this.activePlayerId): string[] {
-    const player = this.players.find(p => p.id === playerId);
-    if (!player) return [];
-    
-    const actions: string[] = [];
+    console.log(
+			"[DEBUG getAllowedActionsForPlayer] Called with playerId:",
+			playerId
+		);
+		console.log(
+			"[DEBUG getAllowedActionsForPlayer] All player IDs:",
+			this.players.map((p) => p.id)
+		);
+		console.log(
+			"[DEBUG getAllowedActionsForPlayer] activePlayerId:",
+			this.activePlayerId,
+			"activePlayerIndex:",
+			this.activePlayerIndex
+		);
+		const player = this.players.find((p) => p.id === playerId);
+		if (!player) {
+			console.log(
+				"[DEBUG getAllowedActionsForPlayer] No player found for playerId:",
+				playerId
+			);
+			return [];
+		}
+		console.log(
+			"[DEBUG getAllowedActionsForPlayer] Found player:",
+			player.username,
+			player.id
+		);
 
-    // Don't allow any actions if player is folded or all-in
-    if (player.folded || player.allIn) {
-      return actions;
-    }
+		const actions: string[] = [];
 
-    // Player can always fold unless they're in big blind with no additional betting
-    const isPreflop = this.phase === 'preflop';
-    const isBigBlind = player.id === this.bigBlindId;
-    const noAdditionalBets = this.currentBet === this.bigBlind;
-    
-    if (!(isPreflop && isBigBlind && noAdditionalBets)) {
-      actions.push('fold');
-    }
+		// Don't allow any actions if player is folded or all-in
+		if (player.folded || player.allIn) {
+			return actions;
+		}
 
-    // Check is allowed if:
-    // 1. Player's current bet matches the game's current bet OR
-    // 2. It's preflop, player is big blind, and no one has raised
-    if ((this.currentBet === player.currentBet) || 
-        (isPreflop && isBigBlind && noAdditionalBets)) {
-      actions.push('check');
-    }
+		const isPreflop = this.phase === "preflop";
+		const isBigBlind = player.id === this.bigBlindId;
+		const noAdditionalBets = this.currentBet === this.bigBlind;
 
-    // Calculate how much more the player needs to call
-    const callAmount = this.currentBet - player.currentBet;
+		// Player can always fold
+		actions.push("fold");
 
-    // Call is allowed if:
-    // 1. There's a bet to call
-    // 2. Player has enough chips
-    if (callAmount > 0 && player.chips >= callAmount) {
-      actions.push('call');
-    }
+		// Check is allowed if player has matched the current bet (regardless of previousAction)
+		if (player.currentBet === this.currentBet) {
+			actions.push("check");
+		}
 
-    // Bet is allowed if:
-    // 1. No current bet (except big blind in preflop) AND
-    // 2. Player has enough chips for minimum bet
-    const minBet = this.bigBlind;
-    if (this.currentBet === 0 && player.chips >= minBet) {
-      actions.push('bet');
-    }
+		// Calculate how much more the player needs to call
+		const callAmount = this.currentBet - player.currentBet;
 
-    // Raise is allowed if:
-    // 1. There's a current bet
-    // 2. Player has enough chips for minimum raise
-    const minRaise = this.currentBet * 2 - player.currentBet;
-    if (this.currentBet > 0 && player.chips >= minRaise) {
-      actions.push('raise');
-    }
+		// Call is allowed if:
+		// 1. There's a bet to call AND
+		// 2. Player has enough chips AND
+		// 3. Player hasn't matched the current bet
+		if (this.currentBet > 0 && callAmount > 0 && player.chips >= callAmount) {
+			actions.push("call");
+		}
 
-    console.log(`Allowed actions for ${player.username}: ${actions.join(', ')}`);
+		// Bet is allowed if:
+		// 1. No current bet AND
+		// 2. Player has enough chips for minimum bet
+		const minBet = this.bigBlind;
+		if (this.currentBet === 0 && player.chips >= minBet) {
+			actions.push("bet");
+		}
+
+		// Raise is allowed if:
+		// 1. There's a current bet AND
+		// 2. Player has enough chips for minimum raise
+		const minRaise = this.currentBet * 2 - player.currentBet;
+		if (this.currentBet > 0 && player.chips >= minRaise) {
+			actions.push("raise");
+		}
+
+		console.log(
+			`Allowed actions for ${player.username}: ${actions.join(", ")}`
+		);
     return actions;
   }
 
@@ -1582,7 +1620,8 @@ export class Game {
    */
   setActivePlayerForNewPhase() {
     let startPos = (this.dealerIndex + 1) % this.players.length;
-    let foundActive = false;
+    let foundActive;
+		foundActive = false;
     
     for (let i = 0; i < this.players.length; i++) {
       const idx = (startPos + i) % this.players.length;
@@ -1590,7 +1629,14 @@ export class Game {
         this.activePlayerIndex = idx;
         this.activePlayerId = this.players[idx].id;
         foundActive = true;
-        console.log(`Set active player to ${this.players[idx].username} for new phase`);
+        console.log(
+					"[DEBUG setActivePlayerForNewPhase] Set activePlayerIndex:",
+					idx,
+					"activePlayerId:",
+					this.activePlayerId,
+					"username:",
+					this.players[idx].username
+				);
         break;
       }
     }
@@ -1602,7 +1648,9 @@ export class Game {
    */
   findNextActivePlayer(): boolean {
     if (this.activePlayerIndex === null) {
-      console.log('FUNC: findNextActivePlayer() - No active player index set, cannot find next player');
+      console.log(
+				"[DEBUG findNextActivePlayer] No active player index set, cannot find next player"
+			);
       return false;
     }
     
@@ -1630,14 +1678,28 @@ export class Game {
         if (bettingRound && player.currentBet < this.currentBet) {
           this.activePlayerIndex = nextPlayerIndex;
           this.activePlayerId = player.id;
-          console.log(`Found next active player: ${player.username} (needs to match current bet)`);
+          console.log(
+						"[DEBUG findNextActivePlayer] Set activePlayerIndex:",
+						nextPlayerIndex,
+						"activePlayerId:",
+						player.id,
+						"username:",
+						player.username
+					);
           return true;
         }
         // Or if they haven't acted in this betting round
         else if (player.previousAction === 'none') {
           this.activePlayerIndex = nextPlayerIndex;
           this.activePlayerId = player.id;
-          console.log(`Found next active player: ${player.username} (hasn't acted yet)`);
+          console.log(
+						"[DEBUG findNextActivePlayer] Set activePlayerIndex:",
+						nextPlayerIndex,
+						"activePlayerId:",
+						player.id,
+						"username:",
+						player.username
+					);
           return true;
         }
       }
@@ -1645,7 +1707,7 @@ export class Game {
       nextPlayerIndex = (nextPlayerIndex + 1) % this.players.length;
     } while (nextPlayerIndex !== startingIndex);
 
-    console.log('FUNC: findNextActivePlayer() - No eligible players found');
+    console.log("[DEBUG findNextActivePlayer] No eligible players found");
     return false;
   }
 
@@ -1705,6 +1767,24 @@ export class Game {
     this.smallBlindId   = this.players[this.smallBlindIndex  ].id;
     this.bigBlindId     = this.players[this.bigBlindIndex    ].id;
     this.activePlayerId = this.players[this.activePlayerIndex].id;
+    console.log(
+			"[DEBUG advanceRoleIndices] dealerIndex:",
+			this.dealerIndex,
+			"dealerId:",
+			this.dealerId,
+			"smallBlindIndex:",
+			this.smallBlindIndex,
+			"smallBlindId:",
+			this.smallBlindId,
+			"bigBlindIndex:",
+			this.bigBlindIndex,
+			"bigBlindId:",
+			this.bigBlindId,
+			"activePlayerIndex:",
+			this.activePlayerIndex,
+			"activePlayerId:",
+			this.activePlayerId
+		);
   }
 
   /** Handles an incoming selection message from a player for Dealer's Choice games
@@ -1878,7 +1958,7 @@ export class Game {
         winner.chips += sidepot.getAmount();
         winner.previousAction = 'win';
         console.log(`Player ${winner.username} awarded ${sidepot.getAmount()} from sidepot ${potIndex} (uncontested)`);
-        
+
         // Record winner info
         winnerInfo.push({
           playerId: winner.id,

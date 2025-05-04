@@ -32,17 +32,17 @@ interface AuthContextType {
 
 // Create the auth context with default values
 const AuthContext = createContext<AuthContextType>({
-  user: null,
-  profile: null,
-  session: null,
-  loading: true,
-  error: null,
-  signIn: async () => {},
-  signInWithOAuth: async () => {},
-  signUp: async () => {},
-  signOut: async () => {},
-  refreshProfile: async () => {},
-  updateProfile: async () => {},
+	user: null,
+	profile: null,
+	session: null,
+	loading: false,
+	error: null,
+	signIn: async () => {},
+	signInWithOAuth: async () => {},
+	signUp: async () => {},
+	signOut: async () => {},
+	refreshProfile: async () => {},
+	updateProfile: async () => {},
 });
 
 // Hook to use the auth context

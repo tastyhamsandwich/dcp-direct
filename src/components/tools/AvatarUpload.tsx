@@ -1,126 +1,130 @@
-import React, { useRef } from 'react';
-import { imageConfig } from '@lib/image';
-import ImageCropper from './ImageCropper'
-import { useAuth } from '@contexts/authContext';
+import React, { useRef } from "react";
+import { imageConfig } from "@lib/image";
+import ImageCropper from "./ImageCropper";
+import { useAuth } from "@contexts/authContext";
 
 export default function AvatarUpload() {
-    const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
-    const [error, setError] = React.useState<string | null>(null);
-    const [isUploading, setIsUploading] = React.useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const { profile } = useAuth();
+	const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
+	const [error, setError] = React.useState<string | null>(null);
+	const [isUploading, setIsUploading] = React.useState(false);
+	const fileInputRef = useRef<HTMLInputElement>(null);
+	const { profile } = useAuth();
 
-    
-    const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        setError(null);
-        
-        if (!file) return;
+	const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+		const file = event.target.files?.[0];
+		setError(null);
 
-        // Validate file type
-        const fileExt = file.name.split('.').pop()?.toLowerCase();
-        if (!fileExt || !imageConfig.avatar.validExtensions.includes(fileExt)) {
-            setError(`Please select a valid image file (${imageConfig.avatar.validExtensions.join(', ')})`);
-            return;
-        }
+		if (!file) return;
 
-        // Validate file size
-        const fileSizeInMB = file.size / (1024 * 1024);
-        if (fileSizeInMB > imageConfig.avatar.maxSizeInMB) {
-            setError(`File size must be less than ${imageConfig.avatar.maxSizeInMB}MB`);
-            return;
-        }
+		// Validate file type
+		const fileExt = file.name.split(".").pop()?.toLowerCase();
+		if (!fileExt || !imageConfig.avatar.validExtensions.includes(fileExt)) {
+			setError(
+				`Please select a valid image file (${imageConfig.avatar.validExtensions.join(
+					", "
+				)})`
+			);
+			return;
+		}
 
-        setSelectedFile(file);
-    };
+		// Validate file size
+		const fileSizeInMB = file.size / (1024 * 1024);
+		if (fileSizeInMB > imageConfig.avatar.maxSizeInMB) {
+			setError(
+				`File size must be less than ${imageConfig.avatar.maxSizeInMB}MB`
+			);
+			return;
+		}
 
-    const handleCropComplete = async (croppedBlob: Blob) => {
-        try {
-            setIsUploading(true);
-            setError(null);
+		setSelectedFile(file);
+	};
 
-            // Create a File from the Blob with PNG extension
-            const timestamp = Date.now();
-            const filename = `avatar-${timestamp}.png`;
-            const file = new File([croppedBlob], filename, {
-                type: imageConfig.avatar.contentType
-            });
+	const handleCropComplete = async (croppedBlob: Blob) => {
+		try {
+			setIsUploading(true);
+			setError(null);
 
-            // Create FormData
-            const formData = new FormData();
-            formData.append('avatar', file);
+			// Create a File from the Blob with PNG extension
+			const timestamp = Date.now();
+			const filename = `avatar-${timestamp}.png`;
+			const file = new File([croppedBlob], filename, {
+				type: imageConfig.avatar.contentType,
+			});
 
-            // Upload to our API
-            const response = await fetch('/api/avatar', {
-                method: 'POST',
-                body: formData
-            });
+			// Create FormData
+			const formData = new FormData();
+			formData.append("avatar", file);
 
-            const data: any = await response.json();
+			// Upload to our API
+			const response = await fetch("/api/avatar", {
+				method: "POST",
+				body: formData,
+			});
 
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to upload avatar');
-            }
+			const data: any = await response.json();
 
-            // Clear the file input
-            if (fileInputRef.current) {
-                fileInputRef.current.value = '';
-            }
-            setSelectedFile(null);
+			if (!response.ok) {
+				throw new Error(data.error || "Failed to upload avatar");
+			}
 
-            // Instead of reloading the page, we could update the profile context
-            // For now, we'll use a reload
-            window.location.reload();
+			// Clear the file input
+			if (fileInputRef.current) {
+				fileInputRef.current.value = "";
+			}
+			setSelectedFile(null);
 
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to upload avatar');
-        } finally {
-            setIsUploading(false);
-        }
-    };
+			// Instead of reloading the page, we could update the profile context
+			// For now, we'll use a reload
+			window.location.reload();
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Failed to upload avatar");
+		} finally {
+			setIsUploading(false);
+		}
+	};
 
-    const handleCancelCrop = () => {
-        setSelectedFile(null);
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
-    };
+	const handleCancelCrop = () => {
+		setSelectedFile(null);
+		if (fileInputRef.current) {
+			fileInputRef.current.value = "";
+		}
+	};
 
-    const handleClick = () => {
-        fileInputRef.current?.click();
-    };
+	const handleClick = () => {
+		fileInputRef.current?.click();
+	};
 
-    return (
-        <>
-            <input
-                ref={fileInputRef}
-                type="file"
-                accept="{image/*"
-                onChange={handleFileSelect}
-                className="hidden"
-                aria-label="Upload avatar"
-            />
-            
-            {/* Invisible button that covers the entire parent area */}
-            <button
-                onClick={handleClick}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                aria-label="Change avatar"
-            />
+	return (
+		<>
+			<input
+				ref={fileInputRef}
+				type="file"
+				accept="{image/*"
+				onChange={handleFileSelect}
+				className="hidden"
+				aria-label="Upload avatar"
+			/>
 
-            {error && (
-                <div className="absolute bottom-0 left-0 right-0 bg-red-500 text-white text-xs p-1 text-center">
-                    {error}
-                </div>
-            )}
+			{/* Invisible button that covers the entire parent area */}
+			<button
+				onClick={handleClick}
+				className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+				aria-label="Change avatar"
+			/>
 
-            {selectedFile && (
-                <ImageCropper 
-                  file={selectedFile} 
-                  onCropComplete={handleCropComplete}
-                  onCancel={handleCancelCrop}
-                />
-            )}
-        </>
-    );
-} 
+			{error && (
+				<div className="absolute bottom-0 left-0 right-0 bg-red-500 text-white text-xs p-1 text-center">
+					{error}
+				</div>
+			)}
+
+			{selectedFile && (
+				<ImageCropper
+					file={selectedFile}
+					onCropComplete={handleCropComplete}
+					onCancel={handleCancelCrop}
+				/>
+			)}
+		</>
+	);
+}
