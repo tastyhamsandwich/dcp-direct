@@ -4,7 +4,7 @@ import React, { useEffect, useReducer, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@contexts/authContext";
 import { io, Socket } from "socket.io-client";
-import { GameState, GameVariant } from "@game/types";
+import { GameState, GameVariant, WinnerInfo } from "@game/types";
 import Card from "@components/game/Card";
 import Deck from "@components/game/Deck";
 import Player from "@components/game/Player";
@@ -14,16 +14,6 @@ import WinnerDisplay from "@components/game/WinnerDisplay";
 import DealerVariantSelector from "@components/game/DealerVariantSelector";
 import { SeatSelector } from "@components/game/SeatSelector";
 import { Playwrite_ES } from "next/font/google";
-
-// Define winner info interface
-interface WinnerInfo {
-	playerId: string;
-	playerName: string;
-	amount: number;
-	potType: string;
-	hand?: string;
-	cards?: string[];
-}
 
 // Define action types
 type GameAction =
@@ -577,7 +567,7 @@ export default function GamePage({
 														.fill(0)
 														.map((_, idx) => (
 															<Card
-																scaleFactor={0.5}
+																scaleFactor={1}
 																key={idx}
 																rank="2"
 																suit="hearts"

@@ -1050,11 +1050,11 @@ function handleShowdown(game, io) {
 	// If we're in showdown phase, determine winners
 	if (game.phase === "showdown") {
 		// If only one player remains (everyone else folded)
-		const activePlayers = game.players.filter((p) => !p.folded);
+		const activePlayers: Player[] = game.players.filter((p) => !p.folded);
 		if (activePlayers.length === 1) {
 			// Award pot to the last remaining player
 			const winner = activePlayers[0];
-			let totalWinnings = game.pot;
+			let totalWinnings: number = game.pot;
 			winner.chips += game.pot;
 			winner.previousAction = "win";
 
@@ -1080,7 +1080,7 @@ function handleShowdown(game, io) {
 						amount: totalWinnings,
 						potType: "All pots (win by fold)",
 						hand: "Win by fold",
-						cards: winner.cards.map((card) => card.name),
+						cards: winner.cards,
 					},
 				],
 				showdown: false,

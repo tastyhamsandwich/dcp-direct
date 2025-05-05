@@ -56,30 +56,17 @@ export function rankToNumStr(rank: string): string {
   return rankNum;
 }
 
-export function suitNameToInitial(suit: Suit | SuitCapitalized): SuitInitial {
-  let suitLetter: SuitInitial;
-  switch (suit) {
-    case 'clubs':
-    case 'Clubs':
-      suitLetter = 'C'
-      break;
-    case 'diamonds':
-    case 'Diamonds':
-      suitLetter = 'D';
-      break;
-    case 'hearts':
-    case 'Hearts':
-      suitLetter = 'H';
-      break;
-    case 'spades':
-    case 'Spades':
-      suitLetter = 'S';
-      break;
-    default:
-      throw Error("An unknown error occurred.");
-  }
+export function suitNameToInitial(suit: Suit | SuitCapitalized): string {
+	let suitLetter = suit.substring(0, 1).toUpperCase();
 
-  return suitLetter;
+	if (
+		suitLetter === "S" ||
+		suitLetter === "C" ||
+		suitLetter === "D" ||
+		suitLetter === "H"
+	)
+		return suitLetter;
+	else return "H";
 }
 
 export function suitToSymbol(suit: SuitInitial | Suit | SuitCapitalized): SuitSymbol {

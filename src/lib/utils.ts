@@ -39,23 +39,40 @@ export function encodedRedirect(
 }
 
 export function valueToRank(value: RankValue, capitalize = false): string {
-  switch (value) {
-      case 2:   return (capitalize) ? 'Two'   : 'two';
-      case 3:   return (capitalize) ? 'Three' : 'three';
-      case 4:   return (capitalize) ? 'Four'  : 'four';
-      case 5:   return (capitalize) ? 'Five'  : 'five';
-      case 6:   return (capitalize) ? 'Six'   : 'six';
-      case 7:   return (capitalize) ? 'Seven' : 'seven';
-      case 8:   return (capitalize) ? 'Eight' : 'eight';
-      case 9:   return (capitalize) ? 'Nine'  : 'nine';
-      case 10:  return (capitalize) ? 'Ten'   : 'ten';
-      case 11:  return (capitalize) ? 'Jack'  : 'jack';
-      case 12:  return (capitalize) ? 'Queen' : 'queen';
-      case 13:  return (capitalize) ? 'King'  : 'king';
-      case 14:  return (capitalize) ? 'Ace'   : 'ace';
-      case 100: return (capitalize) ? 'Wild'  : 'wild';
-      default: throw new Error(`Invalid rank value: ${value}`);
-  }
+	//THIS CAN BE WRITTEN BETTER...
+	//str.charAt(0).toUpperCase() + str.slice(1)
+	switch (value) {
+		case 2:
+			return capitalize ? "Two" : "two";
+		case 3:
+			return capitalize ? "Three" : "three";
+		case 4:
+			return capitalize ? "Four" : "four";
+		case 5:
+			return capitalize ? "Five" : "five";
+		case 6:
+			return capitalize ? "Six" : "six";
+		case 7:
+			return capitalize ? "Seven" : "seven";
+		case 8:
+			return capitalize ? "Eight" : "eight";
+		case 9:
+			return capitalize ? "Nine" : "nine";
+		case 10:
+			return capitalize ? "Ten" : "ten";
+		case 11:
+			return capitalize ? "Jack" : "jack";
+		case 12:
+			return capitalize ? "Queen" : "queen";
+		case 13:
+			return capitalize ? "King" : "king";
+		case 14:
+			return capitalize ? "Ace" : "ace";
+		case 100:
+			return capitalize ? "Wild" : "wild";
+		default:
+			throw new Error(`Invalid rank value: ${value}`);
+	}
 }
 
 export function capitalize(str: string): string {

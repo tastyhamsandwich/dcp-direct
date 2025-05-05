@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { capitalize } from '@lib/utils';
 import { rankToNumStr, suitNameToInitial } from '@game/utils';
 import { motion } from 'framer-motion';
+import { type Suit } from "@game/types";
 
 interface CardProps {
   scaleFactor: number;
@@ -33,7 +34,7 @@ const Card: React.FC<CardProps> = ({
   
   // Convert 'four' to '4', 'spades' to 'S', etc...
   let rankNum: string = rankToNumStr(rank);
-  let suitLetter: string = suitNameToInitial(suit);
+  let suitLetter: string = suitNameToInitial(suit as Suit);
   const cardSrc = `/assets/cards_en/${rankNum}${suitLetter}.png`;
 
   useEffect(() => {

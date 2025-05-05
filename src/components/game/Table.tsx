@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Player from "./Player";
 import Card from "./Card";
 import Deck from "./Deck";
+import { WinnerInfo } from "@game/types";
 
 interface TableProps {
 	players: any[];
@@ -13,15 +14,10 @@ interface TableProps {
 	bigBlindIndex: number;
 	activePlayerIndex: number | null;
 	currentPlayerId: string;
-	winners?: {
-		playerId: string;
-		playerName: string;
-		amount: number;
-		potType: string;
-		hand?: string;
-		cards?: string[];
-	}[];
+	winners?: WinnerInfo[];
 }
+[];
+
 
 const Table: React.FC<TableProps> = ({
 	players,

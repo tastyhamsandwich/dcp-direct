@@ -58,6 +58,15 @@ export type RoomStatus = 'waiting' | 'playing' | 'paused';
 
 export type Action = 'none' | 'fold' | 'check' | 'bet' | 'call' | 'raise' | 'win';
 
+export interface WinnerInfo {
+	playerId: string;
+	playerName: string;
+	amount: number;
+	potType: string;
+	hand?: string;
+	cards?: Card[];
+}
+
 export interface GameState {
   id: string;
   name: string;           
