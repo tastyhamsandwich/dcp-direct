@@ -1,43 +1,45 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "strictPropertyInitialization": false,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noImplicitAny": false,
-    "jsx": "preserve",
-    "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
-    "baseUrl": ".",
-    "paths": {
-      "@comps/*": ["./src/components/*"],
-      "@components/*": ["./src/components/*"],
-      "@contexts/*": ["./src/contexts/*"],
-      "@lib/*": ["./src/lib/*"],
-      "@app/*": ["./src/app/*"],
-      "@supabaseC": ["./src/lib/supabase/client"],
-      "@supabaseS": ["./src/lib/supabase/server"],
-      "@src/*": ["./src/*"],
-      "@socket": ["./socket"],
-      "@game/*": ["./src/game/*"],
-      "@utils/*": ["./src/lib/utils/*"],
-      "@hooks/*": ["./src/hooks/*"]
-    }
-  },
+		"target": "ES2017",
+		"lib": ["dom", "dom.iterable", "esnext"],
+		"allowJs": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"noEmit": true,
+		"esModuleInterop": true,
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"strictPropertyInitialization": false,
+		"experimentalDecorators": true,
+		"emitDecoratorMetadata": true,
+		"resolveJsonModule": true,
+		"isolatedModules": true,
+		"noImplicitAny": false,
+		"jsx": "preserve",
+		"incremental": true,
+		"plugins": [
+			{
+				"name": "next"
+			}
+		],
+		"baseUrl": "./",
+		"paths": {
+			"@comps/*": ["./src/components/*"],
+			"@components/*": ["./src/components/*"],
+			"@contexts/*": ["./src/contexts/*"],
+			"@lib/*": ["./src/lib/*"],
+			"@app/*": ["./src/app/*"],
+			"@supabaseC": ["./src/lib/supabase/client"],
+			"@supabaseS": ["./src/lib/supabase/server"],
+			"@src/*": ["./src/*"],
+			"@socket": ["./socket"],
+			"@game/*": ["./src/game/*"],
+			"@utils/*": ["./src/lib/utils/*"],
+			"@hooks/*": ["./src/hooks/*"],
+			"@db/*": ["./src/lib/db/*"],
+      "@api/*": ["./src/app/api/*"]
+		}
+	},
   "include": ["./socket.ts", "./src/*.ts", "next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/server.js"],
   "exclude": ["node_modules", "misc/*.*"]
 }

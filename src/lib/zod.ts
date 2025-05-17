@@ -22,6 +22,7 @@ export const loginSchema = z
     .email("Invalid email"),
   password: z.string({ required_error: "Password is required" })
     .min(1, "Password is required")
+		.trim()
 })
 
 export const registerSchema = z
@@ -41,3 +42,36 @@ export const registerSchema = z
     message: "Passwords do not match",
     path: ['confirmPassword'],
   })
+
+export const userSchema = z
+  .object({
+    id: z.string(),
+    username: z.string(),
+    email: z.string(),
+    firstName: z.string(),
+    lastName: z.string(),
+    phone: z.string(),
+    balance: z.number(),
+    avatar: z.string(),
+    level: z.number(),
+    exp: z.number(),
+    role: z.enum(["USER", "ADMIN"]),
+  });
+
+export const sessionSchema = z.
+  object({
+    userId: z.string(),
+    role: z.enum(["USER", "ADMIN"]),
+    expiresAt: z.string(),
+  });
+
+export type FormState =
+	| {
+			errors?: {
+				name?: string[];
+				email?: string[];
+				password?: string[];
+			};
+			message?: string;
+		}
+	| undefined;

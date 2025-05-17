@@ -1,49 +1,36 @@
-'use server'
+"use server";
 
-import { createClient } from '@supabaseS'
-import { redirect } from 'next/navigation'
+import { createUser } from "@db/database";
+import { registerSchema, FormState } from "@lib/zod";
+import signUp from "@contexts/authContext";
+import { redirect } from "next/navigation";
+import { createSession } from "@lib/session";
 
-export async function registerAction(formData: FormData) {
+export async function registerAction(state: FormState, formData: FormData) {
+  const validatedFields = registerSchema.safeParse({
+    email: formData.get("email") as string,
+    username: formData.get("username") as string,
+    password: formData.get("password") as string,
+    confirmPassword: formData.get("confirmPassword") as string,
+    dob: formData.get("dob") as string,
+  });
 
-    const email = formData.get('email') as string;
-    const username = formData.get('username') as string;
-    const password = formData.get('password') as string;
-    const confirmPassword = formData.get('confirmPassword') as string;
-    const dob = formData.get('dob') as string;
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+    };
+  }
 
-    const date = dob.toString();
-    if (password !== confirmPassword) {
-        throw new Error('Passwords do not match');
-    }
+  const { username, email, password } = validatedFields.data;
 
-    if (password.length < 8) {
-        throw new Error('Password must be at least 8 characters long');
-    }
+  const result = await createUser({ username, email, password });
 
-    if (username.length < 3) {
-        throw new Error('Username must be at least 3 characters long');
-    }
+  if (result.success) {
+    if (result.user.id && result.user.role)
+      await createSession(result.user.id, result.user.role);
+    else throw new Error("User ID or role is undefined");
 
-    const supabase = await createClient();
-    
-    const { data, error } = await supabase.auth.signUp({
-        email: email,
-        password: password,
-        options: {
-            data: {
-                username: username,
-                dob: date
-            },
-        },
-    })
-
-    if (error) {
-        console.error('Authentication error:', error)
-        throw error
-    }
-
-    // Log the session to verify it's being created
-    console.log('Session created:', data.session)
-
-    redirect('/')
+    redirect("/dashboard");
+  }
 }
+  

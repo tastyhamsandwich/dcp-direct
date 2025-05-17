@@ -11,28 +11,20 @@ import { loginSchema } from "@lib/zod";
 import { useState, useEffect } from "react";
 import { useAuth } from "@contexts/authContext";
 import { useRouter } from "next/navigation";
-import { createClient } from '@supabaseC';
 import Image from 'next/image';
+import { useActionState } from 'react';
+import { loginAction } from './actions';
+import { useFormStatus } from 'react-dom';
 
 const LoginPage = () => {
+  const [state, action, pending] = useActionState(loginAction, undefined);
   const { signIn, signInWithOAuth, error: authError, loading, user } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm({
-    resolver: zodResolver(loginSchema),
-  });
 
-  // Redirect if already logged in
-  useEffect(() => {
-    if (user) {
-      router.push('/dashboard');
-    }
-  }, [user, router]);
+
+  // Redirect if already logged in 
 
   const onSubmit = async (data: { email: string; password: string }) => {
     setError(null);
@@ -43,15 +35,6 @@ const LoginPage = () => {
     }
   };
 
-  const handleDiscordSignIn = async () => {
-    setError(null);
-    try {
-      // Use the signInWithOAuth function from the auth context
-      await signInWithOAuth('discord');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login with Discord failed');
-    }
-  }
 
   return (
     <div className="pt-47 flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-[#111] to-[#222255] text-white">
@@ -67,14 +50,13 @@ const LoginPage = () => {
         )}
 
         <div id="login" className="flex space-y-4">
-          <form className="login" onSubmit={handleSubmit(onSubmit)}>
+          <form className="login" action={action}>
             <div className="form-item flex flex-row space-x-8 pt-10 justify-between">
               <div className="label-container pl-10">
                 <Label htmlFor="email">Email</Label>
               </div>
               <div className={styles.inputcontainer}>
                 <Input
-                  {...register("email")}
                   className="w-50 text-white bg-slate-800"
                   id="email"
                   type="text"
@@ -82,9 +64,9 @@ const LoginPage = () => {
                   required
                 />
               </div>
-              {errors.email?.message && (
+              {state?.errors.email && (
                 <p className="text-red-500">
-                  {errors.email?.message as string}
+                  {state?.errors.email}
                 </p>
               )}
             </div>
@@ -94,7 +76,6 @@ const LoginPage = () => {
               </div>
               <div className={styles.inputcontainer}>
                 <Input
-                  {...register("password")}
                   className="w-50 text-white bg-slate-800"
                   id="password"
                   type="password"
@@ -102,34 +83,16 @@ const LoginPage = () => {
                   required
                 />
               </div>
-              {errors.password?.message && (
+              {state?.errors.password && (
                 <p className="text-red-500">
-                  {errors.password?.message as string}
+                 {state?.errors.password}
                 </p>
               )}
             </div>
             <div className="justify-center flex form-submit pt-5">
-              <button
-                type="submit"
-                className="bg-[#4caf50] hover:bg-[#45a049] text-white font-bold py-2 px-4 rounded"
-                disabled={loading}
-              >
-                {loading ? "Logging In..." : "Sign in"}
-              </button>
+              <SubmitButton />
             </div>
           </form>
-
-        </div>
-        <div className="flex justify-center pt-4">
-          <button 
-            type="button"
-            className="flex items-center bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold py-2 px-4 rounded"
-            onClick={handleDiscordSignIn}
-            disabled={loading}
-          >
-            <Image src="/logos/discord.png" height={24} width={24} alt="Discord" className="mr-2" />
-            {loading ? "Connecting..." : "Sign in with Discord"}
-          </button>
         </div>
       </div>
       <div className="text-white pt-10">
@@ -150,6 +113,20 @@ const LoginPage = () => {
       
     </div>
   );
+}
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      className="bg-[#4caf50] hover:bg-[#45a049] text-white font-bold py-2 px-4 rounded"
+      disabled={pending} 
+    >
+      {pending ? "Logging In..." : "Sign in"}
+    </button>
+  )
 }
 
 export default LoginPage;
