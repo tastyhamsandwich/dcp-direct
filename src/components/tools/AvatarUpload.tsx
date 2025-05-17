@@ -2,6 +2,7 @@ import React, { useRef } from "react";
 import { imageConfig } from "@lib/image";
 import ImageCropper from "./ImageCropper";
 import { useAuth } from "@contexts/authContext";
+import { saveFile } from './actions';
 
 export default function AvatarUpload() {
 	const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
@@ -55,18 +56,16 @@ export default function AvatarUpload() {
 			const formData = new FormData();
 			formData.append("avatar", file);
 
-			// Upload to our API
-			const response = await fetch("/api/avatar", {
-				method: "POST",
-				body: formData,
-			});
+			// Upload via server action
+			const response = await saveFile(formData);
 
-			const data: any = await response.json();
-
-			if (!response.ok) {
-				throw new Error(data.error || "Failed to upload avatar");
+			if (!response.success) {
+				throw new Error(response.message || "Failed to upload avatar");
 			}
 
+			const avatarFilename = response.filename;
+
+			
 			// Clear the file input
 			if (fileInputRef.current) {
 				fileInputRef.current.value = "";
@@ -99,7 +98,9 @@ export default function AvatarUpload() {
 			<input
 				ref={fileInputRef}
 				type="file"
-				accept="{image/*"
+				accept={imageConfig.avatar.validExtensions
+					.map((ext) => `.${ext}`)
+					.join(",")}
 				onChange={handleFileSelect}
 				className="hidden"
 				aria-label="Upload avatar"

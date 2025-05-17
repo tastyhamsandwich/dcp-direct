@@ -1,5 +1,6 @@
+import ImageCropper from '@comps/tools/new/ImageCropper';
 
-const ImageModal = ({ closeModal }) => {
+const ImageModal = ({ updateAvatar, closeModal }) => {
   return (
     <div className="relative z-10"
     aria-labelledby="crop-image-dialog"
@@ -18,6 +19,8 @@ const ImageModal = ({ closeModal }) => {
                   >
                     <span className="sr-only">Close Menu</span>
                   </button>
+									<ImageCropper updateAvatar={updateAvatar}
+									closeModal={closeModal}/>
               </div>
             </div>
           </div>

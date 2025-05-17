@@ -26,8 +26,8 @@ export default function GameLobby() {
 		if (!user || !profile) return;
 
 		// Initialize WebSocket connection to the socket.io server running on port 3001
-		//const socketInstance = io("http://randomencounter.ddns.net:3001", {
-		const socketInstance = io("localhost:3001", {
+		const socketInstance = io("http://randomencounter.ddns.net:3001", {
+			//const socketInstance = io("localhost:3001", {
 			transports: ["websocket"],
 			withCredentials: true,
 		});

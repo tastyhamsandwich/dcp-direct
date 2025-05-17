@@ -23,9 +23,9 @@ export default function NavProfile() {
       <Link href="/dashboard" className="flex items-center gap-3">
         {/* Avatar */}
         <div className="relative w-10 h-10 overflow-hidden rounded-full">
-          {profile.avatar_url && !imageError ? (
+          {profile.avatar && !imageError ? (
             <Image
-              src={profile.avatar_url}
+              src={profile.avatar}
               alt={profile.username || "Profile"}
               fill
               sizes="40px"
@@ -34,7 +34,7 @@ export default function NavProfile() {
               onError={() => setImageError(true)}
               unoptimized
             />
-          ) : (
+          ) : (                                                                 
             <div className="absolute inset-0 rounded-full bg-gray-600 flex items-center justify-center">
               <span className="text-white text-lg">
                 {profile?.username?.charAt(0).toUpperCase() || "?"}

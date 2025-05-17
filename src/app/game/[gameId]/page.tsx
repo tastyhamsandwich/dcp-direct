@@ -160,8 +160,8 @@ export default function GamePage({
 		if (!unwrappedParams.gameId || !user || !profile) return;
 
 		// Initialize WebSocket connection to the socket.io server
-		//const socketInstance = io("http://randomencounter.ddns.net:3001", {
-		const socketInstance = io("localhost:3001", {
+		const socketInstance = io("http://randomencounter.ddns.net:3001", {
+			//const socketInstance = io("localhost:3001", {
 			transports: ["websocket"],
 			withCredentials: true,
 		});

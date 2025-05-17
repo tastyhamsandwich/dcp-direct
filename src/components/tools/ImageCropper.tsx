@@ -1,16 +1,7 @@
 import React, { useState, useRef } from "react";
-import ReactCrop, {
-	makeAspectCrop,
-	centerCrop,
-	type Crop,
-	convertToPixelCrop,
-} from "react-image-crop";
+import ReactCrop, { type Crop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 import { imageConfig } from "@lib/image";
-import { Autour_One } from "next/font/google";
-
-const ASPECT_RATIO = 1;
-const MIN_DIMENSION = 100;
 
 interface ImageCropperProps {
 	file: File;
@@ -18,13 +9,12 @@ interface ImageCropperProps {
 	onCancel: () => void;
 }
 
-const ImageCropper: React.FC<ImageCropperProps> = ({
+export default function ImageCropper({
 	file,
 	onCropComplete,
 	onCancel,
-}) => {
+}: ImageCropperProps) {
 	const [imgSrc, setImgSrc] = useState<string>("");
-	const [error, setError] = useState("");
 	const imgRef = useRef<HTMLImageElement>(null);
 	const [crop, setCrop] = useState<Crop>({
 		unit: "%",
@@ -34,55 +24,16 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
 		y: 0,
 	});
 
-	const onSelectFile = (e) => {
-		const file = e.target.files?.[0];
+	// Load the image when file is provided
+	React.useEffect(() => {
 		if (!file) return;
 
 		const reader = new FileReader();
 		reader.addEventListener("load", () => {
-			const imageElement = new Image();
-			const imageUrl = reader.result?.toString() || "";
-			imageElement.src = imageUrl;
-			imageElement.addEventListener("load", (e) => {
-				const { naturalWidth, naturalHeight } =
-					e.currentTarget as HTMLImageElement;
-				if (naturalWidth < MIN_DIMENSION || naturalHeight < MIN_DIMENSION) {
-					setError("Image must be at least 150x150 pixels.");
-					return setImgSrc("");
-				}
-			});
-
-			setImgSrc(imageUrl);
+			setImgSrc(reader.result?.toString() || "");
 		});
-
 		reader.readAsDataURL(file);
-	};
-
-	const onImageLoad = (e) => {
-		const { width, height } = e.currentTarget;
-
-		const crop = makeAspectCrop(
-			{
-				unit: "%",
-				width: 25, //MIN_DIMENSION,
-			},
-			ASPECT_RATIO,
-			width,
-			height
-		);
-		const centeredCrop = centerCrop(crop, width, height);
-		setCrop(centeredCrop);
-	};
-	/* Load the image when file is provided
-  React.useEffect(() => {
-    if (!file) return;
-    
-    const reader = new FileReader();
-    reader.addEventListener('load', () => {
-      setImgSrc(reader.result?.toString() || '');
-    });
-    reader.readAsDataURL(file);
-  }, [file]);*/
+	}, [file]);
 
 	// Function to get the cropped image
 	const getCroppedImg = async (
@@ -157,58 +108,40 @@ const ImageCropper: React.FC<ImageCropperProps> = ({
 		return <div>Loading...</div>;
 	}
 
-	/*
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
-              <h3 className="text-lg font-semibold mb-4">Crop Your Avatar</h3>
-              <div className="mb-4">*/
 	return (
-		<>
-			<label className="block mb-3 w-fit">
-				<span className="sr-only">Choose profile picture</span>
-				<input
-					type="file"
-					accept="image/*"
-					onChange={onSelectFile}
-					className="block w-full text-sm text-slate-500 file:mr-4 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-xs file:bg-gray-700 file:text-sky-300 hover:file:bg-gray-600"
-				/>
-			</label>
-			{error && <p className="text-red-400 text-xs">{error}</p>}
-			{imgSrc && (
-				<div className="flex flex-col items-center">
+		<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+			<div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+				<h3 className="text-lg font-semibold mb-4">Crop Your Avatar</h3>
+				<div className="mb-4">
 					<ReactCrop
 						crop={crop}
-						onChange={(pixelCrop, percentCrop) => setCrop(percentCrop)}
-						aspect={ASPECT_RATIO}
+						onChange={(c) => setCrop(c)}
+						aspect={1}
 						circularCrop
-						keepSelection
-						minWidth={MIN_DIMENSION}
 					>
 						<img
+							ref={imgRef}
 							src={imgSrc}
-							alt="Uploaded Image"
-							style={{ maxHeight: "70%", width: "auto" }}
-							onLoad={onImageLoad}
+							alt="Crop me"
+							className="max-h-[60vh] w-auto"
 						/>
 					</ReactCrop>
 				</div>
-			)}
-			<div className="flex justify-end gap-2">
-				<button
-					onClick={onCancel}
-					className="px-4 py-2 text-gray-600 hover:text-gray-800"
-				>
-					Cancel
-				</button>
-				<button
-					onClick={handleCropComplete}
-					className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-				>
-					Apply
-				</button>
+				<div className="flex justify-end gap-2">
+					<button
+						onClick={onCancel}
+						className="px-4 py-2 text-gray-600 hover:text-gray-800"
+					>
+						Cancel
+					</button>
+					<button
+						onClick={handleCropComplete}
+						className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+					>
+						Apply
+					</button>
+				</div>
 			</div>
-		</>
+		</div>
 	);
-};
-
-export default ImageCropper;
+}
