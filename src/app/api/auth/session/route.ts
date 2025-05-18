@@ -5,21 +5,20 @@ import { getUserById } from "@db/database";
 export async function GET() {
   const session = await verifySession();
   if (!session) {
+    console.log(`No session could be verified for user`);
     return NextResponse.json({ user: null, session: null }, { status: 401 });
   }
 
   // Fetch user data from DB
-  const { data: user } = await getUserById(session.userId);
+  const result = await getUserById(session.userId);
+  if (!result.success) {
+    console.log(`User not found in database`);
+    return NextResponse.json({ user: null, session: null }, { status: 401 });
+  }
 
-  // Compose a session object for the frontend
-  const sessionData = {
-    userId: session.userId,
-    role: session.role,
-    expiresAt: session.expiresAt,
-  };
-
+  console.log(`Verified user session.`)
   return NextResponse.json({
-    user,
-    session: sessionData,
+    user: result.user,
+    session: session,
   });
 }

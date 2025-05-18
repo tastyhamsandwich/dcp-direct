@@ -7,16 +7,16 @@ import Link from 'next/link';
 import styles from '../styles.module.css';
 
 function Dashboard() {
-    const { profile, loading, signOut } = useAuth();
+    const { user, loading, signOut } = useAuth();
     const router = useRouter();
     
     useEffect(() => {
-        // Only redirect if we're not loading and there's no profile
-        if (!loading && !profile) {
+        // Only redirect if we're not loading and there's no user
+        if (!loading && !user) {
             console.log('No authenticated user found, redirecting to login');
             router.push('/login');
         }
-    }, [profile, loading, router]);
+    }, [user, loading, router]);
 
     // Define poker guide resources
     const pokerGuides = [
@@ -57,7 +57,7 @@ function Dashboard() {
     }
 
     // If not loading and still no profile, we'll be redirected, but show a message
-    if (!profile) {
+    if (!user) {
         return <div className={styles.loadingContainer}>Redirecting to login...</div>;
     }
 
@@ -65,8 +65,8 @@ function Dashboard() {
         <div className={`${styles.dashboardWrapper} w-full m-0 p-0`}>
             <div className={styles.dashboardContainer}>
                 <header className={styles.dashboardHeader}>
-                    <h1>Welcome, {profile.username}!</h1>
-                    <p>Current Balance: {profile.balance}</p>
+                    <h1>Welcome, {user.username}!</h1>
+                    <p>Current Balance: {user.balance}</p>
                 </header>
 
                 {/* Enhanced poker guides section */}

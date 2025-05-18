@@ -8,18 +8,18 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@contexts/authContext';
 
 export default function NavRight() {
-  const { user, profile, loading } = useAuth();
+  const { user, loading } = useAuth();
   const [loginClicked, setLoginClicked] = useState<boolean>(false);
   const router = useRouter();
   const pathname = usePathname();
 
   // Only redirect on successful login
   useEffect(() => {
-    if (loginClicked && user && profile && !loading && pathname === '/') {
+    if (loginClicked && user && !loading && pathname === '/') {
       setLoginClicked(false); // Reset immediately to prevent multiple redirects
       router.push('/dashboard');
     }
-  }, [user, profile, loading, pathname, router, loginClicked]);
+  }, [user, loading, pathname, router, loginClicked]);
 
   const handleLoginClicked = () => {
     setLoginClicked(true);
@@ -32,7 +32,7 @@ export default function NavRight() {
           <div className="animate-spin h-4 w-4 border-2 border-[#4caf50] border-t-transparent rounded-full mr-2"></div>
           <span className="text-gray-200 text-sm">Loading...</span>
         </div>
-      ) : user && profile ? (
+      ) : user ? (
         <NavProfile />
       ) : (
         <NavLogin onLoginClicked={handleLoginClicked} />

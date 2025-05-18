@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 export default function NavProfile() {
-  const { profile, signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const [imageError, setImageError] = useState(false);
   const router = useRouter();
 
@@ -16,17 +16,17 @@ export default function NavProfile() {
     router.push('/');
   };
 
-  if (!profile) return null;
+  if (!user) return null;
 
   return (
     <div className="flex items-center gap-3 p-2 bg-[#444] rounded-lg shadow-md hover:bg-[#555] transition-colors">
       <Link href="/dashboard" className="flex items-center gap-3">
         {/* Avatar */}
         <div className="relative w-10 h-10 overflow-hidden rounded-full">
-          {profile.avatar && !imageError ? (
+          {user.avatar && !imageError ? (
             <Image
-              src={profile.avatar}
-              alt={profile.username || "Profile"}
+              src={user.avatar}
+              alt={user.username || "Profile"}
               fill
               sizes="40px"
               className="object-cover"
@@ -37,7 +37,7 @@ export default function NavProfile() {
           ) : (                                                                 
             <div className="absolute inset-0 rounded-full bg-gray-600 flex items-center justify-center">
               <span className="text-white text-lg">
-                {profile?.username?.charAt(0).toUpperCase() || "?"}
+                {user?.username?.charAt(0).toUpperCase() || "?"}
               </span>
             </div>
           )}
@@ -45,11 +45,11 @@ export default function NavProfile() {
 
         {/* User info */}
         <div className="flex flex-col">
-          <div className="text-white text-sm font-bold">{profile.username}</div>
+          <div className="text-white text-sm font-bold">{user.username}</div>
           <div className="text-gray-400 italic text-sm">
             Chips:{" "}
             <span className="text-[#eedd00] font-bold not-italic text-sm">
-              {profile.balance}
+              {user.balance}
             </span>
           </div>
         </div>

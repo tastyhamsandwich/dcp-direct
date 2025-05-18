@@ -6,8 +6,6 @@ import { useAuth } from "@contexts/authContext";
 import { io, Socket } from "socket.io-client";
 import { GameState, GameVariant, WinnerInfo } from "@game/types";
 import Card from "@components/game/Card";
-import Deck from "@components/game/Deck";
-import Player from "@components/game/Player";
 import Table from "@components/game/Table";
 import Actions from "@components/game/Actions";
 import WinnerDisplay from "@components/game/WinnerDisplay";
@@ -110,7 +108,7 @@ export default function GamePage({
 }: {
 	params: Promise<{ gameId: string }>;
 }) {
-	const { user, profile, loading } = useAuth();
+	const { user, loading } = useAuth();
 	const router = useRouter();
 	const [isMyTurn, setIsMyTurn] = useState<boolean>(false);
 	const [isWinnerOpen, setIsWinnerOpen] = useState<boolean>(false);
@@ -157,7 +155,7 @@ export default function GamePage({
 
 	// Setup Socket.io connection
 	useEffect(() => {
-		if (!unwrappedParams.gameId || !user || !profile) return;
+		if (!unwrappedParams.gameId || !user) return;
 
 		// Initialize WebSocket connection to the socket.io server
 		const socketInstance = io("http://randomencounter.ddns.net:3001", {
@@ -173,12 +171,12 @@ export default function GamePage({
 			console.log("Connected to game server");
 
 			// Register with server upon connection
-			socketInstance.emit("register", { profile });
+			socketInstance.emit("register", { user });
 
 			// Join the game
 			socketInstance.emit("join_game", {
 				gameId: unwrappedParams.gameId,
-				profile,
+				user,
 			});
 		});
 
@@ -332,7 +330,7 @@ export default function GamePage({
 		return () => {
 			socketInstance.disconnect();
 		};
-	}, [unwrappedParams.gameId, user, profile, router]);
+	}, [unwrappedParams.gameId, user, router]);
 
 	/*const handleSeatSelect = (seatNumber: number) => {
     if (!socket || !isConnected || !unwrappedParams.gameId) return;
@@ -382,7 +380,7 @@ export default function GamePage({
 	}
 
 	// Show error if not authenticated
-	if (!user || !profile) {
+	if (!user) {
 		return (
 			<div className="text-center p-10 text-gray-200">
 				You must be logged in to play.

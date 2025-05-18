@@ -2,7 +2,7 @@
 
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { createUser, getUserById, validateUser, updateUser, type User } from '@db/database';
+import { getUserById, validateUser, updateUser, type User } from '@db/database';
 import { createSession, verifySession, deleteSession, type Session } from '@lib/session';
 import { registerSchema, loginSchema, FormState } from "@lib/zod";
 import { redirect } from 'next/navigation';
@@ -20,7 +20,6 @@ export interface Profile extends User {
 // Define the auth context type
 interface AuthContextType {
   user: User | null;
-  profile: Profile | null;
   session: Session | null;
   loading: boolean;
   error: string | null;
@@ -46,7 +45,6 @@ interface AuthContextType {
 // Create the auth context with default values
 const AuthContext = createContext<AuthContextType>({
 	user: null,
-	profile: null,
 	session: null,
 	loading: false,
 	error: null,
@@ -65,7 +63,6 @@ export const useAuth = () => useContext(AuthContext);
 // TODO Ensure that all of provider component is updated to stop using Supabase
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,19 +72,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Fetch the profile data for a user
   const fetchProfile = async (userId: string) => {
     try {
-      const { data, error } = await getUserById(userId);
 
-      if (error) {
-        console.error('Error fetching profile:', error);
-        setError(error.message);
+      if (userId === undefined) {
+        console.log(`User ID is undefined`);
+        console.error('User ID is undefined');
+        setError('User ID is undefined');
+        return null;
+      }
+      console.log(`DEBUG: ${userId}`);
+
+      const res = await fetch("/api/auth/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(userId),
+      });
+
+      console.log(`Sent API call to fetch profile for userId: ${userId}`);
+      const result = await res.json() as { data: Profile | null; error?: string };
+
+      if (result.error) {
+        console.log(`Failed to fetch profile from API call`);
+        console.error('Error fetching profile: ', result.error);
+        setError(result.error);
         return null;
       }
 
-      return data as Profile;
+      return result.data as Profile;
     } catch (err) {
       if (err instanceof Error) {
-        console.error('Error in fetchProfile:', err);
-        setError('Failed to fetch profile');
+        console.error('Error in fetchProfile: ', err.message);
+        setError(`Failed to fetch profile (${err.message})`);
         return null;
       }
     }
@@ -95,13 +109,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Refresh the user's profile data
   const refreshProfile = async () => {
-    if (!user) return;
+    if (!user || !user.id) return;
     
     setLoading(true);
     try {
       const profileData = await fetchProfile(user.id!);
       if (profileData) {
-        setProfile(profileData);
+        setUser(profileData);
       }
     } catch (err) {
       console.error('Error refreshing profile:', err);
@@ -119,9 +133,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      const result = await updateUser(updates.id!, updates);
+      const res = await fetch("/api/auth/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: updates.id, ...updates }),
+      });
+      const result = await res.json() as { success: boolean; error?: string };
 
-      if (!result.success) {
+      if (!result.success && result.error) {
         setError(result.error);
         return;
       }
@@ -140,43 +159,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
     
     try {
-      const result = await validateUser(email, password);
 
-      if (!result.success) {
-        setError(result.error);
-        setLoading(false);
-        return;
-      }
-
-      await fetch("/api/auth/signin", {
+    const res = await fetch("/api/auth/signin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: result.user.id,
-          role: result.user.role,
+          email,
+          password
         }),
       });
       
-      const res = await fetch("/api/auth/session");
-
       if (!res.ok) {
         setUser(null);
         setSession(null);
-        setProfile(null);
         setLoading(false);
         return;
       }
+      
       const { user, session } = await res.json() as { user: User; session: Session };
       setUser(user);
       setSession(session);
-      
-      if (user && user.id) {
-        const profileData = await fetchProfile(user.id);
-        if (profileData) {
-          setProfile(profileData);
-        }
-      }
-      
+            
       router.push('/dashboard');
     } catch (err) {
       console.error('Error signing in:', err);
@@ -189,39 +192,49 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Sign up with email and password
   const signUp = async (state: FormState, formData: FormData): 
   Promise<void | { errors: { email?: string[], username?: string[], password?: string[], confirmPassword?: string[], dob?: string[] }}> => {
+    
     const validatedFields = registerSchema.safeParse({
       email: formData.get("email") as string,
       username: formData.get("username") as string,
       password: formData.get("password") as string,
       confirmPassword: formData.get("confirmPassword") as string,
-      dob: formData.get("dob") as string,
     });
-  
-    if (!validatedFields.success) {
-      return {
-        errors: validatedFields.error.flatten().fieldErrors,
-      };
-    }
-  
-    const { username, email, password } = validatedFields.data;
-  
-    const result = await createUser({ username, email, password });
 
-    if (result.success) {
-      if (result.user.id && result.user.role) {
-        // Create session via API endpoint (server-side only)
-        await fetch("/api/auth/signin", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: result.user.id,
-            role: result.user.role,
-          }),
-        });
-      } else throw new Error("User ID or role is undefined");
+    if (!validatedFields.success)
+      return { errors: validatedFields.error.flatten().fieldErrors }
 
-      redirect("/dashboard");
+    // Send registration data to server-side API
+    const res = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(validatedFields.data),
+    });
+
+    type RegisterResponse = {
+      success: boolean;
+      user?: { id: string; role: string };
+      errors?: { email?: string[]; username?: string[]; password?: string[]; confirmPassword?: string[]; dob?: string[] };
+      error?: string;
+    };
+    const result = (await res.json()) as RegisterResponse;
+
+    if (!res.ok || !result.success) {
+      return { errors: result.errors || { email: [result.error || "Registration failed"] } };
     }
+
+    // On success, sign in the user
+    if (result.user && result.user.id && result.user.role) {
+      await fetch("/api/auth/signin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: result.user.id,
+          role: result.user.role,
+        }),
+      });
+    } else throw new Error("User ID or role is undefined");
+
+    redirect("/dashboard");
   };
 
   // Sign out
@@ -231,7 +244,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       // Clear user data from state
       setUser(null);
-      setProfile(null);
       setSession(null);
       
       router.push('/');
@@ -249,21 +261,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         const res: Response = await fetch("/api/auth/session");
         if (!res.ok) {
+          console.log(`Session not found!`);
           setUser(null);
           setSession(null);
-          setProfile(null);
           setLoading(false);
           return;
         }
         const { user, session } = await res.json() as { user: User; session: Session };
-        setUser(user);
-        setSession(session);
-        if (user && user.id) {
-          const profileData = await fetchProfile(user.id);
-          if (profileData) setProfile(profileData);
-        }
+
+        console.log(`Session found!`);
+        if (user) setUser(user);
+        if (session) setSession(session);
+
       } catch (err) {
-        setError("Failed to initialize authentication");
+        if (err instanceof Error) {
+          console.error('Error initializing authentication:', err);
+          setError(`Failed to initialize authentication: ${err.message}`);
+        }
       } finally {
         setLoading(false);
       }
@@ -272,7 +286,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   // Sign in with OAuth provider
-  // TODO Rewrite sign in via OAUTH without Supabase
   const signInWithOAuth = async (provider: "discord") => {
     setLoading(true);
     setError(null);
@@ -291,7 +304,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Auth context value
   const value = {
     user,
-    profile,
     session,
     loading,
     error,

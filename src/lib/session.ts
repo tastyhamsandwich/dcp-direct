@@ -81,6 +81,8 @@ export async function createSession(userId: string, role: string) {
   const cookieStore = await cookies();
 
   cookieStore.set("session", session, {...cookie, expires});
+
+  return { userId, role, expiresAt: expires }
 }
 
 export async function verifySession(): Promise<SessionPayload | null> {

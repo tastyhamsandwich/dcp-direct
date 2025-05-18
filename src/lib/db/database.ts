@@ -1,4 +1,4 @@
-import { MongoClient, ServerApiVersion, ObjectId, Long, WithId } from "mongodb";
+import { MongoClient, ServerApiVersion, ObjectId, Long, WithId, Db, BSON } from "mongodb";
 import bcrypt from "bcryptjs";
 
 type UserProps = {
@@ -37,7 +37,7 @@ type OpFailure = {
   error: string;
 }
 
-type OpResult = OpSuccess | OpFailure;
+export type OpResult = OpSuccess | OpFailure;
 
 const uri = process.env.MONGODB_URI;
 
@@ -50,13 +50,14 @@ const connectDB = async () => {
     },
   });
 
-  const database = client.db("users");
+  const database = client.db("dcp");
   return database;
 };
 
 const userDB = async () => {
-  const users = (await connectDB()).collection("users");
-  return users;
+  const users = await connectDB();
+
+  return users.collection("users");
 };
 
 export async function validateUser(email: string, password: string): Promise<OpResult> {
@@ -64,7 +65,9 @@ export async function validateUser(email: string, password: string): Promise<OpR
 
   const data = await users.findOne({ email: email });
 
+  console.log(data);
   if (!data) {
+    console.log(`Username/e-mail could not be located`);
     const result: OpFailure = {
       success: false,
       message: "Login failed",
@@ -74,6 +77,7 @@ export async function validateUser(email: string, password: string): Promise<OpR
   }
 
   if (!(await bcrypt.compare(password, data.password))) {
+    console.log(`Password could not be verified.`);
     const result: OpFailure = {
       success: false,
       message: "Login failed",
@@ -95,17 +99,38 @@ export async function validateUser(email: string, password: string): Promise<OpR
       role: data.role || "USER",
     }
   }
-
+  console.log(`User successfully verified.`);
   return result;
 
 }
 
-export async function getUserById(userId: string): Promise<{data: User | null, error?: { message: string | null}}> {
+export async function getUserById(userId: string): Promise<OpResult> {
   const users = await userDB();
-  const data = await users.findOne({ _id: new ObjectId(userId) });
-  if (!data) return {data: null, error: { message: "User not found" }};
-  const User: User = {
-    id: data._id.toString(),
+  console.log(`User ID: ${userId}`);
+
+  const bId = new BSON.ObjectId(userId);
+  const data = await users.findOne({ _id: bId });
+
+  console.log(data);
+  if (!data) { 
+    const result: OpFailure = {
+      success: false,
+      message: "User not found",
+      error: "User not found",
+    }
+    return result;
+  }
+  if (userId !== data._id.toString()) {
+    const result: OpFailure = {
+      success: false,
+      message: "User ID does not match",
+      error: "User ID does not match",
+    }
+    return result;
+  }
+  
+  const user: User = {
+    id: userId,
     username: data.username,
     email: data.email,
     firstName: data.first_name || "",
@@ -118,7 +143,13 @@ export async function getUserById(userId: string): Promise<{data: User | null, e
     role: data.role || "USER",
   };
 
-  return { data: User };
+  const result: OpSuccess = {
+    success: true,
+    message: "User found",
+    user
+  }
+
+  return result;
 }
 
 async function checkUserExists(email: string): Promise<boolean> {
@@ -144,7 +175,7 @@ export const createUser = async (userData: UserProps): Promise<OpResult> => {
     const created = Long.fromNumber(Date.now());
 
     const User = {
-      id: new ObjectId(),
+      _id: new ObjectId(),
       email: userData.email,
       username: userData.username,
       password: hashword,

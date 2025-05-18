@@ -51,6 +51,7 @@ interface WSJoinGame {
 
 interface WSPlayerAction {
   type: 'player_action';
+  gameId: string;
   userId: string;
   action: {
     type: string;
@@ -93,7 +94,8 @@ interface WSGameCreated {
 
 interface WSGameUpdate {
   type: 'game_update';
-  game: GameState;
+  gameId: string;
+  state: GameState;
 }
 
 interface WSSetRoundVariant {

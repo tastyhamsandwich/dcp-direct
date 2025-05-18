@@ -11,20 +11,20 @@ export default function DashboardLayout({
 }: {
 	children: React.ReactNode;
 }) {
-	const { profile, loading } = useAuth();
+	const { user, loading } = useAuth();
 	const [showUpload, setShowUpload] = useState(false);
 	const [imageError, setImageError] = useState(false);
 	const [isImageLoading, setIsImageLoading] = useState(true);
 
 	// Debug log the avatar URL
 	useEffect(() => {
-		if (profile?.avatar_url) {
-			console.log("Avatar URL:", profile.avatar_url);
+		if (user?.avatar) {
+			console.log("Avatar URL:", user.avatar);
 			// Reset error state when URL changes
 			setImageError(false);
 			setIsImageLoading(true);
 		}
-	}, [profile?.avatar_url]);
+	}, [user?.avatar]);
 
 	const handleImageLoad = () => {
 		console.log("Avatar image loaded successfully");
@@ -33,21 +33,21 @@ export default function DashboardLayout({
 	};
 
 	const handleImageError = () => {
-		console.error("Failed to load avatar:", profile?.avatar_url);
+		console.error("Failed to load avatar:", user?.avatar);
 		setImageError(true);
 		setIsImageLoading(false);
 	};
 
 	// Debug the current state of avatar display
 	useEffect(() => {
-		if (profile?.avatar_url) {
+		if (user?.avatar) {
 			console.log("Avatar display state:", {
-				url: profile.avatar_url,
+				url: user.avatar,
 				isLoading: isImageLoading,
 				hasError: imageError,
 			});
 		}
-	}, [profile?.avatar_url, isImageLoading, imageError]);
+	}, [user?.avatar, isImageLoading, imageError]);
 
 	return (
 		<div className="flex h-screen bg-[#1a1a2e] overflow-hidden m-0 p-0">
@@ -61,7 +61,7 @@ export default function DashboardLayout({
 							onMouseEnter={() => setShowUpload(true)}
 							onMouseLeave={() => setShowUpload(false)}
 						>
-							{profile?.avatar_url && !imageError ? (
+							{user?.avatar && !imageError ? (
 								<>
 									<div className="relative w-32 h-32 overflow-hidden rounded-full box-border">
 										{isImageLoading && (
@@ -71,8 +71,8 @@ export default function DashboardLayout({
 										)}
 										<div className="absolute inset-0 rounded-full border-4 border-[#4caf50] z-20 pointer-events-none"></div>
 										<Image
-											src={`${profile.avatar_url}?t=${Date.now()}`}
-											alt={profile.username || "Profile"}
+											src={`${user.avatar}?t=${Date.now()}`}
+											alt={user.username || "Profile"}
 											fill
 											sizes="128px"
 											className={`object-cover transition-opacity duration-300 ${
@@ -105,7 +105,7 @@ export default function DashboardLayout({
 								<div className="relative w-full h-full">
 									<div className="absolute inset-0 rounded-full bg-gray-600 flex items-center justify-center border-4 border-[#4caf50] shadow-lg">
 										<span className="text-4xl">
-											{profile?.username?.charAt(0).toUpperCase() || "?"}
+											{user?.username?.charAt(0).toUpperCase() || "?"}
 										</span>
 									</div>
 									{/* Hover Overlay */}
@@ -128,7 +128,7 @@ export default function DashboardLayout({
 							)}
 						</div>
 						<h2 className="text-xl font-bold mb-2">
-							{profile?.username || "Loading..."}
+							{user?.username || "Loading..."}
 						</h2>
 					</div>
 				</div>
@@ -184,7 +184,7 @@ export default function DashboardLayout({
 					<div className="flex items-center justify-between">
 						<span className="text-gray-400">Balance</span>
 						<span className="text-[#eedd00] font-bold">
-							${profile?.balance || "0"}
+							${user?.balance || "0"}
 						</span>
 					</div>
 				</div>

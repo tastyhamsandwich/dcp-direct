@@ -2,13 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@contexts/authContext';
-import { createClient } from '@supabaseC';
 import { Button } from '@components/ui/Button';
 import { Input } from '@components/ui/Input';
 import './settings.modules.css';
 
 export default function SettingsPage() {
-  const { user, profile, updateProfile } = useAuth();
+  const { user, updateProfile } = useAuth();
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -29,24 +28,20 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  
-  const supabase = createClient();
-  
+    
   // Load user data
   useEffect(() => {
-    if (user && profile) {
-      setDisplayName(profile.username || '');
+    if (user) {
+      setDisplayName(user.username || '');
       setEmail(user.email || '');
       
       // Fetch additional user data
       const fetchUserData = async () => {
         try {
-          const { data } = await supabase
-            .from('user_details')
-            .select('*')
-            .eq('user_id', user.id)
-            .single();
-            
+          // TODO Replace with actual user data fetching logic using MongoDB
+          
+          const data: any = await fetch(`dummydata`); // TODO Replace with actual API call
+          
           if (data) {
             setFirstName(data.first_name || '');
             setLastName(data.last_name || '');
@@ -61,11 +56,10 @@ export default function SettingsPage() {
           }
           
           // Fetch payment methods
-          const { data: paymentData } = await supabase
-            .from('payment_methods')
-            .select('*')
-            .eq('user_id', user.id);
-            
+          // TODO Replace with actual payment method fetching logic using MongoDB
+          
+          const paymentData: any = await fetch(`dummydata`); // TODO Replace with actual API call
+          
           if (paymentData) {
             setPaymentMethods(paymentData);
           }
@@ -76,7 +70,7 @@ export default function SettingsPage() {
       
       fetchUserData();
     }
-  }, [user, profile, supabase]);
+  }, [user]);
   
   // Update display name
   const handleUpdateDisplayName = async (e: React.FormEvent) => {
@@ -104,7 +98,7 @@ export default function SettingsPage() {
     setError('');
     
     try {
-      const { error } = await supabase.auth.updateUser({ email });
+      // TODO Replace with actual email update logic using MongoDB
       
       if (error) {
         throw error;
@@ -127,9 +121,7 @@ export default function SettingsPage() {
     setError('');
     
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/dashboard/settings`,
-      });
+      // TODO Replace with actual password reset logic using MongoDB
       
       if (error) {
         throw error;
@@ -152,14 +144,7 @@ export default function SettingsPage() {
     setError('');
     
     try {
-      const { error } = await supabase
-        .from('user_details')
-        .upsert({
-          user_id: user?.id,
-          first_name: firstName,
-          last_name: lastName,
-          address: address,
-        });
+      // TODO Replace with actual personal info update logic using MongoDB
         
       if (error) {
         throw error;
@@ -179,12 +164,7 @@ export default function SettingsPage() {
     setTheme(newTheme);
     
     try {
-      const { error } = await supabase
-        .from('user_details')
-        .upsert({
-          user_id: user?.id,
-          theme: newTheme,
-        });
+      // TODO Replace with actual theme update logic using MongoDB
         
       if (error) {
         throw error;
@@ -206,13 +186,8 @@ export default function SettingsPage() {
     setError('');
     
     try {
-      const { error } = await supabase
-        .from('user_details')
-        .upsert({
-          user_id: user?.id,
-          timezone: timezone,
-        });
-        
+      // TODO Replace with actual timezone update logic using MongoDB
+
       if (error) {
         throw error;
       }
@@ -237,17 +212,7 @@ export default function SettingsPage() {
     setError('');
     
     try {
-      const { error } = await supabase
-        .from('player_statistics')
-        .update({
-          games_played: 0,
-          games_won: 0,
-          total_winnings: 0,
-          hands_played: 0,
-          best_hand: null,
-          last_reset: new Date().toISOString(),
-        })
-        .eq('user_id', user?.id);
+      // TODO Replace with actual statistics reset logic using MongoDB
         
       if (error) {
         throw error;
@@ -269,10 +234,7 @@ export default function SettingsPage() {
     }
     
     try {
-      const { error } = await supabase
-        .from('payment_methods')
-        .delete()
-        .eq('id', id);
+      // TODO Replace with actual payment method removal logic using MongoDB
         
       if (error) {
         throw error;
@@ -290,9 +252,10 @@ export default function SettingsPage() {
   // Add payment method (mock - would connect to payment processor in production)
   const handleAddPaymentMethod = () => {
     alert('This would open a secure payment method form in a production environment.');
+    // TODO Add logic to open a payment method form/modal and handle the response
   };
   
-  if (!user || !profile) {
+  if (!user) {
     return <div className="text-center p-8">Loading user data...</div>;
   }
 

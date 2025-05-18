@@ -46,7 +46,7 @@ const RegisterPage = () => {
         setFieldErrors(result.errors);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed');
+      setError(err instanceof Error ? `Error: ${err.message}` : `Registration failed}`);
     }
   };
 

@@ -9,7 +9,7 @@ import { io, type Socket } from "socket.io-client";
 import { SeatSelector } from "@comps/game/SeatSelector";
 
 export default function GameLobby() {
-	const { user, profile, loading } = useAuth();
+	const { user, loading } = useAuth();
 	const [gamesList, setGamesList] = useState<ListEntry[]>([]);
 	const [isConnected, setIsConnected] = useState(false);
 	const [socket, setSocket] = useState<Socket | null>(null);
@@ -23,7 +23,7 @@ export default function GameLobby() {
 	}, [user, loading, router]);
 
 	useEffect(() => {
-		if (!user || !profile) return;
+		if (!user) return;
 
 		// Initialize WebSocket connection to the socket.io server running on port 3001
 		const socketInstance = io("http://randomencounter.ddns.net:3001", {
@@ -38,7 +38,7 @@ export default function GameLobby() {
 			console.log("Connected to server");
 
 			// Register with server upon connection
-			socketInstance.emit("register", { profile });
+			socketInstance.emit("register", { user });
 		});
 
 		socketInstance.on("registration_success", (data) => {
@@ -71,10 +71,10 @@ export default function GameLobby() {
 		return () => {
 			socketInstance.disconnect();
 		};
-	}, [user, profile, router]);
+	}, [user, router]);
 
 	const handleCreateGame = (gameData) => {
-		if (!socket || !isConnected || !profile) return;
+		if (!socket || !isConnected || !user) return;
 
 		console.log("Creating game with settings:", gameData);
 		socket.emit("create_game", {
@@ -90,7 +90,7 @@ export default function GameLobby() {
 	};
 
 	const handleJoinGame = (gameId) => {
-		if (!gameId || !profile || !socket) return;
+		if (!gameId || !user || !socket) return;
 
 		/*socket.emit('get_seat_info', { gameId });
 
@@ -119,7 +119,7 @@ export default function GameLobby() {
 	}
 
 	// Show error if not authenticated
-	if (!user || !profile) {
+	if (!user) {
 		return (
 			<div className="flex items-center justify-center h-screen bg-gray-900 text-gray-200">
 				<div className="bg-gray-800 p-8 rounded-lg shadow-lg">
@@ -156,7 +156,7 @@ export default function GameLobby() {
 
 				<Lobby
 					games={gamesList}
-					profile={profile}
+					profile={user}
 					socket={socket}
 					onJoinGame={handleJoinGame}
 					onCreateGame={handleCreateGame}
