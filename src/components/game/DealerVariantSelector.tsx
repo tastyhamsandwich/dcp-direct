@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useWebSocket } from '@hooks/useWebSocket';
 import { GameVariant } from '@game/types';
-import Button from '@components/ui/Button';
+import { Button } from '@components/ui/Button';
 
 interface DealerVariantSelectorProps {
   isVisible: boolean;
