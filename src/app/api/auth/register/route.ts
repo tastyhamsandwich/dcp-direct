@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Create session (sets cookie)
-    await createSession(result.user.id!, result.user.role!);
+    const session = await createSession(result.user.id!, result.user.role!);
 
     // Return user info (never return password)
     return NextResponse.json({
@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
         level: result.user.level,
         exp: result.user.exp,
       },
+      session
     });
   } catch (err) {
     if (err instanceof Error)

@@ -14,134 +14,179 @@ export default function ImageCropper({
 	onCropComplete,
 	onCancel,
 }: ImageCropperProps) {
-	const [imgSrc, setImgSrc] = useState<string>("");
-	const imgRef = useRef<HTMLImageElement>(null);
-	const [crop, setCrop] = useState<Crop>({
-		unit: "%",
-		width: 100,
-		height: 100,
-		x: 0,
-		y: 0,
-	});
+  const [imgSrc, setImgSrc] = useState<string>("");
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [crop, setCrop] = useState<Crop>({
+    unit: "%",
+    width: 100,
+    height: 100,
+    x: 0,
+    y: 0,
+  });
 
-	// Load the image when file is provided
-	React.useEffect(() => {
-		if (!file) return;
+  // Load the image when file is provided
+  React.useEffect(() => {
+    if (!file) return;
 
-		const reader = new FileReader();
-		reader.addEventListener("load", () => {
-			setImgSrc(reader.result?.toString() || "");
-		});
-		reader.readAsDataURL(file);
-	}, [file]);
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      setImgSrc(reader.result?.toString() || "");
+    });
+    reader.readAsDataURL(file);
+  }, [file]);
 
-	// Function to get the cropped image
-	const getCroppedImg = async (
-		image: HTMLImageElement,
-		crop: Crop
-	): Promise<Blob> => {
-		const canvas = document.createElement("canvas");
-		const scaleX = image.naturalWidth / image.width;
-		const scaleY = image.naturalHeight / image.height;
-		const pixelRatio = window.devicePixelRatio;
+  // Set initial crop in pixels when image loads
+  const onImageLoaded = (img: HTMLImageElement) => {
+    imgRef.current = img;
+    const size = Math.min(img.width, img.height);
+    const x = Math.round((img.width - size) / 2);
+    const y = Math.round((img.height - size) / 2);
+    setCrop({
+      unit: "px",
+      width: size,
+      height: size,
+      x,
+      y,
+    });
+    return false; // required by react-image-crop
+  };
 
-		// Set canvas size to match our config dimensions
-		canvas.width = imageConfig.avatar.width;
-		canvas.height = imageConfig.avatar.height;
+  // Function to get the cropped image
+  const getCroppedImg = async (
+    image: HTMLImageElement,
+    crop: Crop
+  ): Promise<Blob> => {
+    const canvas = document.createElement("canvas");
+    const scaleX = image.naturalWidth / image.width;
+    const scaleY = image.naturalHeight / image.height;
+    const pixelRatio = window.devicePixelRatio;
 
-		const ctx = canvas.getContext("2d");
-		if (!ctx) {
-			throw new Error("No 2d context");
-		}
+    // Set canvas size to match our config dimensions
+    canvas.width = imageConfig.avatar.width;
+    canvas.height = imageConfig.avatar.height;
 
-		// Set the canvas transform for high DPI displays
-		ctx.scale(pixelRatio, pixelRatio);
-		ctx.imageSmoothingQuality = "high";
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("No 2d context");
+    }
 
-		// Calculate the actual crop dimensions
-		const cropX = crop.x * scaleX;
-		const cropY = crop.y * scaleY;
-		const cropWidth = crop.width * scaleX;
-		const cropHeight = crop.height * scaleY;
+    // Set the canvas transform for high DPI displays
+    ctx.scale(pixelRatio, pixelRatio);
+    ctx.imageSmoothingQuality = "high";
 
-		// Draw the cropped image
-		ctx.drawImage(
-			image,
-			cropX,
-			cropY,
-			cropWidth,
-			cropHeight,
-			0,
-			0,
-			imageConfig.avatar.width,
-			imageConfig.avatar.height
-		);
+    // Calculate the actual crop dimensions
+    const cropX = crop.x * scaleX;
+    const cropY = crop.y * scaleY;
+    const cropWidth = crop.width * scaleX;
+    const cropHeight = crop.height * scaleY;
 
-		// Convert canvas to blob
-		return new Promise((resolve, reject) => {
-			canvas.toBlob(
-				(blob) => {
-					if (!blob) {
-						reject(new Error("Canvas is empty"));
-						return;
-					}
-					resolve(blob);
-				},
-				imageConfig.avatar.contentType,
-				1 // Quality
-			);
-		});
-	};
+    // Draw the cropped image
+    ctx.drawImage(
+      image,
+      cropX,
+      cropY,
+      cropWidth,
+      cropHeight,
+      0,
+      0,
+      imageConfig.avatar.width,
+      imageConfig.avatar.height
+    );
 
-	const handleCropComplete = async () => {
-		if (!imgRef.current || !crop.width || !crop.height) return;
+    // Convert canvas to blob
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error("Canvas is empty"));
+            return;
+          }
+          resolve(blob);
+        },
+        imageConfig.avatar.contentType,
+        1 // Quality
+      );
+    });
+  };
 
-		try {
-			const croppedBlob = await getCroppedImg(imgRef.current, crop);
-			onCropComplete(croppedBlob);
-		} catch (error) {
-			console.error("Error cropping image:", error);
-		}
-	};
+  const handleCropComplete = async () => {
+    if (!imgRef.current || !crop.width || !crop.height) return;
 
-	if (!imgSrc) {
-		return <div>Loading...</div>;
-	}
+    try {
+      const croppedBlob = await getCroppedImg(imgRef.current, crop);
 
-	return (
-		<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-			<div className="bg-white rounded-lg p-6 max-w-2xl w-full">
-				<h3 className="text-lg font-semibold mb-4">Crop Your Avatar</h3>
-				<div className="mb-4">
-					<ReactCrop
-						crop={crop}
-						onChange={(c) => setCrop(c)}
-						aspect={1}
-						circularCrop
-					>
-						<img
-							ref={imgRef}
-							src={imgSrc}
-							alt="Crop me"
-							className="max-h-[60vh] w-auto"
-						/>
-					</ReactCrop>
-				</div>
-				<div className="flex justify-end gap-2">
-					<button
-						onClick={onCancel}
-						className="px-4 py-2 text-gray-600 hover:text-gray-800"
-					>
-						Cancel
-					</button>
-					<button
-						onClick={handleCropComplete}
-						className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-					>
-						Apply
-					</button>
-				</div>
-			</div>
-		</div>
-	);
+      // Create a File from the Blob with PNG extension
+      const timestamp = Date.now();
+      const filename = `avatar-${timestamp}.png`;
+      const file = new File([croppedBlob], filename, {
+        type: imageConfig.avatar.contentType,
+      });
+
+      // Create FormData
+      const formData = new FormData();
+      formData.append("avatar", file);
+
+      // Upload via server action
+      const response = await fetch("/api/upload/avatar", {
+        method: "POST",
+        body: formData,
+      });
+      const data = (await response.json()) as {
+        success: boolean;
+        filename?: string;
+        message?: string;
+      };
+
+      if (!data.success) {
+        throw new Error(data.message || "Failed to upload avatar");
+      }
+
+      const avatarFilename = data.filename;
+
+      onCropComplete(croppedBlob);
+    } catch (error) {
+      console.error("Error cropping image:", error);
+    }
+  };
+
+  if (!imgSrc) {
+    return <div>Loading...</div>;
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-slate-700 rounded-lg p-6 max-w-2xl w-full">
+        <h3 className="text-lg font-semibold mb-4">Crop Your Avatar</h3>
+        <div className="mb-4">
+          <ReactCrop
+            crop={crop}
+            onChange={(c) => setCrop(c)}
+            aspect={1}
+            circularCrop
+          >
+            <img
+              ref={imgRef}
+              src={imgSrc}
+              alt="Crop me"
+              className="max-h-[60vh] w-auto"
+            />
+          </ReactCrop>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-slate-300 hover:text-slate-400"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleCropComplete}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Apply
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

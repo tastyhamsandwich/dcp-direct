@@ -96,6 +96,14 @@ export async function verifySession(): Promise<SessionPayload | null> {
   return { userId: session.userId as string, role: session.role as string, expiresAt: session.expiresAt as Date };
 }
 
+export async function getUserIdFromSession(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const cookie = cookieStore.get("session")?.value;
+  const session = await decrypt(cookie);
+  if (!session?.userId) return null;
+  return session.userId as string;
+}
+
 export async function deleteSession() {
   const cookieStore = await cookies();
   cookieStore.delete("session");

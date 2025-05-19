@@ -215,24 +215,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       user?: { id: string; role: string };
       errors?: { email?: string[]; username?: string[]; password?: string[]; confirmPassword?: string[]; dob?: string[] };
       error?: string;
+      session?: Session;
     };
     const result = (await res.json()) as RegisterResponse;
 
-    if (!res.ok || !result.success) {
+    if (!result.success) {
       return { errors: result.errors || { email: [result.error || "Registration failed"] } };
     }
 
-    // On success, sign in the user
-    if (result.user && result.user.id && result.user.role) {
-      await fetch("/api/auth/signin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: result.user.id,
-          role: result.user.role,
-        }),
-      });
-    } else throw new Error("User ID or role is undefined");
+    if (!result.session || !result.user) {
+      return { errors: { email: ["Could not create session or user."] } };
+    }
+
+    setUser(result.user);
+    setSession(result.session);
 
     redirect("/dashboard");
   };

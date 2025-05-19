@@ -42,7 +42,7 @@ export default function DashboardLayout({
 	useEffect(() => {
 		if (user?.avatar) {
 			console.log("Avatar display state:", {
-				url: user.avatar,
+				url: `/uploads/avatars/${user.avatar}`,
 				isLoading: isImageLoading,
 				hasError: imageError,
 			});
@@ -71,7 +71,7 @@ export default function DashboardLayout({
 										)}
 										<div className="absolute inset-0 rounded-full border-4 border-[#4caf50] z-20 pointer-events-none"></div>
 										<Image
-											src={`${user.avatar}?t=${Date.now()}`}
+											src={`/uploads/avatars/${user.avatar}`}
 											alt={user.username || "Profile"}
 											fill
 											sizes="128px"

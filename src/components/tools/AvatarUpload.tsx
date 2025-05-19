@@ -9,7 +9,7 @@ export default function AvatarUpload() {
 	const [error, setError] = React.useState<string | null>(null);
 	const [isUploading, setIsUploading] = React.useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
-	const { profile } = useAuth();
+	const { user } = useAuth();
 
 	const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
 		const file = event.target.files?.[0];
@@ -45,25 +45,7 @@ export default function AvatarUpload() {
 			setIsUploading(true);
 			setError(null);
 
-			// Create a File from the Blob with PNG extension
-			const timestamp = Date.now();
-			const filename = `avatar-${timestamp}.png`;
-			const file = new File([croppedBlob], filename, {
-				type: imageConfig.avatar.contentType,
-			});
-
-			// Create FormData
-			const formData = new FormData();
-			formData.append("avatar", file);
-
-			// Upload via server action
-			const response = await saveFile(formData);
-
-			if (!response.success) {
-				throw new Error(response.message || "Failed to upload avatar");
-			}
-
-			const avatarFilename = response.filename;
+			
 
 			
 			// Clear the file input
@@ -93,39 +75,49 @@ export default function AvatarUpload() {
 		fileInputRef.current?.click();
 	};
 
-	return (
-		<>
-			<input
-				ref={fileInputRef}
-				type="file"
-				accept={imageConfig.avatar.validExtensions
-					.map((ext) => `.${ext}`)
-					.join(",")}
-				onChange={handleFileSelect}
-				className="hidden"
-				aria-label="Upload avatar"
-			/>
+  return (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={imageConfig.avatar.validExtensions
+          .map((ext) => `.${ext}`)
+          .join(",")}
+        onChange={handleFileSelect}
+        className="hidden"
+        aria-label="Upload avatar"
+      />
 
-			{/* Invisible button that covers the entire parent area */}
-			<button
-				onClick={handleClick}
-				className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-				aria-label="Change avatar"
-			/>
+      <button
+        onClick={handleClick}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        aria-label="Change avatar"
+      />
 
-			{error && (
-				<div className="absolute bottom-0 left-0 right-0 bg-red-500 text-white text-xs p-1 text-center">
-					{error}
-				</div>
-			)}
+      {error && (
+        <div className="absolute bottom-0 left-0 right-0 bg-red-500 text-white text-xs p-1 text-center">
+          {error}
+        </div>
+      )}
 
-			{selectedFile && (
-				<ImageCropper
-					file={selectedFile}
-					onCropComplete={handleCropComplete}
-					onCancel={handleCancelCrop}
-				/>
-			)}
-		</>
-	);
+      {isUploading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50">
+          <div className="w-1/2">
+            <div className="h-2 bg-gray-300 rounded">
+              <div className="h-2 bg-blue-500 rounded animate-pulse" style={{ width: "100%" }} />
+            </div>
+            <div className="text-white text-center mt-2">Uploading...</div>
+          </div>
+        </div>
+      )}
+
+      {selectedFile && (
+        <ImageCropper
+          file={selectedFile}
+          onCropComplete={handleCropComplete}
+          onCancel={handleCancelCrop}
+        />
+      )}
+    </>
+  );
 }

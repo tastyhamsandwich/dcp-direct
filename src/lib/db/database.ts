@@ -223,37 +223,33 @@ export const updateUser = async (userId: string, userData: User): Promise<OpResu
   const users = database.collection("users");
 
   try {
-    const id = new ObjectId(userId);
+    const id = new BSON.ObjectId(userId);
 
-    const data = await users.findOne({ _id: id });
-
-    if (!data) {
-      return { success: false, message: "User not found", error: "User not found" };
-    }
-
-    const updatedData = {
-      ...data,
-      ...userData,
-      lastUpdated: Long.fromNumber(Date.now()),
+    const filter = { _id: id };
+    const updatedData = { 
+      $set: {
+        ...userData,
+        lastUpdated: Long.fromNumber(Date.now()),
+      },
     };
 
-    await users.updateOne({ _id: id }, { $set: updatedData });
+    const user = await users.updateOne(filter, updatedData);
 
     const result: OpSuccess = {
       success: true,
       message: "User updated successfully",
       user: {
         id: userId,
-        username: updatedData.username,
-        email: updatedData.email,
-        firstName: updatedData.firstName || "",
-        lastName: updatedData.lastName || "",
-        phone: updatedData.phone || null,
-        balance: updatedData.balance || 0,
-        avatar: updatedData.avatar || "",
-        level: updatedData.level || 1,
-        exp: updatedData.exp || 0,
-        role: updatedData.role || "USER",
+        username: updatedData.$set.username,
+        email: updatedData.$set.email,
+        firstName: updatedData.$set.firstName || "",
+        lastName: updatedData.$set.lastName || "",
+        phone: updatedData.$set.phone || null,
+        balance: updatedData.$set.balance || 0,
+        avatar: updatedData.$set.avatar || "",
+        level: updatedData.$set.level || 1,
+        exp: updatedData.$set.exp || 0,
+        role: updatedData.$set.role || "USER",
       },
     };
 

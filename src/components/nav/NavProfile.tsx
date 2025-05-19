@@ -25,7 +25,7 @@ export default function NavProfile() {
         <div className="relative w-10 h-10 overflow-hidden rounded-full">
           {user.avatar && !imageError ? (
             <Image
-              src={user.avatar}
+              src={`/uploads/avatars/${user.avatar}`}
               alt={user.username || "Profile"}
               fill
               sizes="40px"

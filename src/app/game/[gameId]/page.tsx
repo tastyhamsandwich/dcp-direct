@@ -158,8 +158,8 @@ export default function GamePage({
 		if (!unwrappedParams.gameId || !user) return;
 
 		// Initialize WebSocket connection to the socket.io server
-		const socketInstance = io("http://randomencounter.ddns.net:3001", {
-			//const socketInstance = io("localhost:3001", {
+		//const socketInstance = io("http://randomencounter.ddns.net:3001", {
+		const socketInstance = io("localhost:3001", {
 			transports: ["websocket"],
 			withCredentials: true,
 		});
@@ -171,7 +171,7 @@ export default function GamePage({
 			console.log("Connected to game server");
 
 			// Register with server upon connection
-			socketInstance.emit("register", { user });
+			socketInstance.emit("register", { profile: user });
 
 			// Join the game
 			socketInstance.emit("join_game", {
