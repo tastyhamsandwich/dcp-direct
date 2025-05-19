@@ -15,10 +15,10 @@ Initial documentation has been created over the following subjects:
    - Data flow patterns
 
 2. **Authentication** (`/docs/authentication.md`)
-   - Authentication flow with Supabase
+   - Authentication flow with local MongoDB
    - User profiles and session management
    - Protected routes implementation
-   - WebSocket authentication
+   - WebSocket authentication for game routes
 
 3. **Game Logic** (`/docs/game-logic.md`)
    - Core game concepts and data structures
@@ -27,6 +27,7 @@ Initial documentation has been created over the following subjects:
    - Server-side game management
 
 4. **WebSockets** (`/docs/websockets.md`)
+   - Implemented with Socket.IO presently
    - Real-time communication implementation
    - Server-side WebSocket handling
    - Client-side connection management
@@ -39,7 +40,7 @@ Initial documentation has been created over the following subjects:
    - Component design philosophy
 
 6. **API Reference** (`/docs/api-reference.md`)
-   - WebSocket API endpoints and message formats
+   - WebSocket API endpoints and message formats <span style="color:darkred;font-weight:700">--- CURRENTLY DEPRECATED ---</span>
    - REST API endpoints
    - Request and response examples
    - Error handling
@@ -47,23 +48,14 @@ Initial documentation has been created over the following subjects:
 ## 🃏 Key Architecture Points
 
 - **Next.js App Router**: Pages and API routes organized in the `/app` directory
-- **React Context**: Used for authentication and game state management
-- **Supabase**: Handles authentication and user profiles
+- **React Context**: Used for authentication
+- **MongoDB**: NoSQL database implementation for user profiles, statistics, etc.
 - **WebSockets**: Real-time communication between clients and server
 - **Tailwind CSS**: Utility-first styling approach
 
 ## 🃏 Getting Started
 
 For setup instructions and developer guides, please see the individual documentation files in the `/docs` directory.
-
-## 🃏 Code Conventions
-
-The project follows these key conventions:
-
-- **TypeScript**: Type safety throughout the codebase
-- **Component-Based Architecture**: UI built from reusable components
-- **Context API for State**: Global state managed with React Context
-- **Feature-Based Organization**: Code organized by feature rather than type
 
 ## 🃏 Future Development
 
@@ -78,44 +70,44 @@ Areas for future development and improvement include:
 
 A checklist for ongoing development:
 
- [✔️] Basic website scaffolding  
- [✔️] User authentication  
- [✔️] User profile dashboard  
- [✔️] Game lobby access  
- [✔️] Create/join games  
- [✔️] Back-end websocket architecture  
- [✔️] Poker object classes and logic  
- [✔️] Working game sequence  
- [✔️] Animations and sound effects  
- [✖️] Support for multiple poker variant rulesets  
-  ----[✖️] Hold 'Em Styles  
-  --------[✔️] Texas  
-  --------[➖] Omaha  
-  --------[➖] Omaha Hi/Lo  
-  --------[➖] Chicago  
-  ----[✖️] Stud Styles  
-  --------[➖] Seven Card Stud  
-  ----[✖️] Draw Styles  
-  --------[➖] Five Card Draw  
- [➖] Wildcard Support  
- [➖] Support for custom community board setups  
- [➕] **Full Dashboard feature set**  
-  ----[➖] Change display name  
-  ----[➖] Password reset  
-  ----[➖] Change e-mail   
-  ----[➖] Light/Dark theme  
-  ----[➖] Daily tips  
-  ----[➖] Statistics tracking  
-  ----[➖] Strategy guide  
-  ----[➖] New player guide  
- [➖] Changelog / Announcements page  
- [➖] Forums  
- [➖] Multi-Factor Authentication  
- [➕] **Full login provider sets**  
-  ----[✔️] Discord  
-  ----[➖] Facebook  
-  ----[➖] Google  
-  ----[➖] Phone  
-  ----[✔️] E-mail  
- [➖] AI players   
- [➖] Extras   
+- [x] Basic website scaffolding  
+- [x] User authentication  
+- [x] User profile dashboard  
+- [x] Game lobby access  
+- [x] Create/join games  
+- [x] Back-end websocket architecture  
+- [x] Poker object classes and logic  
+- [x] Working game sequence  
+- [x] Animations and sound effects  
+- [x] Support for multiple poker variant rulesets  
+  - [x] Hold 'Em Styles  
+    - [x] Texas  
+    - [x] Omaha  
+    - [ ] Omaha Hi/Lo  
+    - [ ] Chicago  
+  - [x] Stud Styles  
+    - [ ] Seven Card Stud  
+  - [x] Draw Styles  
+    - [ ] Five Card Draw  
+- [ ] Wildcard Support  
+- [ ] Support for custom community board setups  
+- [ ] **Full Dashboard feature set**  
+  - [ ] Change display name  
+  - [ ]  Password reset  
+  - [ ]  Change e-mail   
+  - [ ]  Light/Dark theme  
+  - [ ]  Daily tips  
+  - [ ]  Statistics tracking  
+  - [ ]  Strategy guide  
+  - [ ]  New player guide  
+- [ ]  Changelog / Announcements page  
+- [ ]  Forums  
+- [ ]  Multi-Factor Authentication  
+- [ ]  **Full login provider sets**  
+  - [x] Discord  
+  - [ ]  Facebook  
+  - [ ]  Google  
+  - [ ]  Phone  
+  - [x] E-mail  
+- [ ]  AI players   
+- [ ]  Extras   

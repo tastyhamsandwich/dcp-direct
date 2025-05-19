@@ -59,7 +59,7 @@ export default function DashboardLayout({
 						<div
 							className="relative w-32 h-32 mb-4 cursor-pointer group"
 							onMouseEnter={() => setShowUpload(true)}
-							onMouseLeave={() => setShowUpload(false)}
+
 						>
 							{user?.avatar && !imageError ? (
 								<>

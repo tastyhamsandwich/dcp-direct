@@ -56,41 +56,45 @@ export default function ImageCropper({
     image: HTMLImageElement,
     crop: Crop
   ): Promise<Blob> => {
-    const canvas = document.createElement("canvas");
     const scaleX = image.naturalWidth / image.width;
     const scaleY = image.naturalHeight / image.height;
-    const pixelRatio = window.devicePixelRatio;
 
-    // Set canvas size to match our config dimensions
-    canvas.width = imageConfig.avatar.width;
-    canvas.height = imageConfig.avatar.height;
+    // Calculate the actual crop dimensions in the original image
+    const cropX = crop.x * scaleX;
+    const cropY = crop.y * scaleY;
+    const cropWidth = crop.width * scaleX;
+    const cropHeight = crop.height * scaleY;
+
+    // Determine the largest possible square size (max 500)
+    const maxOutputSize = imageConfig.avatar.width; // 500
+    const outputSize = Math.min(
+      maxOutputSize,
+      Math.floor(Math.min(cropWidth, cropHeight))
+    );
+
+    // Set canvas size to outputSize x outputSize
+    const canvas = document.createElement("canvas");
+    canvas.width = outputSize;
+    canvas.height = outputSize;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) {
       throw new Error("No 2d context");
     }
 
-    // Set the canvas transform for high DPI displays
-    ctx.scale(pixelRatio, pixelRatio);
     ctx.imageSmoothingQuality = "high";
 
-    // Calculate the actual crop dimensions
-    const cropX = crop.x * scaleX;
-    const cropY = crop.y * scaleY;
-    const cropWidth = crop.width * scaleX;
-    const cropHeight = crop.height * scaleY;
-
-    // Draw the cropped image
+    // Draw the cropped image, scaling to outputSize
     ctx.drawImage(
       image,
       cropX,
       cropY,
-      cropWidth,
-      cropHeight,
+      cropWidth, // source width (actual crop size in original image)
+      cropHeight, // source height
       0,
       0,
-      imageConfig.avatar.width,
-      imageConfig.avatar.height
+      outputSize, // dest width (canvas)
+      outputSize // dest height (canvas)
     );
 
     // Convert canvas to blob

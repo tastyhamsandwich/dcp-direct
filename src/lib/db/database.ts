@@ -41,6 +41,8 @@ export type OpResult = OpSuccess | OpFailure;
 
 const uri = process.env.MONGODB_URI;
 
+const emailRegEx = /^([\w-\.]+)@([\w-]+)\.+([\w-]+)/;
+
 const connectDB = async () => {
   const client = new MongoClient(process.env.MONGODB_URI!, {
     serverApi: {
@@ -63,9 +65,13 @@ const userDB = async () => {
 export async function validateUser(email: string, password: string): Promise<OpResult> {
   const users = await userDB();
 
-  const data = await users.findOne({ email: email });
+  let data;
 
-  console.log(data);
+  if (emailRegEx.test(email))
+    data = await users.findOne({ email: email });
+  else
+    data = await users.findOne({ username: email });
+  
   if (!data) {
     console.log(`Username/e-mail could not be located`);
     const result: OpFailure = {
@@ -75,6 +81,7 @@ export async function validateUser(email: string, password: string): Promise<OpR
     }
     return result;
   }
+
 
   if (!(await bcrypt.compare(password, data.password))) {
     console.log(`Password could not be verified.`);
@@ -155,7 +162,11 @@ export async function getUserById(userId: string): Promise<OpResult> {
 async function checkUserExists(email: string): Promise<boolean> {
   const users = await userDB();
 
-  const data = await users.findOne({ email: email });
+  let data;
+  if (emailRegEx.test(email))
+    data = await users.findOne({ email: email });
+  else
+    data = await users.findOne({ username: email });
 
   if (data) return true;
   else return false;

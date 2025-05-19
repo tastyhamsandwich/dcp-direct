@@ -60,7 +60,6 @@ const AuthContext = createContext<AuthContextType>({
 export const useAuth = () => useContext(AuthContext);
 
 // Provider component
-// TODO Ensure that all of provider component is updated to stop using Supabase
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -269,11 +268,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (user) setUser(user);
         if (session) setSession(session);
 
-      } catch (err) {
+      /*} catch (err) {
         if (err instanceof Error) {
           console.error('Error initializing authentication:', err);
           setError(`Failed to initialize authentication: ${err.message}`);
-        }
+        }*/
       } finally {
         setLoading(false);
       }
