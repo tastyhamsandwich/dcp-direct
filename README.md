@@ -111,6 +111,6 @@ A checklist for ongoing development:
   - [ ]  Google  
   - [ ]  Phone  
   - [x]  E-mail  
-- [ ]  Globally-accessible Chat component
+- [x]  Globally-accessible Chat component
 - [ ]  AI players   
 - [ ]  Extras   
