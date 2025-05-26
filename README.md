@@ -70,28 +70,30 @@ Areas for future development and improvement include:
 
 A checklist for ongoing development:
 
-- [x] Basic website scaffolding  
-- [x] User authentication  
-- [x] User profile dashboard  
-- [x] Game lobby access  
-- [x] Create/join games  
-- [x] Back-end websocket architecture  
-- [x] Poker object classes and logic  
-- [x] Working game sequence  
-- [x] Animations and sound effects  
-- [x] Support for multiple poker variant rulesets  
-  - [x] Hold 'Em Styles  
-    - [x] Texas  
-    - [x] Omaha  
-    - [ ] Omaha Hi/Lo  
-    - [ ] Chicago  
-  - [x] Stud Styles  
-    - [ ] Seven Card Stud  
-  - [x] Draw Styles  
-    - [ ] Five Card Draw  
-- [ ] Wildcard Support  
-- [ ] Support for custom community board setups  
-- [ ] **Full Dashboard feature set**  
+- [x]  Basic website scaffolding  
+- [x]  User authentication  
+- [x]  User profile dashboard  
+- [x]  Game lobby access  
+- [x]  Create/join games  
+- [x]  Back-end websocket architecture  
+- [x]  Poker object classes and logic  
+- [x]  Working game sequence  
+- [x]  Animations and sound effects  
+- [x]  Support for multiple poker variant rulesets  
+  - [x]  Hold 'Em Styles  
+    - [x]  Texas  
+    - [x]  Omaha  
+    - [ ]  Omaha Hi/Lo  
+    - [ ]  Chicago  
+  - [x]  Stud Styles  
+    - [ ]  Seven Card Stud  
+    - [ ]  Others?
+  - [x]  Draw Styles  
+    - [ ]  Five Card Draw  
+    - [ ]  Others?
+- [ ]  Wildcard Support  
+- [ ]  Support for custom community board setups  
+- [ ]  **Full Dashboard feature set**  
   - [ ] Change display name  
   - [ ]  Password reset  
   - [ ]  Change e-mail   
@@ -104,10 +106,11 @@ A checklist for ongoing development:
 - [ ]  Forums  
 - [ ]  Multi-Factor Authentication  
 - [ ]  **Full login provider sets**  
-  - [x] Discord  
+  - [x]  Discord  
   - [ ]  Facebook  
   - [ ]  Google  
   - [ ]  Phone  
-  - [x] E-mail  
+  - [x]  E-mail  
+- [ ]  Globally-accessible Chat component
 - [ ]  AI players   
 - [ ]  Extras   

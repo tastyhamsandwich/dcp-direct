@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useEffect, useReducer, useState } from "react";
+import React, { useEffect, useReducer, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@contexts/authContext";
 import { io, Socket } from "socket.io-client";
 import { GameState, GameVariant, WinnerInfo } from "@game/types";
 import Card from "@components/game/Card";
+import DraggableChat from '@comps/game/Chat';
 import Table from "@components/game/Table";
 import Actions from "@components/game/Actions";
 import WinnerDisplay from "@components/game/WinnerDisplay";
@@ -14,7 +15,7 @@ import { SeatSelector } from "@components/game/SeatSelector";
 import { Playwrite_ES } from "next/font/google";
 
 // Define action types
-type GameAction =
+export type GameAction =
 	| { type: "SET_SOCKET"; payload: Socket | null }
 	| { type: "SET_CONNECTED"; payload: boolean }
 	| { type: "SET_GAME_STATE"; payload: GameState }
@@ -61,8 +62,6 @@ const initialState: GamePageState = {
 // Reducer function
 function gameReducer(state: GamePageState, action: GameAction): GamePageState {
 	switch (action.type) {
-		case "SET_SOCKET":
-			return { ...state, socket: action.payload };
 		case "SET_CONNECTED":
 			return { ...state, isConnected: action.payload };
 		case "SET_GAME_STATE":
@@ -114,6 +113,8 @@ export default function GamePage({
 	const [isWinnerOpen, setIsWinnerOpen] = useState<boolean>(false);
 	const [allowedActions, setAllowedActions] = useState<string[]>([]);
 	const [state, dispatch] = useReducer(gameReducer, initialState);
+  const [isPlayerReady, setIsPlayerReady] = useState<boolean>(false);
+  const socketRef = useRef<Socket | null>(null);
 	/*const [showSeatSelector, setShowSeatSelector] = useState<boolean>(false);
   const [occupiedSeats, setOccupiedSeats] = useState<Array<{
     seatNumber: number;
@@ -136,15 +137,22 @@ export default function GamePage({
 
 	// Function to handle variant selection
 	const handleSelectVariant = (variant: GameVariant) => {
-		if (!socket || !isConnected || !unwrappedParams.gameId) return;
+		if (!socketRef || !isConnected || !unwrappedParams.gameId) return;
 
-		socket.emit("select_variant", {
+		socketRef.current?.emit("select_variant", {
 			gameId: unwrappedParams.gameId,
 			variant,
 		});
 	};
 
 	const unwrappedParams = React.use(params);
+
+  useEffect(() => {
+    if (!gameState || !socketRef.current) return;
+
+    const currentPlayer = gameState.players.find((params) => params.id === socketRef.current?.id);
+    setIsPlayerReady(currentPlayer ? !!currentPlayer.ready : false);
+  }, [gameState, socketRef.current]);
 
 	// Redirect to login if not authenticated
 	useEffect(() => {
@@ -158,59 +166,72 @@ export default function GamePage({
 		if (!unwrappedParams.gameId || !user) return;
 
 		// Initialize WebSocket connection to the socket.io server
-		//const socketInstance = io("http://randomencounter.ddns.net:3001", {
-		const socketInstance = io("localhost:3001", {
+		//const socketRef.current = io("http://randomencounter.ddns.net:3001", {
+		/*const socketRef.current = io("localhost:3001", {
 			transports: ["websocket"],
 			withCredentials: true,
-		});
+		});*/
 
-		dispatch({ type: "SET_SOCKET", payload: socketInstance });
+		socketRef.current = io("localhost:3001", {
+      transports: ["websocket"],
+      withCredentials: true,
+    });
 
-		socketInstance.on("connect", () => {
+    socketRef.current.on(
+      "player_ready_status",
+      (data: { playerId: string; isReady: boolean }) => {
+        if (data.playerId === socketRef.current?.id) {
+          setIsPlayerReady(data.isReady);
+          console.log(`Received player ready status update: ${data.isReady}`);
+        }
+      }
+    );
+
+		socketRef.current.on("connect", () => {
 			dispatch({ type: "SET_CONNECTED", payload: true });
 			console.log("Connected to game server");
 
 			// Register with server upon connection
-			socketInstance.emit("register", { profile: user });
+			socketRef.current?.emit("register", { profile: user });
 
 			// Join the game
-			socketInstance.emit("join_game", {
+			socketRef.current?.emit("join_game", {
 				gameId: unwrappedParams.gameId,
 				user,
 			});
 		});
 
 		// Add handler for seat selection request
-		/*socketInstance.on('select_seat', (data) => {
+		/*socketRef.current.on('select_seat', (data) => {
       console.log('Received seat selection request:', data);
       setOccupiedSeats(data.occupiedSeats);
       setShowSeatSelector(true);
     });*/
 
-		socketInstance.on("game_state", (data) => {
+		socketRef.current.on("game_state", (data) => {
 			console.log("Game state received:", data);
 			dispatch({ type: "SET_GAME_STATE", payload: data.game });
-			setIsMyTurn(data.game.activePlayerId === socketInstance.id);
+			setIsMyTurn(data.game.activePlayerId === socketRef.current?.id);
 		});
 
-		socketInstance.on("player_joined", (data) => {
+		socketRef.current.on("player_joined", (data) => {
 			console.log("Player joined:", data);
 			dispatch({ type: "SET_GAME_STATE", payload: data.game });
 		});
 
-		socketInstance.on("player_left", (data) => {
+		socketRef.current.on("player_left", (data) => {
 			console.log("Player left:", data);
 			if (data.game) {
 				dispatch({ type: "SET_GAME_STATE", payload: data.game });
 			}
 		});
 
-		socketInstance.on("player_ready_changed", (data) => {
+		socketRef.current.on("player_ready_changed", (data) => {
 			console.log("Player ready status changed:", data);
 			dispatch({ type: "SET_GAME_STATE", payload: data.game });
 		});
 
-		socketInstance.on("game_starting", (data) => {
+		socketRef.current.on("game_starting", (data) => {
 			console.log("Game starting:", data);
 			dispatch({ type: "SET_GAME_STATE", payload: data.game });
 			if (data.message) {
@@ -218,7 +239,7 @@ export default function GamePage({
 			}
 		});
 
-		socketInstance.on("round_starting", (data) => {
+		socketRef.current.on("round_starting", (data) => {
 			console.log("Round starting:", data);
 			dispatch({ type: "SET_GAME_STATE", payload: data.game });
 			if (data.message) {
@@ -226,12 +247,12 @@ export default function GamePage({
 			}
 		});
 
-		socketInstance.on("game_update", (data) => {
+		socketRef.current.on("game_update", (data) => {
 			console.log("Game update received:", data);
 			dispatch({ type: "SET_GAME_STATE", payload: data.game });
-			setIsMyTurn(data.game.activePlayerId === socketInstance.id);
+			setIsMyTurn(data.game.activePlayerId === socketRef.current?.id);
 			// Reset allowed actions unless this is the active player
-			if (data.game.activePlayerId !== socketInstance.id) {
+			if (data.game.activePlayerId !== socketRef.current?.id) {
 				setAllowedActions([]);
 			}
 			// Show message if provided
@@ -240,7 +261,7 @@ export default function GamePage({
 			}
 		});
 
-		socketInstance.on("round_ended", (data) => {
+		socketRef.current.on("round_ended", (data) => {
 			console.log("Round ended:", data);
 			dispatch({ type: "SET_GAME_STATE", payload: data.game });
 			setIsMyTurn(false);
@@ -257,7 +278,7 @@ export default function GamePage({
 			}
 		});
 
-		socketInstance.on("round_winners", (data) => {
+		socketRef.current.on("round_winners", (data) => {
 			console.log("Round winners received:", data);
 			dispatch({
 				type: "SET_WINNERS",
@@ -269,29 +290,29 @@ export default function GamePage({
 			setIsWinnerOpen(true);
 		});
 
-		socketInstance.on("chat_message", (data) => {
+		socketRef.current.on("chat_message", (data) => {
 			console.log("Chat message received:", data);
 			dispatch({ type: "ADD_CHAT_MESSAGE", payload: data });
 		});
 
-		socketInstance.on("error", (error) => {
+		socketRef.current.on("error", (error) => {
 			console.error("Socket error:", error.message);
 			alert(`Error: ${error.message}`);
 		});
 
-		socketInstance.on("disconnect", () => {
+		socketRef.current.on("disconnect", () => {
 			dispatch({ type: "SET_CONNECTED", payload: false });
 			console.log("Disconnected from game server");
 		});
 
-		socketInstance.on("your_turn", (data) => {
+		socketRef.current.on("your_turn", (data) => {
 			console.log("Your turn!", data);
 			setIsMyTurn(true);
 			setAllowedActions(data.allowedActions || []);
 		});
 
 		// Handler for when variant selection begins
-		socketInstance.on("variant_selection_started", (data) => {
+		socketRef.current.on("variant_selection_started", (data) => {
 			console.log("Variant selection started:", data);
 			dispatch({ type: "SET_VARIANT_SELECTION_ACTIVE", payload: true });
 			if (data.timeoutMs) {
@@ -312,7 +333,7 @@ export default function GamePage({
 		});
 
 		// Handler for when variant selection is complete
-		socketInstance.on("variant_selected", (data) => {
+		socketRef.current.on("variant_selected", (data) => {
 			console.log("Variant selected:", data);
 			dispatch({ type: "SET_VARIANT_SELECTION_ACTIVE", payload: false });
 			dispatch({
@@ -328,7 +349,22 @@ export default function GamePage({
 		});
 
 		return () => {
-			socketInstance.disconnect();
+			socketRef.current?.disconnect();
+      socketRef.current?.off("player_ready_status");
+      socketRef.current?.off("game_state");
+      socketRef.current?.off("your_turn");
+      socketRef.current?.off("disconnect");
+      socketRef.current?.off("variant_selected");
+      socketRef.current?.off("round_ended");
+      socketRef.current?.off("variant_Selection_started");
+      socketRef.current?.off("error");
+      socketRef.current?.off("chat_message");
+      socketRef.current?.off("game_update");
+      socketRef.current?.off("game_starting");
+      socketRef.current?.off("player_left");
+      socketRef.current?.off("player_joined");
+      socketRef.current?.off("round_starting");
+      socketRef.current?.off("round_winners");
 		};
 	}, [unwrappedParams.gameId, user, router]);
 
@@ -336,7 +372,7 @@ export default function GamePage({
     if (!socket || !isConnected || !unwrappedParams.gameId) return;
     
     // Join the game with selected seat
-    socket.emit('join_game', { 
+    socketRef.current?.emit('join_game', { 
       gameId: unwrappedParams.gameId,
       profile,
       seatNumber
@@ -346,30 +382,30 @@ export default function GamePage({
   };*/
 
 	const handlePlayerAction = (actionType: string, amount: number = 0) => {
-		if (!socket || !isConnected || !unwrappedParams.gameId) return;
+		if (!socketRef.current || !isConnected || !unwrappedParams.gameId) return;
 
 		if (actionType === "player_ready") {
-			socket.emit("player_ready", {
-				gameId: unwrappedParams.gameId,
-			});
+			socketRef.current?.emit("player_ready", {
+        gameId: unwrappedParams.gameId,
+      });
 		} else {
-			socket.emit("player_action", {
-				gameId: unwrappedParams.gameId,
-				action: { type: actionType, amount },
-			});
+			socketRef.current?.emit("player_action", {
+        gameId: unwrappedParams.gameId,
+        action: { type: actionType, amount },
+      });
 		}
 	};
 
 	const handleSendMessage = (e: React.FormEvent) => {
 		e.preventDefault();
 
-		if (!socket || !isConnected || !unwrappedParams.gameId || !message.trim())
+		if (!socketRef.current || !isConnected || !unwrappedParams.gameId || !message.trim())
 			return;
 
-		socket.emit("chat_message", {
-			gameId: unwrappedParams.gameId,
-			message: message.trim(),
-		});
+		socketRef.current?.emit("chat_message", {
+      gameId: unwrappedParams.gameId,
+      message: message.trim(),
+    });
 
 		dispatch({ type: "CLEAR_MESSAGE" });
 	};
@@ -411,8 +447,8 @@ export default function GamePage({
 	};
 
 	return (
-		<div className="container mx-auto p-4 bg-gray-900 text-gray-200 min-h-screen">
-			{/* Add SeatSelector component 
+    <div className="container mx-auto p-4 bg-gray-900 text-gray-200 min-h-screen">
+      {/* Add SeatSelector component 
       <SeatSelector
         isOpen={showSeatSelector}
         onClose={() => setShowSeatSelector(false)}
@@ -422,337 +458,305 @@ export default function GamePage({
       />
       */}
 
-			{/* Dealer's Variant Selector */}
-			<DealerVariantSelector
-				isVisible={
-					variantSelectionActive && gameState?.gameVariant === "DealersChoice"
-				}
-				dealerId={gameState?.dealerId}
-				currentPlayerId={socket?.id}
-				gameId={unwrappedParams.gameId}
-				onVariantSelected={handleVariantSelected}
-				timeoutMs={variantSelectionTimeout}
-			/>
+      {/* Dealer's Variant Selector */}
+      <DealerVariantSelector
+        isVisible={
+          variantSelectionActive && gameState?.gameVariant === "DealersChoice"
+        }
+        dealerId={gameState?.dealerId}
+        currentPlayerId={socketRef.current?.id}
+        gameId={unwrappedParams.gameId}
+        onVariantSelected={handleVariantSelected}
+        timeoutMs={variantSelectionTimeout}
+      />
 
-			{/* Winner display modal */}
-			{winners && (
-				<WinnerDisplay
-					winners={winners}
-					showdown={showdown}
-					isOpen={isWinnerOpen}
-					onClose={handleCloseWinnerDisplay}
-				/>
-			)}
+      {/* Winner display modal */}
+      {winners && (
+        <WinnerDisplay
+          winners={winners}
+          showdown={showdown}
+          isOpen={isWinnerOpen}
+          onClose={handleCloseWinnerDisplay}
+        />
+      )}
 
-			<div className="bg-gray-800 border-l-4 border-blue-700 p-4 mb-4 rounded">
-				<p className="text-gray-200">
-					{isConnected
-						? "✅ Connected to game server"
-						: "❌ Disconnected from game server"}
-				</p>
-			</div>
+      <div className="bg-gray-800 border-l-4 border-blue-700 p-4 mb-4 rounded">
+        <p className="text-gray-200">
+          {isConnected
+            ? "✅ Connected to game server"
+            : "❌ Disconnected from game server"}
+        </p>
+      </div>
 
-			<h1 className="text-2xl font-bold mb-4 text-gray-100">
-				Game Room: {gameState?.name || unwrappedParams.gameId}
-			</h1>
+      <h1 className="text-2xl font-bold mb-4 text-gray-100">
+        Game Room: {gameState?.name || unwrappedParams.gameId}
+      </h1>
 
-			<div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-				<div className="lg:col-span-2 bg-gray-800 p-4 rounded-lg shadow">
-					<h2 className="text-xl font-semibold mb-4 text-gray-100">
-						Game Table
-					</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 bg-gray-800 p-4 rounded-lg shadow">
+          <h2 className="text-xl font-semibold mb-4 text-gray-100">
+            Game Table
+          </h2>
 
-					{gameState ? (
-						<div>
-							<div className="grid grid-cols-2 gap-4 mb-4">
-								<div className="bg-gray-700 p-3 rounded">
-									<span className="text-gray-400">Status:</span>
-									<span className="ml-2 text-gray-200">{gameState.status}</span>
-								</div>
-								<div className="bg-gray-700 p-3 rounded">
-									<span className="text-gray-400">Phase:</span>
-									<span className="ml-2 text-gray-200">{gameState.phase}</span>
-								</div>
-								<div className="bg-gray-700 p-3 rounded">
-									<span className="text-gray-400">Pot:</span>
-									<span className="ml-2 text-gray-200">{gameState.pot}</span>
-								</div>
-								<div className="bg-gray-700 p-3 rounded">
-									<span className="text-gray-400">Current Bet:</span>
-									<span className="ml-2 text-gray-200">
-										{gameState.currentBet}
-									</span>
-								</div>
-								<div className="bg-gray-700 p-3 rounded col-span-2">
-									<span className="text-gray-400">Game Variant:</span>
-									<span className="ml-2 text-gray-200">
-										{gameState.gameVariant === "DealersChoice"
-											? gameState.currentSelectedVariant
-												? `Dealer's Choice (${gameState.currentSelectedVariant})`
-												: "Dealer's Choice (waiting for dealer)"
-											: gameState.gameVariant}
-									</span>
-								</div>
-							</div>
+          {gameState ? (
+            <div>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="bg-gray-700 p-3 rounded">
+                  <span className="text-gray-400">Status:</span>
+                  <span className="ml-2 text-gray-200">{gameState.status}</span>
+                </div>
+                <div className="bg-gray-700 p-3 rounded">
+                  <span className="text-gray-400">Phase:</span>
+                  <span className="ml-2 text-gray-200">{gameState.phase}</span>
+                </div>
+                <div className="bg-gray-700 p-3 rounded">
+                  <span className="text-gray-400">Pot:</span>
+                  <span className="ml-2 text-gray-200">{gameState.pot}</span>
+                </div>
+                <div className="bg-gray-700 p-3 rounded">
+                  <span className="text-gray-400">Current Bet:</span>
+                  <span className="ml-2 text-gray-200">
+                    {gameState.currentBet}
+                  </span>
+                </div>
+                <div className="bg-gray-700 p-3 rounded col-span-2">
+                  <span className="text-gray-400">Game Variant:</span>
+                  <span className="ml-2 text-gray-200">
+                    {gameState.gameVariant === "DealersChoice"
+                      ? gameState.currentSelectedVariant
+                        ? `Dealer's Choice (${gameState.currentSelectedVariant})`
+                        : "Dealer's Choice (waiting for dealer)"
+                      : gameState.gameVariant}
+                  </span>
+                </div>
+              </div>
 
-							<div className="poker-game-container mt-6 mb-6">
-								<Table
-									players={gameState.players.map((player) => ({
-										id: player.id,
-										name: player.username,
-										chips: player.chips,
-										cards: player.cards,
-										folded: player.folded,
-										currentBet: player.currentBet,
-										previousAction: player.previousAction,
-									}))}
-									communityCards={gameState.communityCards}
-									pot={gameState.pot}
-									dealerIndex={gameState.dealerIndex}
-									smallBlindIndex={gameState.smallBlindIndex ?? -1}
-									bigBlindIndex={gameState.bigBlindIndex ?? -1}
-									activePlayerIndex={gameState.activePlayerIndex}
-									currentPlayerId={socket?.id || ""}
-									winners={winners || []}
-								/>
-							</div>
+              <div className="poker-game-container mt-6 mb-6">
+                <Table
+                  players={gameState.players.map((player) => ({
+                    id: player.id,
+                    name: player.username,
+                    chips: player.chips,
+                    cards: player.cards,
+                    folded: player.folded,
+                    currentBet: player.currentBet,
+                    previousAction: player.previousAction,
+                  }))}
+                  communityCards={gameState.communityCards}
+                  pot={gameState.pot}
+                  dealerIndex={gameState.dealerIndex}
+                  smallBlindIndex={gameState.smallBlindIndex ?? -1}
+                  bigBlindIndex={gameState.bigBlindIndex ?? -1}
+                  activePlayerIndex={gameState.activePlayerIndex}
+                  currentPlayerId={socketRef.current?.id || ""}
+                  winners={winners || []}
+                />
+              </div>
 
-							<h3 className="font-medium mt-6 mb-3 text-gray-300">Players:</h3>
-							<ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
-								{gameState.players.map((player, index) => (
-									<li
-										key={player.id}
-										className={`p-3 rounded ${
-											player.id === socket?.id
-												? "bg-gray-600 border border-blue-600"
-												: "bg-gray-700"
-										}`}
-									>
-										<div className="flex justify-between items-center mb-2">
-											<span className="font-medium text-gray-200">
-												{player.username}
-											</span>
-											<div className="flex gap-2">
-												{gameState.status === "waiting" && player.ready && (
-													<span className="bg-green-700 text-xs px-2 py-1 rounded-full text-white">
-														Ready
-													</span>
-												)}
-												{player.id === gameState.activePlayerId && (
-													<span className="bg-blue-700 text-xs px-2 py-1 rounded-full text-white">
-														Active
-													</span>
-												)}
-											</div>
-										</div>
-										<div className="text-sm text-gray-300">
-											Chips: {player.chips}
-										</div>
-										<div className="text-sm text-gray-300 flex gap-2 mt-2">
-											{player.cards.length > 0 ? (
-												// Show all cards face up if it's the current player or during showdown
-												player.id === socket?.id || isShowdownPhase ? (
-													player.cards.map((card, idx) => (
-														<Card
-															scaleFactor={1}
-															key={idx}
-															rank={card.rank}
-															suit={card.suit}
-														/>
-													))
-												) : (
-													Array(player.cards.length)
-														.fill(0)
-														.map((_, idx) => (
-															<Card
-																scaleFactor={1}
-																key={idx}
-																rank="2"
-																suit="hearts"
-																faceDown={true}
-															/>
-														))
-												)
-											) : (
-												<span>No cards</span>
-											)}
-										</div>
-										{player.currentBet > 0 && (
-											<div className="text-sm text-gray-300">
-												Bet: {player.currentBet}
-											</div>
-										)}
-										{player.previousAction !== "none" && (
-											<div className="text-sm text-gray-400">
-												Action: {player.previousAction}
-											</div>
-										)}
-									</li>
-								))}
-							</ul>
+              <h3 className="font-medium mt-6 mb-3 text-gray-300">Players:</h3>
+              <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {gameState.players.map((player, index) => (
+                  <li
+                    key={player.id}
+                    className={`p-3 rounded ${
+                      player.id === socket?.id
+                        ? "bg-gray-600 border border-blue-600"
+                        : "bg-gray-700"
+                    }`}
+                  >
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-medium text-gray-200">
+                        {player.username}
+                      </span>
+                      <div className="flex gap-2">
+                        {gameState.status === "waiting" && player.ready && (
+                          <span className="bg-green-700 text-xs px-2 py-1 rounded-full text-white">
+                            Ready
+                          </span>
+                        )}
+                        {player.id === gameState.activePlayerId && (
+                          <span className="bg-blue-700 text-xs px-2 py-1 rounded-full text-white">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-300">
+                      Chips: {player.chips}
+                    </div>
+                    <div className="text-sm text-gray-300 flex gap-2 mt-2">
+                      {player.cards.length > 0 ? (
+                        // Show all cards face up if it's the current player or during showdown
+                        player.id === socketRef.current?.id || isShowdownPhase ? (
+                          player.cards.map((card, idx) => (
+                            <Card
+                              scaleFactor={1}
+                              key={idx}
+                              rank={card.rank}
+                              suit={card.suit}
+                            />
+                          ))
+                        ) : (
+                          Array(player.cards.length)
+                            .fill(0)
+                            .map((_, idx) => (
+                              <Card
+                                scaleFactor={1}
+                                key={idx}
+                                rank="2"
+                                suit="hearts"
+                                faceDown={true}
+                              />
+                            ))
+                        )
+                      ) : (
+                        <span>No cards</span>
+                      )}
+                    </div>
+                    {player.currentBet > 0 && (
+                      <div className="text-sm text-gray-300">
+                        Bet: {player.currentBet}
+                      </div>
+                    )}
+                    {player.previousAction !== "none" && (
+                      <div className="text-sm text-gray-400">
+                        Action: {player.previousAction}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
 
-							{gameState.communityCards.length > 0 && (
-								<div className="mt-6 bg-gray-700 p-3 rounded">
-									<h3 className="font-medium mb-2 text-gray-300">
-										Community Cards:
-									</h3>
-									<div className="flex gap-2 flex-wrap">
-										{gameState.communityCards.map((card, idx) => (
-											<Card
-												scaleFactor={1}
-												key={idx}
-												rank={card.rank}
-												suit={card.suit}
-											/>
-										))}
-									</div>
-								</div>
-							)}
+              {gameState.communityCards.length > 0 && (
+                <div className="mt-6 bg-gray-700 p-3 rounded">
+                  <h3 className="font-medium mb-2 text-gray-300">
+                    Community Cards:
+                  </h3>
+                  <div className="flex gap-2 flex-wrap">
+                    {gameState.communityCards.map((card, idx) => (
+                      <Card
+                        scaleFactor={1}
+                        key={idx}
+                        rank={card.rank}
+                        suit={card.suit}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
 
-							{/* Only show the "Ready" button before the game starts */}
-							{gameState.status === "waiting" && (
-								<div className="mt-6">
-									<Actions
-										roundStatus="waiting"
-										canCheck={false}
-										gameCurrentBet={0}
-										playerCurrentBet={0}
-										minRaise={0}
-										playerChips={
-											gameState.players.find((p) => p.id === socket?.id)
-												?.chips || 0
-										}
-										gamePhase={gameState.phase}
-										onAction={handlePlayerAction}
-										isActive={true}
-										allowedActions={[]}
-										isPlayerReady={
-											gameState.players.find((p) => p.id === socket?.id)
-												?.ready || false
-										}
-									/>
-								</div>
-							)}
+              {/* Only show the "Ready" button before the game starts */}
+              {gameState.status === "waiting" && (
+                <div className="mt-6">
+                  <Actions
+                    gameId={unwrappedParams.gameId}
+                    socket={socketRef.current}
+                    roundStatus="waiting"
+                    canCheck={false}
+                    gameCurrentBet={0}
+                    playerCurrentBet={0}
+                    minRaise={0}
+                    playerChips={
+                      gameState.players.find(
+                        (p) => p.id === socketRef.current?.id
+                      )?.chips || 0
+                    }
+                    gamePhase={gameState.phase}
+                    onAction={handlePlayerAction}
+                    isActive={true}
+                    allowedActions={[]}
+                    isPlayerReady={
+                      gameState.players.find(
+                        (p) => p.id === socketRef.current?.id
+                      )?.ready || false
+                    }
+                  />
+                </div>
+              )}
 
-							{/* Only show game actions for the active player during gameplay */}
-							{gameState.status === "playing" &&
-								gameState.activePlayerId === socket?.id && (
-									<div className="mt-6">
-										<Actions
-											roundStatus="playing"
-											canCheck={
-												gameState.currentBet ===
-												(gameState.players.find((p) => p.id === socket?.id)
-													?.currentBet || 0)
-											}
-											gameCurrentBet={gameState.currentBet}
-											playerCurrentBet={
-												gameState.players.find((p) => p.id === socket?.id)
-													?.currentBet || 0
-											}
-											minRaise={
-												gameState.currentBet > 0
-													? gameState.currentBet -
-													  gameState.players.find((p) => p.id === socket.id)!
-															.currentBet
-													: 5
-											}
-											playerChips={
-												gameState.players.find((p) => p.id === socket?.id)
-													?.chips || 0
-											}
-											gamePhase={gameState.phase}
-											onAction={handlePlayerAction}
-											isActive={true}
-											allowedActions={allowedActions}
-											isPlayerReady={true}
-										/>
-									</div>
-								)}
-						</div>
-					) : (
-						<div className="flex items-center justify-center h-64">
-							<div className="animate-pulse text-gray-400">
-								Loading game data...
-							</div>
-						</div>
-					)}
-				</div>
+              {/* Only show game actions for the active player during gameplay */}
+              {gameState.status === "playing" &&
+                gameState.activePlayerId === socketRef.current?.id && (
+                  <div className="mt-6">
+                    <Actions
+                      gameId={unwrappedParams.gameId}
+                      socket={socketRef.current}
+                      roundStatus="playing"
+                      canCheck={
+                        gameState.currentBet ===
+                        (gameState.players.find(
+                          (p) => p.id === socketRef.current?.id
+                        )?.currentBet || 0)
+                      }
+                      gameCurrentBet={gameState.currentBet}
+                      playerCurrentBet={
+                        gameState.players.find(
+                          (p) => p.id === socketRef.current?.id
+                        )?.currentBet || 0
+                      }
+                      minRaise={
+                        gameState.currentBet > 0
+                          ? gameState.currentBet -
+                            gameState.players.find(
+                              (p) => p.id === socketRef.current?.id
+                            )!.currentBet
+                          : 5
+                      }
+                      playerChips={
+                        gameState.players.find(
+                          (p) => p.id === socketRef.current?.id
+                        )?.chips || 0
+                      }
+                      gamePhase={gameState.phase}
+                      onAction={handlePlayerAction}
+                      isActive={true}
+                      allowedActions={allowedActions}
+                      isPlayerReady={true}
+                    />
+                  </div>
+                )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-pulse text-gray-400">
+                Loading game data...
+              </div>
+            </div>
+          )}
+        </div>
 
-				<div className="lg:col-span-1 bg-gray-800 p-4 rounded-lg shadow">
-					<h2 className="text-xl font-semibold mb-4 text-gray-100">Chat</h2>
+        <DraggableChat socket={socketRef.current} scope="game" />
+      </div>
 
-					<div className="h-64 overflow-y-auto border border-gray-700 rounded p-2 mb-4 bg-gray-700">
-						{chatMessages.length === 0 ? (
-							<p className="text-gray-400 text-center italic p-4">
-								No messages yet
-							</p>
-						) : (
-							<div className="space-y-2 p-1">
-								{chatMessages.map((msg, i) => (
-									<div key={i} className="bg-gray-800 p-2 rounded">
-										<span className="font-medium text-blue-400">
-											{msg.sender}:{" "}
-										</span>
-										<span className="text-gray-200">{msg.message}</span>
-										<div className="text-xs text-gray-500 mt-1">
-											{new Date(msg.timestamp).toLocaleTimeString()}
-										</div>
-									</div>
-								))}
-							</div>
-						)}
-					</div>
+      <div className="mt-6">
+        <button
+          onClick={() => router.push("/game")}
+          className="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded"
+        >
+          Back to Lobby
+        </button>
+      </div>
 
-					<form onSubmit={handleSendMessage} className="flex">
-						<input
-							type="text"
-							value={message}
-							onChange={(e) =>
-								dispatch({ type: "SET_MESSAGE", payload: e.target.value })
-							}
-							placeholder="Type a message..."
-							className="flex-1 border border-gray-600 bg-gray-700 text-gray-200 rounded-l px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-						/>
-						<button
-							type="submit"
-							className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-r"
-						>
-							Send
-						</button>
-					</form>
-				</div>
-			</div>
-
-			<div className="mt-6">
-				<button
-					onClick={() => router.push("/game")}
-					className="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded"
-				>
-					Back to Lobby
-				</button>
-			</div>
-
-			{/* Debug Section: Only show in development */}
-			{process.env.NODE_ENV !== "production" && gameState && (
-				<div className="mt-10 p-4 bg-gray-950 text-green-300 rounded overflow-x-auto">
-					<h2 className="text-lg font-bold mb-2">[DEBUG] Game State</h2>
-					<pre className="text-xs whitespace-pre-wrap break-all max-h-96 overflow-y-auto border border-green-700 rounded bg-gray-900 p-2 mb-4">
-						{JSON.stringify(gameState, null, 2)}
-					</pre>
-					<h3 className="text-md font-semibold mb-1">Players</h3>
-					{gameState.players.map((player, idx) => (
-						<div
-							key={player.id || idx}
-							className="mb-2 p-2 bg-gray-800 rounded border border-green-700"
-						>
-							<pre className="text-xs whitespace-pre-wrap break-all">
-								{JSON.stringify(player, null, 2)}
-							</pre>
-						</div>
-					))}
-				</div>
-			)}
-		</div>
-	);
+      {/* Debug Section: Only show in development */}
+      {process.env.NODE_ENV !== "production" && gameState && (
+        <div className="mt-10 p-4 bg-gray-950 text-green-300 rounded overflow-x-auto">
+          <h2 className="text-lg font-bold mb-2">[DEBUG] Game State</h2>
+          <pre className="text-xs whitespace-pre-wrap break-all max-h-96 overflow-y-auto border border-green-700 rounded bg-gray-900 p-2 mb-4">
+            {JSON.stringify(gameState, null, 2)}
+          </pre>
+          <h3 className="text-md font-semibold mb-1">Players</h3>
+          {gameState.players.map((player, idx) => (
+            <div
+              key={player.id || idx}
+              className="mb-2 p-2 bg-gray-800 rounded border border-green-700"
+            >
+              <pre className="text-xs whitespace-pre-wrap break-all">
+                {JSON.stringify(player, null, 2)}
+              </pre>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }

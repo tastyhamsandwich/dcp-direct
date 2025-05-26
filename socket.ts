@@ -75,6 +75,8 @@ export function initializeSocket(io: Server) {
 
 		socket.on("get_games_list", () => {
 			console.log(`Received request for games list, sending...`, gamesArray);
+
+      socket.join("lobby");
 			socket.emit("games_list", gamesArray);
 		});
 
@@ -155,24 +157,24 @@ export function initializeSocket(io: Server) {
 		socket.on("join_game", (data) => {
 			console.log(`Received request to join game lobby...`);
 
-			if (!data || !data.gameId || !data.profile) {
-				socket.emit("error", { message: "Invalid join_game data" });
+			if (!data || !data.gameId || !data.user) {
+				socket.emit("error", { message: `Invalid join_game data | DATA: ${data}}` });
 				return;
 			}
 
-			const { gameId, profile } = data;
+			const { gameId, user } = data;
 
 			// Check if this is a reconnection after page navigation
 			if (
-				profile &&
-				profile.username &&
-				pendingReconnects.has(gameId + profile.username)
+				user &&
+				user.username &&
+				pendingReconnects.has(gameId + user.username)
 			) {
-				const reconnectData = pendingReconnects.get(gameId + profile.username);
+				const reconnectData = pendingReconnects.get(gameId + user.username);
 				if (reconnectData) {
 					clearTimeout(reconnectData.timeout);
-					pendingReconnects.delete(gameId + profile.username);
-					console.log(`User ${profile.username} reconnected to game ${gameId}`);
+					pendingReconnects.delete(gameId + user.username);
+					console.log(`User ${user.username} reconnected to game ${gameId}`);
 				}
 			}
 
@@ -222,13 +224,13 @@ export function initializeSocket(io: Server) {
 					);
 				}
 			} else {
-				const username = profile.username;
-				// Fix: Use profile.balance instead of profile.chips
-				const chips = profile.balance || 1000; // Fallback to 1000 if balance is undefined
-				const avatar = profile.avatar || profile.avatar_url;
+				const username = user.username;
+				// Fix: Use user.balance instead of user.chips
+				const chips = user.balance || 1000; // Fallback to 1000 if balance is undefined
+				const avatar = user.avatar || user.avatar_url;
 
 				console.log(
-					`Player joining with username: ${username}, chips: ${chips} (from balance: ${profile.balance}), avatar: ${avatar}`
+					`Player joining with username: ${username}, chips: ${chips} (from balance: ${user.balance}), avatar: ${avatar}`
 				);
 
 				// Find an available seat
@@ -273,7 +275,7 @@ export function initializeSocket(io: Server) {
 
 			// Join the game room
 			console.log(
-				`Socket.join(${gameId}) executing for user '${profile.username}'...`
+				`Socket.join(${gameId}) executing for user '${user.username}'...`
 			);
 			socket.join(gameId);
 
@@ -310,6 +312,7 @@ export function initializeSocket(io: Server) {
 
 		// Handle player ready status separately from actions
 		socket.on("player_ready", (data) => {
+      console.log(`Received socket event 'player_ready'...`, data);
 			if (!data || !data.gameId) {
 				socket.emit("error", { message: "Invalid ready data" });
 				return;
@@ -343,6 +346,9 @@ export function initializeSocket(io: Server) {
 				isReady: player.ready,
 				game: game.returnGameState(),
 			});
+
+      // Pass ready status back to player for state sync
+      socket.to(userId).emit("player_ready_status", { isReady: player.ready });
 
 			// Check if all players are ready to start game or next round
 			if (game.players.length >= 2) {
@@ -680,38 +686,67 @@ export function initializeSocket(io: Server) {
 		socket.on("chat_message", (data) => {
 			console.log(`Received socket event 'chat_message'...`, data);
 			const userId = socket.id;
-			let sender = "";
+			let sender = users[userId]?.username || "SYSTEM";
 
-			if (!users[userId]) sender = "SYSTEM:";
-			else sender = users[userId].username + ":";
-			if (!data || !data.gameId || !data.message) {
-				socket.emit("error", { message: "Invalid chat message data" });
+
+			if (!data || (!data.gameId && data.scope === "game") || !data.message) {
+				socket.emit("error", { message: "Invalid chat message data ya doof!" });
 				return;
 			}
 
-			const { gameId, message } = data;
+			const { scope, gameId, message } = data;
 
-			console.log(
-				`Emitting socket event 'chat_message' to specific room '${gameId}'...`
-			);
-			io.to(gameId).emit("chat_message", {
-				sender,
-				message,
-				timestamp: new Date().toISOString(),
-			});
+      if (!gameId && scope !== "lobby")
+        console.log(`Emitting socket event 'chat_message' to specific room '${gameId}'...`);
+      else if (scope === "lobby")
+        console.log(`Emitting socket event 'chat_message' to lobby...`);
+      else if (!message) {
+        console.error(`Invalid chat message`);
+        return;
+      }
+
+      const timestamp = formatTimestamp(Date.now());
+
+      const chatPayload = {
+        sender,
+        message,
+        timestamp,
+      }
+
+      if (scope === "lobby") {
+        // Send to all users in the lobby
+        io.to("lobby").emit("chat_message", chatPayload);
+      } else if (scope === "game" && gameId) {
+        // Send to all users in the game room
+        io.to(gameId).emit("chat_message", chatPayload);
+      } else {
+        console.error(`Invalid chat scope: ${scope}`);
+        socket.emit("error", { message: "Invalid chat scope" });
+      }
 		});
 
-		socket.on("private_message", (targetSocketId, message) => {
+		socket.on("private_message", (data) => {
 			console.log(`Received socket event 'private_message'...`);
 			const userId = socket.id;
 			if (!users[userId]) return;
 
+      const { message, recipient } = data;
+      const timestamp = formatTimestamp(Date.now());
 			const sender = users[userId].username;
-			const formattedMessage = `[${sender}]: ${message}`;
 
-			socket
-				.to(targetSocketId)
-				.emit("private_message", socket.id, formattedMessage);
+      const targetSocketId = getSocketIdByUsername(users, recipient);
+      const privateMsg = true;
+      const chatPayload = {
+        privateMsg,
+        sender,
+        message,
+        timestamp,
+      };
+
+      if (targetSocketId)
+        socket.to(targetSocketId).emit("chat_message", chatPayload);
+      else
+        socket.emit("error", { message: "Recipient not found" });
 		});
 
 		// Handle disconnections
@@ -783,7 +818,51 @@ export function initializeSocket(io: Server) {
 									game.smallBlindId = game.players[game.smallBlindIndex].id;
 									game.bigBlindId = game.players[game.bigBlindIndex].id;
 
-									game.findNextActivePlayer();
+                  if (game.activePlayerId === userId) {
+                    // If the disconnected player was the active player, find the next one
+                    const dcedPlayerIndex = game.activePlayerIndex;
+
+                    // Once found, set the active player id & index to this player's id & index
+                    if (dcedPlayerIndex) {
+                      const nextPlayer = game.players[(dcedPlayerIndex + 1) % game.players.length];
+                      game.activePlayerId = nextPlayer.id;
+                      game.activePlayerIndex = (dcedPlayerIndex + 1) % game.players.length;
+
+                      // Confirm this player is not folded, otherwise advance to the next player again, until a valid player is found
+                      while (nextPlayer.folded) {
+                        const nextNextPlayer = game.players[(game.activePlayerIndex + 1) % game.players.length];
+                        game.activePlayerId = nextNextPlayer.id;
+                        game.activePlayerIndex = (game.activePlayerIndex + 1) % game.players.length;
+                      }
+
+                      console.log(
+                        `Player ${username} was active, switching to next player: ${nextPlayer.username}`
+                      );
+
+                      // Notify the new player it is their turn, and update others as well
+                      console.log(
+                        `Notifying player '${
+                          game.players[game.activePlayerIndex!].username
+                        }' it's their turn`
+                      );
+                      io.to(game.activePlayerId).emit("your_turn", {
+                        gameId: game.id,
+                        allowedActions: game.getAllowedActionsForPlayer(
+                          game.activePlayerId
+                        ),
+                      });
+
+                      // Also broadcast a message to everyone about whose turn it is
+                      io.to(gameId).emit("active_player_changed", {
+                        activePlayerId: game.activePlayerId,
+                        activePlayerName:
+                          game.players.find((p) => p.id === game.activePlayerId)
+                            ?.username || "Unknown player",
+                      });
+                    }
+                  }
+                  // Removed this function call for now, the above checks and loop should resolve the active player issue
+									//game.findNextActivePlayer();
 								}
 							}
 
@@ -793,6 +872,7 @@ export function initializeSocket(io: Server) {
 								game.phase = "waiting";
 								game.status = "waiting";
 								game.communityCards = [];
+                game.players[0].chips += game.pot;
 								game.pot = 0;
 							}
 
@@ -1212,4 +1292,26 @@ function resetForNextRound(game, io) {
 			message: "Not enough players to start next round.",
 		});
 	}
+}
+
+function getSocketIdByUsername(
+  users: { [key: string]: User },
+  username: string
+): string | null {
+  for (const [socketId, user] of Object.entries(users)) {
+    if (user.username === username) {
+      return socketId;
+    }
+  }
+  return null;
+}
+
+function formatTimestamp(timestamp: number | string | Date) {
+  const date = new Date(timestamp);
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
 }

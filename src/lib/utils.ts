@@ -6,6 +6,22 @@ type RankValue = 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 100;
 
 const one_day = 60 * 60 * 24;
 
+export const USER_COLORS = [
+  "text-red-400",
+  "text-green-400",
+  "text-purple-400",
+  "text-yellow-400",
+  "text-pink-400",
+  "text-purple-400",
+  "text-indigo-400",
+  "text-teal-400",
+  "text-orange-400",
+  "text-cyan-400",
+];
+
+export const usernameColorMap: { [username: string]: string } = {};
+let colorIndex = 0;
+
 export const EmailRegExp = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const COOKIE_OPTIONS = {
@@ -81,4 +97,16 @@ export function capitalize(str: string): string {
 
 export function valueTruthy(value: any): boolean {
   return value !== undefined && value !== null && value !== "";
+}
+
+export function getUsernameColor(username: string, localUsername?: string) {
+  if (localUsername && username === localUsername) {
+    return "text-blue-400";
+  }
+  if (!usernameColorMap[username]) {
+    // Assign next color in the palette
+    usernameColorMap[username] = USER_COLORS[colorIndex];
+    colorIndex = (colorIndex + 1) % USER_COLORS.length;
+  }
+  return usernameColorMap[username];
 }

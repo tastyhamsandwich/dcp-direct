@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface ActionsProps {
+  gameId: string;
+  socket: any;
 	roundStatus: string;
 	canCheck: boolean;
 	gameCurrentBet: number;
@@ -16,6 +18,8 @@ interface ActionsProps {
 }
 
 const Actions: React.FC<ActionsProps> = ({
+  gameId,
+  socket,
 	roundStatus,
 	canCheck,
 	gameCurrentBet,
@@ -29,18 +33,13 @@ const Actions: React.FC<ActionsProps> = ({
 	isPlayerReady = false,
 }) => {
 	const [raiseAmount, setRaiseAmount] = useState<number>(minRaise);
-	const [isReady, setIsReady] = useState<boolean>(isPlayerReady);
 	const [prevIsActive, setPrevIsActive] = useState<boolean>(isActive);
+  const [isReady, setIsReady] = useState<boolean>(isPlayerReady);
 
 	// Update raise amount when minimum changes
 	useEffect(() => {
 		setRaiseAmount(minRaise);
 	}, [minRaise]);
-
-	// Sync ready state with props
-	useEffect(() => {
-		setIsReady(isPlayerReady);
-	}, [isPlayerReady]);
 
 	// Play sound when it becomes the player's turn
 	useEffect(() => {
@@ -79,9 +78,10 @@ const Actions: React.FC<ActionsProps> = ({
 	}, [isActive, allowedActions, gamePhase, gameCurrentBet, playerCurrentBet, minRaise, playerChips, canCheck]);
 
 	const toggleReady = () => {
-		onAction("player_ready");
-	};
-
+    socket.emit("player_ready", { gameId });
+    setIsReady(!isReady);
+  };
+  
 	// Enhanced action validation
 	const isActionAllowed = (action: string) => {
 		// First check if we're the active player
@@ -169,34 +169,40 @@ const Actions: React.FC<ActionsProps> = ({
 
 	if (roundStatus === "waiting") {
 		return (
-			<>
-				{showDebug && (
-					<div className="bg-gray-950 text-green-300 text-xs p-2 mb-2 rounded">
-						<strong>[ACTIONS DEBUG]</strong>
-						<div>allowedActions: {JSON.stringify(allowedActions)}</div>
-						<div>isActive: {String(isActive)}, gamePhase: {gamePhase}, gameCurrentBet: {gameCurrentBet}, playerCurrentBet: {playerCurrentBet}, minRaise: {minRaise}, playerChips: {playerChips}, canCheck: {String(canCheck)}, isPlayerReady: {String(isPlayerReady)}, roundStatus: {roundStatus}</div>
-					</div>
-				)}
-				<motion.div
-					className="player-actions bg-gray-900 p-2 rounded-lg mt-2"
-					initial="hidden"
-					animate="visible"
-					variants={containerVariants}
-				>
-					<motion.button
-						onClick={toggleReady}
-						className={`px-4 py-2 rounded text-white ${
-							isReady ? "bg-blue-600" : "bg-red-600"
-						}`}
-						variants={buttonVariants}
-						whileHover={{ scale: 1.05 }}
-						whileTap={{ scale: 0.95 }}
-					>
-						{isReady ? "Ready" : "Not Ready"}
-					</motion.button>
-				</motion.div>
-			</>
-		);
+      <>
+        {showDebug && (
+          <div className="bg-gray-950 text-green-300 text-xs p-2 mb-2 rounded">
+            <strong>[ACTIONS DEBUG]</strong>
+            <div>allowedActions: {JSON.stringify(allowedActions)}</div>
+            <div>
+              isActive: {String(isActive)}, gamePhase: {gamePhase},
+              gameCurrentBet: {gameCurrentBet}, playerCurrentBet:{" "}
+              {playerCurrentBet}, minRaise: {minRaise}, playerChips:{" "}
+              {playerChips}, canCheck: {String(canCheck)}, isPlayerReady:{" "}
+              {String(isPlayerReady)}, roundStatus: {roundStatus}
+            </div>
+          </div>
+        )}
+        <motion.div
+          className="player-actions bg-gray-900 p-2 rounded-lg mt-2"
+          initial="hidden"
+          animate="visible"
+          variants={containerVariants}
+        >
+          <motion.button
+            onClick={toggleReady}
+            className={`px-4 py-2 rounded text-white ${
+              isReady ? "bg-blue-600" : "bg-red-600"
+            }`}
+            variants={buttonVariants}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            {isReady ? "Ready" : "Not Ready"}
+          </motion.button>
+        </motion.div>
+      </>
+    );
 	} else {
 		return (
 			<>

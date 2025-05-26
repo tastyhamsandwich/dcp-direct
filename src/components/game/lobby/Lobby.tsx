@@ -57,7 +57,7 @@ const Lobby: React.FC<LobbyProps> = ({
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+    <div className="w-2/3 bg-gray-800 rounded-lg shadow-lg overflow-hidden">
       <div className="p-6">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-semibold text-gray-100">Available Games</h2>

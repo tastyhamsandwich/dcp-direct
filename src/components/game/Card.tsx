@@ -34,7 +34,8 @@ const Card: React.FC<CardProps> = ({
   
   // Convert 'four' to '4', 'spades' to 'S', etc...
   let rankNum: string = rankToNumStr(rank);
-  let suitLetter: string = suitNameToInitial(suit as Suit);
+  let safeSuit = typeof suit === "string" && suit ? suit : "hearts";
+  let suitLetter: string = suitNameToInitial(safeSuit as Suit);
   const cardSrc = `/assets/cards_en/${rankNum}${suitLetter}.png`;
 
   useEffect(() => {
@@ -93,7 +94,7 @@ const Card: React.FC<CardProps> = ({
         src={isFlipped ? '/assets/cardback.png' : cardSrc} 
         width={finalCardWidth} 
         height={finalCardHeight} 
-        alt={isFlipped ? 'A playing card' : `${capitalize(rank)} of ${capitalize(suit)}`} 
+        alt={isFlipped ? 'A playing card' : `${rank} of ${suit}`} 
       />
     </motion.div>
   );

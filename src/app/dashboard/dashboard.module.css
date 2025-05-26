@@ -1,0 +1,7 @@
+.change-avatar {
+  opacity: 0%;
+}
+
+.change-avatar:hover {
+  opacity: 100%
+}

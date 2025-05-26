@@ -4,7 +4,9 @@ import { Card as CardClass } from "@game/classes";
 import useClickOutside from "@hooks/useClickOutside";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { WinnerInfo } from "@game/types";
+import { Hand, Winner, WinnerInfo } from "@game/types";
+import { Waiting_for_the_Sunrise } from 'next/font/google';
+import { CardDescription } from '@comps/ui/Card';
 
 interface WinnerDisplayProps {
 	winners: WinnerInfo[];
@@ -12,6 +14,12 @@ interface WinnerDisplayProps {
 	isOpen: boolean;
 	onClose: () => void;
 }
+
+let winnersArray: WinnerInfo[];
+let winner: WinnerInfo;
+let winnerHand: string;
+let winnerName: string;
+let winnerCards: CardClass[] = [];
 
 const WinnerDisplay = ({
 	winners,
@@ -22,6 +30,8 @@ const WinnerDisplay = ({
 	const winnerRef = useRef(null);
 	const [confettiActive, setConfettiActive] = useState(false);
 	const [showDetails, setShowDetails] = useState(false);
+
+
 
 	useEffect(() => {
 		if (isOpen) {
@@ -36,6 +46,15 @@ const WinnerDisplay = ({
 			return () => clearTimeout(timer);
 		}
 	}, [isOpen]);
+
+  useEffect(() => {
+    winnersArray = winners;
+    winner = winners[0];
+    winnerHand = winners[0].hand || "";
+    winnerName = winners[0].playerName;
+    winnerCards = winners[0].cards || [];
+  }, []);
+
 
 	useClickOutside(winnerRef, onClose);
 
@@ -117,25 +136,22 @@ const WinnerDisplay = ({
 								className="text-2xl font-bold text-yellow-400"
 								variants={titleVariants}
 							>
-								{winners.length === 1 ? "Winner!" : "Winners!"}
+								{winnersArray.length === 1 ? "Winner!" : "Winners!"}
 							</motion.h2>
 						</motion.div>
 
 						{/* Quick summary - always visible */}
 						<motion.div className="space-y-4">
-							{winners.map((winner, index) => (
 								<motion.div
-									key={index}
 									className="bg-gray-700 rounded-lg p-4"
 									variants={itemVariants}
-									custom={index}
 									initial="hidden"
 									animate="visible"
-									transition={{ delay: 0.3 + index * 0.1 }}
+									transition={{ delay: 0.3 + 1 * 0.1 }}
 								>
 									<div className="flex justify-between items-center">
 										<span className="text-white font-medium text-lg">
-											{winner.playerName}
+											{winnerName}
 										</span>
 										<motion.span
 											className="text-yellow-300 font-bold text-xl"
@@ -145,7 +161,6 @@ const WinnerDisplay = ({
 										</motion.span>
 									</div>
 								</motion.div>
-							))}
 						</motion.div>
 
 						{/* Detailed results button */}
@@ -175,7 +190,7 @@ const WinnerDisplay = ({
 									exit={{ height: 0, opacity: 0 }}
 									transition={{ duration: 0.3 }}
 								>
-									{winners.map((winner, index) => (
+									{winnersArray.map((winner, index) => (
 										<motion.div
 											key={`details-${index}`}
 											className="bg-gray-700/50 rounded-lg p-4"
@@ -184,27 +199,27 @@ const WinnerDisplay = ({
 											transition={{ delay: 0.1 * index }}
 										>
 											<div className="text-white font-medium mb-1">
-												{winner.hand}
+												{winnerHand}
 											</div>
-											{winner.cards && (
+											{winnerCards && (
 												<div className="flex space-x-1">
-													{winner.cards.map((card, cardIndex) => (
-														<motion.div
-															key={cardIndex}
-															className="w-10 h-14 relative"
-															initial={{ opacity: 0, rotateY: 90 }}
-															animate={{ opacity: 1, rotateY: 0 }}
-															transition={{ delay: 0.1 * cardIndex }}
-														>
-															<Card
-																scaleFactor={1}
-																key={index}
-																rank={card.rank}
-																suit={card.suit}
-																index={index}
-															/>
-														</motion.div>
-													))}
+                          {winnerCards.map((card, cardIndex) => (
+                            <motion.div
+                            key={cardIndex}
+                            className="w-10 h-14 relative"
+                            initial={{ opacity: 0, rotateY: 90 }}
+                            animate={{ opacity: 1, rotateY: 0 }}
+                            transition={{ delay: 0.1 * cardIndex }}
+                            >
+                            <Card
+                              scaleFactor={1}
+                              key={cardIndex}
+                              rank={card.rank}
+                              suit={card.suit}
+                              index={cardIndex}
+                            />
+                            </motion.div>
+                          ))}
 												</div>
 											)}
 											<div className="text-gray-300 text-sm mt-2">

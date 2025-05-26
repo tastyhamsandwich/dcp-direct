@@ -1,18 +1,19 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@contexts/authContext";
 import Lobby from "@comps/game/lobby/Lobby";
 import { User, ListEntry } from "@game/types";
 import { io, type Socket } from "socket.io-client";
 import { SeatSelector } from "@comps/game/SeatSelector";
+import DraggableChat from "@comps/game/Chat";
 
 export default function GameLobby() {
 	const { user, loading } = useAuth();
 	const [gamesList, setGamesList] = useState<ListEntry[]>([]);
 	const [isConnected, setIsConnected] = useState(false);
-	const [socket, setSocket] = useState<Socket | null>(null);
+	const socketRef = useRef<Socket | null>(null);
 	const router = useRouter();
 
 	// Redirect to login if not authenticated
@@ -27,11 +28,20 @@ export default function GameLobby() {
 
 		// Initialize WebSocket connection to the socket.io server running on port 3001
 		//const socketInstance = io("http://randomencounter.ddns.net:3001", {
-		const socketInstance = io("localhost:3001", {
+		if (socketRef.current === null) {
+      socketRef.current = io("http://localhost:3001", {
+        transports: ["websocket"],
+        withCredentials: true,
+      });
+    }
+    
+    const socketInstance = io("localhost:3001", {
 			transports: ["websocket"],
 			withCredentials: true,
 		});
-		setSocket(socketInstance);
+		socketRef.current = socketInstance;
+
+    const socket = socketRef.current;
 
 		socketInstance.on("connect", () => {
 			setIsConnected(true);
@@ -74,10 +84,10 @@ export default function GameLobby() {
 	}, [user, router]);
 
 	const handleCreateGame = (gameData) => {
-		if (!socket || !isConnected || !user) return;
+		if (!socketRef || !isConnected || !user) return;
 
 		console.log("Creating game with settings:", gameData);
-		socket.emit("create_game", {
+		socketRef.current?.emit("create_game", {
 			tableName: gameData.name,
 			creator: gameData.player,
 			maxPlayers: gameData.maxPlayers,
@@ -90,7 +100,7 @@ export default function GameLobby() {
 	};
 
 	const handleJoinGame = (gameId) => {
-		if (!gameId || !user || !socket) return;
+		if (!gameId || !user || !socketRef.current) return;
 
 		/*socket.emit('get_seat_info', { gameId });
 
@@ -139,29 +149,33 @@ export default function GameLobby() {
 	}
 
 	return (
-		<div className="min-h-screen bg-gray-900 text-gray-200 mt-10 pt-10">
-			<div className="empty pt-10"></div>
-			<div className="container mx-auto p-4 mt-10">
-				<div className="bg-gray-800 border-l-4 border-blue-700 p-4 mb-6 rounded">
-					<p className="text-gray-200">
-						{isConnected
-							? "✅ Connected to game server"
-							: "❌ Disconnected from game server"}
-					</p>
-				</div>
+    <div className="min-h-screen bg-gray-900 text-gray-200 mt-10 pt-10">
+      <div className="empty pt-10"></div>
+      <div className="container mx-auto p-4 mt-10">
+        <div className="bg-gray-800 border-l-4 border-blue-700 p-4 mb-6 rounded">
+          <p className="text-gray-200">
+            {isConnected
+              ? "✅ Connected to game server"
+              : "❌ Disconnected from game server"}
+          </p>
+        </div>
 
-				<h1 className="text-3xl font-bold mb-6 text-gray-100">
-					Poker Game Lobby
-				</h1>
-
-				<Lobby
-					games={gamesList}
-					profile={user}
-					socket={socket}
-					onJoinGame={handleJoinGame}
-					onCreateGame={handleCreateGame}
-				/>
-			</div>
-		</div>
-	);
+        <h1 className="text-3xl font-bold mb-6 text-gray-100">
+          Poker Game Lobby
+        </h1>
+        <div className="flex w-full">
+          <Lobby
+            games={gamesList}
+            profile={user}
+            socket={socketRef.current}
+            onJoinGame={handleJoinGame}
+            onCreateGame={handleCreateGame}
+          />
+          <div>
+            <DraggableChat socket={socketRef.current} scope="lobby" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
