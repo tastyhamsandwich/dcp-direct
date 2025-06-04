@@ -2,7 +2,6 @@ import "server-only";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { redirect } from "next/navigation";
-import { CookieOptions } from "@supabase/ssr";
 import type { User } from "@db/database";
 
 export type SessionPayload = {
@@ -46,10 +45,17 @@ export interface Session {
 
 const encodedKey = new TextEncoder().encode(process.env.JWT_SECRET);
 
-const cookie: CookieOptions = {
+type CookieOptions = {
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite?: boolean | 'lax' | 'strict' | 'none';
+  path: string;
+}
+
+const cookie = {
     httpOnly: true,
-    secure: true,
-    sameSite: 'lax',
+    secure: false,
+    sameSite: "lax" as "lax",
     path: "/",
 }
 

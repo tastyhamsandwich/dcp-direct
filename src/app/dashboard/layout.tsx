@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@contexts/authContext";
+import { usePathname } from 'next/navigation';
+import clsx from 'clsx';
 import Link from "next/link";
 import Image from "next/image";
 import AvatarUpload from "@comps/tools/AvatarUpload";
@@ -17,6 +19,40 @@ export default function DashboardLayout({
 	const [imageError, setImageError] = useState(false);
 	const [isImageLoading, setIsImageLoading] = useState(true);
 
+  const pathname = usePathname();
+
+  const links = [
+    { title: "Overview", path: "/dashboard" },
+    { title: "Staistics", path: "/dashboard/stats" },
+    { title: "Game History", path: "/dashboard/history" },
+    { title: "Settings", path: "/dashboard/settings" },
+    { title: "Balance", path: "/dashboard/balance" }
+  ].map((link) => {
+    
+    const isActive = pathname === link.path && link.path !== "/";
+
+    return (
+      <li
+        key={link.title}
+        className={
+          isActive
+            ? "ml-5 border-l-3 rounded-lg border-blue-600 duration-300 hover:duration-300 hover:translate-x-2"
+            : "border-blue-950 hover:ml-5 hover:border-l-3 hover:rounded-lg hover:border-blue-300 duration-300 hover:duration-300 hover:translate-x-2"
+        }
+      >
+        <Link
+          href={link.path}
+          className={
+            isActive
+              ? "flex items-center px-4 py-2 bg-[#575757] text-white underline rounded transition-colors duration-200"
+              : "flex items-center px-4 py-2 text-gray-300 hover:bg-[#575757] hover:text-white hover:underline rounded transition-colors duration-200"
+          }
+        >
+          {link.title}
+        </Link>
+      </li>
+    );
+  })
 	// Debug log the avatar URL
 	useEffect(() => {
 		if (user?.avatar) {
@@ -51,9 +87,9 @@ export default function DashboardLayout({
 	}, [user?.avatar, isImageLoading, imageError]);
 
 	return (
-    <div className="flex h-screen bg-[#1a1a2e] overflow-hidden m-0 p-0">
+    <div className="flex h-screen bg-[#1a1a2e] m-0 p-0">
       {/* Sidebar */}
-      <div className="w-64 bg-[#333] text-white shadow-xl">
+      <div className="w-64 bg-[#333] text-white shadow-xl relative">
         {/* Profile Section */}
         <div className="p-6 pt-10 border-b border-gray-700">
           <div className="flex flex-col items-center">
@@ -82,7 +118,6 @@ export default function DashboardLayout({
                       priority
                       onLoad={handleImageLoad}
                       onError={handleImageError}
-                      onLoadingComplete={() => setIsImageLoading(false)}
                       unoptimized
                     />
                   </div>
@@ -140,55 +175,16 @@ export default function DashboardLayout({
         {/* Navigation */}
         <nav className="p-4">
           <ul className="space-y-2">
-            <li>
-              <Link
-                href="/dashboard"
-                className="flex items-center px-4 py-2 text-gray-300 hover:bg-[#575757] hover:text-white rounded transition-colors duration-200"
-              >
-                Overview
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/dashboard/stats"
-                className="flex items-center px-4 py-2 text-gray-300 hover:bg-[#575757] hover:text-white rounded transition-colors duration-200"
-              >
-                Statistics
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/dashboard/history"
-                className="flex items-center px-4 py-2 text-gray-300 hover:bg-[#575757] hover:text-white rounded transition-colors duration-200"
-              >
-                Game History
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/dashboard/settings"
-                className="flex items-center px-4 py-2 text-gray-300 hover:bg-[#575757] hover:text-white rounded transition-colors duration-200"
-              >
-                Settings
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/dashboard/balance"
-                className="flex items-center px-4 py-2 text-gray-300 hover:bg-[#575757] hover:text-white rounded transition-colors duration-200"
-              >
-                Balance
-              </Link>
-            </li>
+            {links}
           </ul>
         </nav>
 
         {/* Balance Display */}
-        <div className="absolute bottom-0 w-64 p-6 border-t border-gray-700">
+        <div className="absolute bottom-0 left-0 w-full p-6 border-t border-gray-700">
           <div className="flex items-center justify-between">
             <span className="text-gray-400">Balance</span>
             <span className="text-[#eedd00] font-bold">
-              ${user?.balance || "0"}
+              {user?.balance || "0"}
             </span>
           </div>
         </div>

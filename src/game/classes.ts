@@ -1,5 +1,5 @@
-import { Truculenta } from 'next/font/google';
-import { Stringable, Suit, Rank, RankValue, CardName, RoomStatus, TGamePhase, TGamePhaseCommon, GamePhases, TGamePhaseStud, GameVariant, GameState, TableSeat, RoleIds, User, CustomGameRules, Hand, Action, Winner} from './types';
+import { Ruge_Boogie, Truculenta } from 'next/font/google';
+import { Stringable, Suit, Rank, RankValue, CardName, RoomStatus, TGamePhase, TGamePhaseCommon, GamePhases, TGamePhaseStud, GameVariant, GameState, TableSeat, RoleIds, User, CustomGameRules, Hand, Action, Winner, RoomPhase} from './types';
 import { capitalize, valueToRank } from '@lib/utils';
 import { evaluateHand, evaluateHands } from '@game/utils';
 import { Socket, Server } from 'socket.io';
@@ -134,6 +134,10 @@ export class Player implements User {
  * const card = new Card('ace', 'hearts'); // Ace of Hearts
  * @example <caption>Creating a new Card instance with a RankValue and Suit</caption>
  * const card = new Card(12, 'diamonds'); // Queen of Diamonds
+ * @example <caption>Creating a new Card instance with just two-character card name</caption>
+ * const card = new Card('AS'); // Ace of Spades
+ * const card = new Card('4C'); // Four of Clubs
+ * const card = new Card('TH'); // Ten of Hearts
  */
 export class Card implements Stringable {
 
@@ -448,9 +452,7 @@ export class Deck {
   }
 
   regenerateDeck(): void {
-
     this.cards = [];
-
     this.cards = this.generateDeck();
   }
 
@@ -529,6 +531,7 @@ export class Game {
   creator: Player;        
   players: Player[];
   status: RoomStatus;
+  roomPhase: RoomPhase;
   socket: Server;
   phase: TGamePhase;
   phaseOrder: GamePhases;
@@ -561,6 +564,7 @@ export class Game {
   nextRoundVariant: GameVariant | null;
   variantSelectionActive: boolean;
   variantSelectionTimeout: NodeJS.Timeout | null;
+  wildcard: Rank | Card | null;
 
   constructor(id: string, name: string, creator: Player, maxPlayers?: number, smallBlind?: number, bigBlind?: number, gameVariant?: GameVariant, customRules?: CustomGameRules) {
     this.id = id;
@@ -772,6 +776,7 @@ export class Game {
     console.log(`Starting dealer variant selection, dealer: ${this.players[this.dealerIndex].username}`);
     this.variantSelectionActive = true;
     this.phase = 'waiting'; // Ensure phase is waiting during selection
+    this.roomPhase = 'dealersetup';
     this.dealerSelectedVariant = null; // Clear previous selection
 
     // ... (rest of notification and timeout logic remains the same)
@@ -882,6 +887,20 @@ export class Game {
     }
   }
   
+  confirmDealerIdFromIndex(): boolean {
+    if (this.dealerId !== this.players[this.dealerIndex].id) {
+      if (this.players.findIndex(p => p.id === this.dealerId) !== this.dealerIndex)
+        return false;
+    }
+    return true;
+  }
+
+  confirmDealerIndexFromId(): boolean {
+    if (this.dealerIndex !== this.players.findIndex(p => p.id === this.dealerId))
+      return false;
+    return true;
+  }
+
   /** Finalizes round setup.
    * @function continueRoundSetup
    * @param {GameVariant} currentRoundVariant The current game variant in use.

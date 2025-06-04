@@ -172,7 +172,7 @@ export default function GamePage({
 			withCredentials: true,
 		});*/
 
-		socketRef.current = io("localhost:3001", {
+		socketRef.current = io("172.28.229.234:3001", {
       transports: ["websocket"],
       withCredentials: true,
     });

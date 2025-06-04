@@ -824,15 +824,23 @@ export function initializeSocket(io: Server) {
 
                     // Once found, set the active player id & index to this player's id & index
                     if (dcedPlayerIndex) {
-                      const nextPlayer = game.players[(dcedPlayerIndex + 1) % game.players.length];
+                      const nextPlayer =
+                        game.players[
+                          (dcedPlayerIndex + 1) % game.players.length
+                        ];
                       game.activePlayerId = nextPlayer.id;
-                      game.activePlayerIndex = (dcedPlayerIndex + 1) % game.players.length;
+                      game.activePlayerIndex =
+                        (dcedPlayerIndex + 1) % game.players.length;
 
                       // Confirm this player is not folded, otherwise advance to the next player again, until a valid player is found
                       while (nextPlayer.folded) {
-                        const nextNextPlayer = game.players[(game.activePlayerIndex + 1) % game.players.length];
+                        const nextNextPlayer =
+                          game.players[
+                            (game.activePlayerIndex + 1) % game.players.length
+                          ];
                         game.activePlayerId = nextNextPlayer.id;
-                        game.activePlayerIndex = (game.activePlayerIndex + 1) % game.players.length;
+                        game.activePlayerIndex =
+                          (game.activePlayerIndex + 1) % game.players.length;
                       }
 
                       console.log(
@@ -853,12 +861,23 @@ export function initializeSocket(io: Server) {
                       });
 
                       // Also broadcast a message to everyone about whose turn it is
-                      io.to(gameId).emit("active_player_changed", {
+
+                      const timestamp = formatTimestamp(Date.now());
+                      const sysChatPayload = {
+                        sender: "SYSTEM",
+                        message: `Player '${username}' has disconnected, it is now ${nextPlayer.username}'s turn.`,
+                        timestamp,
+                      };
+                      io.to(gameId).emit("chat_message", sysChatPayload);
+
+                      // INFO This was the code for broadcasting an update message, but there is no corresponding client-side event handler for this emitted event
+                      // INFO Unless this becomes necessary, the update message is handled by a chat message from "SYSTEM" as done above
+                      /*io.to(gameId).emit("active_player_changed", {
                         activePlayerId: game.activePlayerId,
                         activePlayerName:
                           game.players.find((p) => p.id === game.activePlayerId)
                             ?.username || "Unknown player",
-                      });
+                      });*/
                     }
                   }
                   // Removed this function call for now, the above checks and loop should resolve the active player issue
@@ -1251,6 +1270,7 @@ function resetForNextRound(game, io) {
 
 	// Reset game state for next round
 	game.roundActive = false;
+  game.roomStatus = "waiting";
 	game.phase = "waiting";
 	game.pot = 0;
 	game.currentBet = 0;
@@ -1264,12 +1284,12 @@ function resetForNextRound(game, io) {
 		p.cards = [];
 		p.currentBet = 0;
 		p.previousAction = "none";
-		// Automatically set players ready for next round
-		p.ready = true;
+		p.ready = false;
 	});
 
 	// Also update roles based on new dealer position
-	if (game.players.length >= 2) {
+	/*
+  if (game.players.length >= 2) {
 		game.startRound(); // Start the new round immediately since players are auto-ready
 
 		// Emit game update with new state
@@ -1292,6 +1312,7 @@ function resetForNextRound(game, io) {
 			message: "Not enough players to start next round.",
 		});
 	}
+    */
 }
 
 function getSocketIdByUsername(

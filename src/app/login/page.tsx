@@ -1,26 +1,20 @@
 'use client';
 
 import styles from "./login.module.css";
-import { FormMessage, Message } from "@comps/forms/FormMessage";
 import { Input } from "@comps/ui/Input";
 import { Label } from "@comps/ui/Label";
 import Link from "next/link";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { loginSchema } from "@lib/zod";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuth } from "@contexts/authContext";
 import { useRouter } from "next/navigation";
-import Image from 'next/image';
 import { useActionState } from 'react';
 import { loginAction } from './actions';
 import { useFormStatus } from 'react-dom';
 
 const LoginPage = () => {
-  const [state, action, pending] = useActionState(loginAction, undefined);
-  const { signIn, signInWithOAuth, error: authError, loading, user } = useAuth();
+  const [state, action] = useActionState(loginAction, undefined);
+  const { signIn, error: authError, loading } = useAuth();
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
 
 
 
@@ -85,7 +79,7 @@ const LoginPage = () => {
               </div>
               {state?.errors.password && (
                 <p className="text-red-500">
-                 {state?.errors.password}
+                  {state?.errors.password}
                 </p>
               )}
             </div>

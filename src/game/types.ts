@@ -58,6 +58,8 @@ export type RoomStatus = 'waiting' | 'playing' | 'paused';
 
 export type Action = 'none' | 'fold' | 'check' | 'bet' | 'call' | 'raise' | 'win';
 
+export type RoomPhase = 'dealersetup' | 'active' | 'interround';
+
 export interface WinnerInfo {
 	playerId: string;
 	playerName: string;
