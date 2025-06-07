@@ -2,48 +2,15 @@
 
 ## 🃏 Overview
 
-DCP is a real-time multiplayer card game application built with Next.js and WebSockets. The application features user authentication, real-time gameplay, and a responsive UI.
+DCP is a real-time multiplayer card game application built with Next.js and WebSockets. The application features user authentication, real-time gameplay, and a responsive UI. It will eventually feature extensive stat-tracking and a custom game variant editor to allow players to deal any kind of poker game they can think of.
 
-Initial documentation has been created over the following subjects:
+## Why?
 
-## 🃏 Documentation Structure
+There are lots of online poker games out there already, what's different about this one? 
 
-1. **Project Overview** (`/docs/project-overview.md`)
-   - Application architecture and organization
-   - Directory structure explanation
-   - Key technologies used
-   - Data flow patterns
+I really enjoy playing poker, but I get freakin' tired of playing Texas Hold'Em all the time. It's all anyone seems to know or understand, at least in the casual poker player arena. I always played Dealer's Choice with my friends, where we could deal any kind of poker game we wanted when it was our turn. And I mean any kind. Anything we could come up with, crazy community boards, different layouts, different rules for how you could combine the cards on the board, and it made it WAY MORE FUN.
 
-2. **Authentication** (`/docs/authentication.md`)
-   - Authentication flow with local MongoDB
-   - User profiles and session management
-   - Protected routes implementation
-   - WebSocket authentication for game routes
-
-3. **Game Logic** (`/docs/game-logic.md`)
-   - Core game concepts and data structures
-   - Game state management
-   - Game initialization and player actions
-   - Server-side game management
-
-4. **WebSockets** (`/docs/websockets.md`)
-   - Implemented with Socket.IO presently
-   - Real-time communication implementation
-   - Server-side WebSocket handling
-   - Client-side connection management
-   - Message protocol and types
-
-5. **UI Components** (`/docs/ui-components.md`)
-   - Component organization and structure
-   - Core UI components examples
-   - Game-specific UI components
-   - Component design philosophy
-
-6. **API Reference** (`/docs/api-reference.md`)
-   - WebSocket API endpoints and message formats <span style="color:darkred;font-weight:700">--- CURRENTLY DEPRECATED ---</span>
-   - REST API endpoints
-   - Request and response examples
-   - Error handling
+So, I wanted to capture that awesome unpredictability and excitement, but in an online poker format. That's why!
 
 ## 🃏 Key Architecture Points
 
