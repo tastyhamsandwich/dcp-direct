@@ -114,3 +114,26 @@ A checklist for ongoing development:
 - [x]  Globally-accessible Chat component
 - [ ]  AI players   
 - [ ]  Extras   
+
+
+## Contributing
+
+### Clone the repo
+```bash
+git clone https://github.com/tastyhamsandwich/dcp-direct/
+cd dcp-direct
+```
+
+### Run the dev server and explore
+
+```bash
+pnpm run dev:all
+```
+
+The site defaults to localhost:3003 for the frontend and localhost:3001 for the websockets backend
+
+### Make some additions or changes
+Then submit a pull request
+
+If you'd like to contribute, please fork the repository and open a pull request to the primary branch
+
