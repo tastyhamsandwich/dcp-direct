@@ -515,6 +515,7 @@ export function initializeSocket(io: Server) {
 						);
 					}
 					player.previousAction = "call";
+          game.stats.players[player.id].stats.updateTotalBets(callAmount);
 					actionSuccess = true;
 					break;
 
@@ -545,6 +546,7 @@ export function initializeSocket(io: Server) {
 						player.chips = 0;
 						game.currentBet = betAmount;
 						game.pot += betAmount;
+            game.stats[player.id].betTotal += betAmount;
 
 						// Create a sidepot for this all-in player
 						game.createSidepot(player, betAmount);
@@ -559,6 +561,7 @@ export function initializeSocket(io: Server) {
 						game.currentBet = betAmount;
 					}
 
+          game.stats.players[player.id].stats.updateTotalBets(betAmount);
 					player.previousAction = "bet";
 					actionSuccess = true;
 					break;
@@ -1252,22 +1255,31 @@ function handleShowdown(game, io) {
 			showdown: true,
 		});
 
-		// Reset the game for next round after delay
-		setTimeout(() => {
-			resetForNextRound(game, io);
-		}, 8000); // Give players 8 seconds to see the result
+	resetForNextRound(game, io);
+
 	}
 }
 
 function resetForNextRound(game, io) {
-	// Sort players first to ensure consistent ordering
-	game.sortPlayerList();
 
 	// Make sure the dealer index is valid
 	if (game.dealerIndex >= game.players.length) {
 		game.dealerIndex = 0;
 	}
 
+  game.resetRound();
+
+  io.to(game.id).emit("round_reset", { game: game.returnGameState() });
+
+  const chatPayload = {
+    message: `Round ended, beginning round #${game.roundNumber}...`,
+    sender: "SYSTEM",
+    timestamp: insertTimestamp()
+  }
+
+  io.to(game.id).emit("chat_message", chatPayload);
+
+  /*
 	// Reset game state for next round
 	game.roundActive = false;
   game.roomStatus = "waiting";
@@ -1285,7 +1297,7 @@ function resetForNextRound(game, io) {
 		p.currentBet = 0;
 		p.previousAction = "none";
 		p.ready = false;
-	});
+	});*/
 
 	// Also update roles based on new dealer position
 	/*
@@ -1335,4 +1347,8 @@ function formatTimestamp(timestamp: number | string | Date) {
     second: "2-digit",
     hour12: true,
   });
+}
+
+function insertTimestamp(): string {
+  return `${formatTimestamp(Date.now())}`;
 }

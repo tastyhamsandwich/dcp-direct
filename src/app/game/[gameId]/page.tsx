@@ -172,7 +172,7 @@ export default function GamePage({
 			withCredentials: true,
 		});*/
 
-		socketRef.current = io("172.28.229.234:3001", {
+		socketRef.current = io("172.30.152.67:3001", {
       transports: ["websocket"],
       withCredentials: true,
     });
@@ -277,6 +277,12 @@ export default function GamePage({
 				});
 			}
 		});
+
+    socketRef.current.on("round_reset", (data) => {
+      console.log("Resetting round:", data);
+      dispatch({ type: "SET_GAME_STATE", payload: data.game });
+      setIsMyTurn(false);
+    });
 
 		socketRef.current.on("round_winners", (data) => {
 			console.log("Round winners received:", data);

@@ -45,9 +45,9 @@ const LoginPage = () => {
 
         <div id="login" className="flex space-y-4">
           <form className="login" action={action}>
-            <div className="form-item flex flex-row space-x-8 pt-10 justify-between">
+            <div className="form-item flex flex-row space-x-8 pt-5 justify-between">
               <div className="label-container pl-10">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">Email or Username</Label>
               </div>
               <div className={styles.inputcontainer}>
                 <Input

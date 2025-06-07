@@ -4,6 +4,231 @@ import { capitalize, valueToRank } from '@lib/utils';
 import { evaluateHand, evaluateHands } from '@game/utils';
 import { Socket, Server } from 'socket.io';
 import { socketManager, type SocketManager } from '@lib/socketManager';
+import { PlayerStats, GameSessionStats, PlayerGameStats } from '@game/stats/types';
+import { clearAllModuleContexts } from 'next/dist/server/lib/render-server';
+
+class PlayerStatsComposite {
+  stats: PlayerStatsObject;
+  gameStats: PlayerGameStatsObject;
+}
+class GameSessionStatsObject {
+  id: string;
+  startedAt: string;
+  endedAt: string | null;
+  gameVariants: {[key: string]: number;};
+  buyIn: number;
+  creator: string;
+  players: string[];
+  gameId: string;
+  gameName: string;
+  bestHand: string | null;
+  bestHandPlayer: string | null;
+  biggestPot: number;
+  biggestPotWinner: string | null;
+  totalPot: number;
+  hardcoreMode: boolean;
+  rankedGame: boolean;
+  totalHands: number;
+
+  constructor(id, creator, players, gameId, gameName, hardcoreMode, rankedGame) {
+    this.id = '';
+    this.startedAt = Date.now().toString();
+    this.endedAt = '';
+    this.gameVariants = {};
+    this.buyIn = 0;
+    this.creator = creator;
+    this.players = players;
+    this.gameId = gameId;
+    this.gameName = gameName;
+    this.bestHand = '';
+    this.bestHandPlayer = '';
+    this.biggestPot = 0;
+    this.biggestPotWinner = '';
+    this.totalPot = 0;
+    this.hardcoreMode = hardcoreMode;
+    this.rankedGame = rankedGame;
+    this.totalHands = 0;
+  }
+
+  updateEndedAt() {
+    this.endedAt = Date.now().toString();
+    return this.endedAt;
+  }
+
+  updateBestHand(hand) {
+    this.bestHand = hand;
+    return this.bestHand;
+  }
+
+
+
+  updateBestHandPlayer(player) {
+    this.bestHandPlayer = player;
+    return this.bestHandPlayer;
+  }
+
+  updateBiggestPot(amount) {
+    this.biggestPot = amount;
+    return this.biggestPot;
+  }
+
+  updateBiggestPotWinner(player) {
+    this.biggestPotWinner = player;
+    return this.biggestPotWinner;
+  }
+
+  updateTotalPot(amount) {
+    this.totalPot += amount;
+    return this.totalPot;
+  }
+
+  updateTotalHands() {
+    this.totalHands += 1;
+    return this.totalHands;
+  }
+
+}
+
+class PlayerStatsObject {
+  id: string;
+  gamesPlayed: number;
+  gamesWon: number;
+  totalHandsPlayed: number;
+  handsWon: number;
+  totalWinnings: number;
+  biggestPot: number;
+  lastUpdated: string;
+  totalBets: number;
+
+  constructor(id) {
+    this.id = id;
+    this.gamesPlayed = 0;
+    this.gamesWon = 0;
+    this.totalHandsPlayed = 0;
+    this.handsWon = 0;
+    this.totalWinnings = 0;
+    this.biggestPot = 0;
+    this.lastUpdated = Date.now().toString();
+    this.totalBets = 0;
+  }
+
+  getGamesPlayed() {
+    return this.gamesPlayed;
+  }
+
+  addGamePlayed() {
+    this.gamesPlayed += 1;
+    return this.gamesPlayed;
+  }
+
+  getGamesWon() {
+    return this.gamesWon;
+  }
+
+  addGameWon() {
+    this.gamesWon += 1;
+    return this.gamesWon;
+  }
+
+  getTotalHandsPlayed() {
+    return this.totalHandsPlayed;
+  }
+
+  addTotalHandsPlayed() {
+    this.totalHandsPlayed += 1;
+    return this.totalHandsPlayed;
+  }
+
+  getHandsWon() {
+    return this.handsWon;
+  }
+
+  addHandWon() {
+    this.handsWon += 1;
+    return this.handsWon;
+  }
+
+  getTotalWinnings() {
+    return this.totalWinnings;
+  }
+
+  addTotalWinnings(amount) {
+    this.totalWinnings += amount;
+    return this.totalWinnings;
+  }
+
+  getBiggestPot() {
+    return this.biggestPot;
+  }
+
+  updateBiggestPot(amount) {
+    this.biggestPot = amount;
+    return this.biggestPot;
+  }
+
+  getLastUpdated() {
+    return this.lastUpdated;
+  }
+
+  updateLastUpdated() {
+    this.lastUpdated = Date.now().toString();
+    return this.lastUpdated;
+  }
+
+  getTotalBets() {
+    return this.totalBets;
+  }
+
+  updateTotalBets(amount) {
+    this.totalBets += amount;
+    return this.totalBets;
+  }
+}
+
+class PlayerGameStatsObject {
+  id: string;
+  playerId: string;
+  gameId: string;
+  buyIn: number;
+  cashOut: number;
+  handsPlayed: number;
+  handsWon: number;
+  joinedAt: string;
+  leftAt: string;
+
+  constructor(id, playerId, gameId, buyIn, cashOut) {
+    this.id = id;
+    this.playerId = playerId;
+    this.gameId = gameId;
+    this.buyIn = buyIn;
+    this.cashOut = 0;
+    this.handsPlayed = 0;
+    this.handsWon = 0;
+    this.joinedAt = Date.now().toString();
+    this.leftAt = '';
+  }
+
+  updateCashOut(amount) {
+    this.cashOut = amount;
+    return this.cashOut;
+  }
+
+  updateHandsPlayed() {
+    this.handsPlayed += 1;
+    return this.handsPlayed;
+  }
+
+  updatedHandsWon() {
+    this.handsWon += 1;
+    return this.handsWon;
+  }
+
+  updateLeftAt() {
+    this.leftAt = Date.now().toString();
+    return this.leftAt;
+  }
+}
+
 
 type HandRank = {
   hand: string,
@@ -565,6 +790,13 @@ export class Game {
   variantSelectionActive: boolean;
   variantSelectionTimeout: NodeJS.Timeout | null;
   wildcard: Rank | Card | null;
+  stats: {  game: GameSessionStatsObject,
+            players: Array<{
+              id: string;
+              stats: PlayerStatsObject,
+              gameStats: PlayerGameStatsObject
+            }>;
+    };
 
   constructor(id: string, name: string, creator: Player, maxPlayers?: number, smallBlind?: number, bigBlind?: number, gameVariant?: GameVariant, customRules?: CustomGameRules) {
     this.id = id;
@@ -596,6 +828,16 @@ export class Game {
     this.nextRoundVariant = this.gameVariant;
     this.variantSelectionActive = false;
     this.variantSelectionTimeout = null;
+    this.stats = {
+      game: new GameSessionStatsObject(this.id, this.creator, this.players, this.id, this.name, false, false),
+      players: []
+    }
+    this.players.forEach((player) => {
+      const stats = new PlayerStatsObject(player.id);
+      const gameStats = new PlayerGameStatsObject(player.id, player.id, this.id, 0, 0);
+
+      this.stats.players.push({id: player.id, stats, gameStats})
+    });
 
     this.updateCardsPerPlayer(this.gameVariant, customRules)
     switch (gameVariant) {
@@ -983,12 +1225,16 @@ export class Game {
     smallBlindPlayer.allIn = smallBlindPlayer.chips === 0;
     smallBlindPlayer.previousAction = 'bet'; 
 
+    this.stats.game.totalPot += sbAmount;
+
     const bbAmount = Math.min(this.bigBlind, bigBlindPlayer.chips);
     this.pot += bbAmount;
     bigBlindPlayer.currentBet = bbAmount;
     bigBlindPlayer.chips -= bbAmount;
     bigBlindPlayer.allIn = bigBlindPlayer.chips === 0;
     bigBlindPlayer.previousAction = 'none'; 
+
+    this.stats.game.totalPot += bbAmount;
     // Big blind previous action is 'none' to allow the action to return to them in first round. 
   }
 
@@ -1759,6 +2005,7 @@ export class Game {
       p.allIn = false;
       p.folded = false;
       p.cards = [];
+      p.ready = false;
     });
 
     if (this.players.every(p => {
@@ -1766,6 +2013,7 @@ export class Game {
       p.previousAction === 'none' &&
       p.allIn === false &&
       p.folded === false &&
+      p.ready === false &&
       p.cards.length === 0
     })) return true;
     else return false;
@@ -1849,10 +2097,14 @@ export class Game {
     // Sort players first toensure consistent ordering
     this.sortPlayerList();
 
-    // Make sure we have valid player count
     const numPlayers = this.players.length;
-    if (numPlayers <= 1)
-      this.status = 'waiting';
+    
+    // ---- Set Room Status to 'waiting' at end of round ALWAYS
+    // ---- Since we have stopped using 'automatic round start' logic for now
+    
+    // if (numPlayers <= 1)
+    
+    this.status = 'waiting';
 
     // Reset game state
     this.pot = 0;

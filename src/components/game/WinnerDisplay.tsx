@@ -15,11 +15,7 @@ interface WinnerDisplayProps {
 	onClose: () => void;
 }
 
-let winnersArray: WinnerInfo[];
-let winner: WinnerInfo;
-let winnerHand: string;
-let winnerName: string;
-let winnerCards: CardClass[] = [];
+
 
 const WinnerDisplay = ({
 	winners,
@@ -31,7 +27,11 @@ const WinnerDisplay = ({
 	const [confettiActive, setConfettiActive] = useState(false);
 	const [showDetails, setShowDetails] = useState(false);
 
-
+  const winnersArray = winners;
+  const winner = winners[0];
+  const winnerHand = winners[0].hand || "";
+  const winnerName = winners[0].playerName;
+  const winnerCards = winners[0].cards || [];
 
 	useEffect(() => {
 		if (isOpen) {
@@ -46,15 +46,6 @@ const WinnerDisplay = ({
 			return () => clearTimeout(timer);
 		}
 	}, [isOpen]);
-
-  useEffect(() => {
-    winnersArray = winners;
-    winner = winners[0];
-    winnerHand = winners[0].hand || "";
-    winnerName = winners[0].playerName;
-    winnerCards = winners[0].cards || [];
-  }, []);
-
 
 	useClickOutside(winnerRef, onClose);
 
