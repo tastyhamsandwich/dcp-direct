@@ -4,7 +4,7 @@
 
 DCP is a real-time multiplayer card game application built with Next.js and WebSockets. The application features user authentication, real-time gameplay, and a responsive UI. It will eventually feature extensive stat-tracking and a custom game variant editor to allow players to deal any kind of poker game they can think of.
 
-## Why?
+## 🃏 Why?
 
 There are lots of online poker games out there already, what's different about this one? 
 
@@ -22,7 +22,7 @@ So, I wanted to capture that awesome unpredictability and excitement, but in an 
 
 ## 🃏 Getting Started
 
-For setup instructions and developer guides, please see the individual documentation files in the `/docs` directory.
+To setup the project in a development environment, see the Contributing section at the bottom of this README. For developer guides and function descriptions, please see the individual documentation files in the `/docs` directory. Finally, once the project is in a state worthy of going live, the URL of the site will be posted.
 
 ## 🃏 Future Development
 
@@ -32,6 +32,8 @@ Areas for future development and improvement include:
 - Implementing a persistent storage solution for game history
 - Enhancing the lobby system with game filtering and searching
 - Adding social features like friends lists and private games
+- Comprehensive statistics-tracking and leaderboards
+- Improved UI layouts
 
 ## 🃏 Tasks and Milestones
 
@@ -80,26 +82,33 @@ A checklist for ongoing development:
   - [x]  E-mail  
 - [x]  Globally-accessible Chat component
 - [ ]  AI players   
-- [ ]  Extras   
+- [ ]  Extras? (I'm always open to ideas for features!)   
 
 
-## Contributing
+## 🃏 Contributing
 
-### Clone the repo
+### Cloning the Repo
 ```bash
 git clone https://github.com/tastyhamsandwich/dcp-direct/
 cd dcp-direct
 ```
 
-### Run the dev server and explore
+### Running the Development Server
 
+For local development:
 ```bash
 pnpm run dev:all
 ```
 
+For public-facing development:
+```bash
+pnpm run dev:net
+```
+
+These scripts utilize `concurrently` to launch the Next.JS development server and an Express-based WebSockets back-end server as well.
 The site defaults to localhost:3003 for the frontend and localhost:3001 for the websockets backend
 
-### Make some additions or changes
+### Additions & Changes
 Then submit a pull request
 
 If you'd like to contribute, please fork the repository and open a pull request to the primary branch
