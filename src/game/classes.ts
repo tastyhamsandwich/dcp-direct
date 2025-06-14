@@ -4,9 +4,15 @@ import { capitalize, valueToRank } from '@lib/utils';
 import { evaluateHand, evaluateHands } from '@game/utils';
 import { Socket, Server } from 'socket.io';
 import { socketManager, type SocketManager } from '@lib/socketManager';
-import { PlayerStats, GameSessionStats, PlayerGameStats } from '@game/stats/types';
+import {
+  CompositeStatsObject,
+  PlayerStatsComposite,
+  PlayerStats,
+  PlayerGameStats,
+  GameSessionStats,
+} from "@game/stats/types";
 import { clearAllModuleContexts } from 'next/dist/server/lib/render-server';
-
+/*
 class PlayerStatsComposite {
   stats: PlayerStatsObject;
   gameStats: PlayerGameStatsObject;
@@ -228,7 +234,7 @@ class PlayerGameStatsObject {
     return this.leftAt;
   }
 }
-
+*/
 
 type HandRank = {
   hand: string,
@@ -790,13 +796,7 @@ export class Game {
   variantSelectionActive: boolean;
   variantSelectionTimeout: NodeJS.Timeout | null;
   wildcard: Rank | Card | null;
-  stats: {  game: GameSessionStatsObject,
-            players: Array<{
-              id: string;
-              stats: PlayerStatsObject,
-              gameStats: PlayerGameStatsObject
-            }>;
-    };
+  stats: CompositeStatsObject;
 
   constructor(id: string, name: string, creator: Player, maxPlayers?: number, smallBlind?: number, bigBlind?: number, gameVariant?: GameVariant, customRules?: CustomGameRules) {
     this.id = id;
@@ -829,14 +829,68 @@ export class Game {
     this.variantSelectionActive = false;
     this.variantSelectionTimeout = null;
     this.stats = {
-      game: new GameSessionStatsObject(this.id, this.creator, this.players, this.id, this.name, false, false),
-      players: []
+      game: {
+        id: '',
+        startedAt: Date.now().toString(),
+        endedAt: '',
+        gameVariants: {},
+        buyIn: null,
+        creator: this.creator.username,
+        players: [],
+        gameId: this.id,
+        gameName: this.name,
+        bestHand: null,
+        bestHandPlayer: null,
+        biggestPot: 0,
+        biggestPotWinner: null,
+        totalPot: 0,
+        hardcoreMode: false,
+        rankedGame: false,
+        totalHands: 0
+      },
+      players: {},
     }
     this.players.forEach((player) => {
-      const stats = new PlayerStatsObject(player.id);
-      const gameStats = new PlayerGameStatsObject(player.id, player.id, this.id, 0, 0);
+      const personalStats: PlayerStats = {
+        gamesPlayed: 0,
+        gamesWon: 0,
+        totalHandsPlayed: 0,
+        handsWon: 0,
+        totalWinnings: 0,
+        biggestPot: 0,
+        lastUpdated: '',
+        totalBets: 0,
+        mainPotWinnings: 0,
+        sidePotWinnings: 0,
+        mainPotsWon: 0,
+        sidePotsWon: 0,
+        timesCalled: 0,
+        timesBet: 0,
+        timesRaised: 0,
+        timesFolded: 0,
+        timesChecked: 0
+      }
+      const gameStats: PlayerGameStats = {
+        gameId: this.id,
+        gameName: this.name,
+        buyIn: null,
+        cashOut: null,
+        handsPlayed: 0,
+        handsWon: 0,
+        joinedAt: '',
+        leftAt: '',
+        timesCalled: 0,
+        timesBet: 0,
+        timesRaised: 0,
+        timesFolded: 0,
+        timesChecked: 0,
+        totalBets: 0,
+        biggestPot: 0
+      }
 
-      this.stats.players.push({id: player.id, stats, gameStats})
+      const playerStats: PlayerStatsComposite = {id: player.id, name: player.username, personalStats, gameStats};
+
+      this.stats.players[player.id] = playerStats;
     });
 
     this.updateCardsPerPlayer(this.gameVariant, customRules)
@@ -1727,13 +1781,21 @@ export class Game {
       let totalWinnings = this.pot;
       winner.chips += this.pot;
       winner.previousAction = 'win';
-      
+
+      this.stats.players[winner.id].personalStats.handsWon += 1;
+      this.stats.players[winner.id].personalStats.totalHandsPlayed += 1;
+      this.stats.players[winner.id].personalStats.totalWinnings += this.pot;
+      this.stats.players[winner.id].personalStats.mainPotWinnings += this.pot;
+      this.stats.players[winner.id].personalStats.mainPotsWon += 1;
+
       // Handle any sidepots
       if (this.sidepots.length > 0) {
         this.sidepots.forEach(sidepot => {
           const sidepotAmount = sidepot.getAmount();
           winner.chips += sidepotAmount;
           totalWinnings += sidepotAmount;
+          this.stats.players[winner.id].personalStats.sidePotWinnings += sidepotAmount;
+          this.stats.players[winner.id].personalStats.sidePotsWon += 1;
         });
       }
       
@@ -2237,6 +2299,18 @@ export class Game {
           amount: sidepot.getAmount(),
           potType: `Sidepot ${potIndex}`
         });
+
+        // Update player stats
+        this.stats.players[winner.id].personalStats.totalHandsPlayed += 1;
+        this.stats.players[winner.id].personalStats.handsWon += 1;
+        this.stats.players[winner.id].personalStats.totalWinnings += sidepot.getAmount();
+
+        // Update player game stats
+        this.stats.players[winner.id].gameStats.handsWon += 1;
+
+        if (sidepot.getAmount() > this.stats.players[winner.id].personalStats.biggestPot)
+          this.stats.players[winner.id].personalStats.biggestPot = sidepot.getAmount();
+
       } else {
         // Multiple eligible players, evaluate hands
         if (Array.isArray(this.communityCards) && this.communityCards.length > 0) {
@@ -2258,6 +2332,18 @@ export class Game {
               amount: potPerWinner,
               potType: `Sidepot ${potIndex}`
             });
+
+            this.stats.players[winner.id].personalStats.totalHandsPlayed += 1;
+            this.stats.players[winner.id].personalStats.handsWon += 1;
+            this.stats.players[winner.id].personalStats.totalWinnings +=
+              sidepot.getAmount();
+
+            if (
+              sidepot.getAmount() >
+              this.stats.players[winner.id].personalStats.biggestPot
+            )
+              this.stats.players[winner.id].personalStats.biggestPot =
+                sidepot.getAmount();
           });
           
           // Give remainder to first position after dealer
@@ -2268,6 +2354,8 @@ export class Game {
             }
             this.players[currentPos].chips += remainder;
             console.log(`Player ${this.players[currentPos].username} awarded ${remainder} remainder from sidepot ${potIndex}`);
+            
+            this.stats.players[this.players[currentPos].id].personalStats.totalWinnings += remainder;
             
             // Add the remainder to the winner's total in winnerInfo
             const winnerIndex = winnerInfo.findIndex(w => 

@@ -1,5 +1,7 @@
 import { MongoClient, ServerApiVersion, ObjectId, Long, WithId, Db, BSON } from "mongodb";
 import bcrypt from "bcryptjs";
+import { PlayerStatsComposite, GameSessionStats } from '@game/stats/types';
+import { statsBuffer } from "framer-motion";
 
 type UserProps = {
   username: string;
@@ -9,21 +11,46 @@ type UserProps = {
 };
 
 export type User = {
+  _id?: ObjectId;
   id?: string;
   username?: string;
   password?: string;
   email?: string;
-  firstName?: string | null;
-  lastName?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
   phone?: number | null;
   balance?: number;
   avatar?: string;
   level?: number;
   exp?: number;
   role?: string;
-  created?: Date;
-  lastUpdated?: Date;
+  created_at?: Date | number;
+  last_updated?: Date | number;
+  active?: boolean;
 };
+
+export type UserStats = {
+  user_id?: ObjectId;
+  username?: string;
+  games_played?: number;
+  games_won?: number;
+  total_hands_played?: number;
+  hands_won?: number;
+  main_pot_winnings?: number;
+  side_pot_winnings?: number;
+  main_pots_won?: number;
+  side_pots_won?: number;
+  total_winnings?: number;
+  biggest_pot?: number;
+  last_updated?: Date | number;
+  total_bets?: number;
+  times_called?: number,
+  times_bet?: number,
+  times_raised?: number,
+  times_folded?: number,
+  times_checked?: number,
+  last_played?: Date | number
+}
 
 type OpSuccess = {
   success: true;
@@ -140,8 +167,8 @@ export async function getUserById(userId: string): Promise<OpResult> {
     id: userId,
     username: data.username,
     email: data.email,
-    firstName: data.first_name || "",
-    lastName: data.last_name || "",
+    first_name: data.first_name || "",
+    last_name: data.last_name || "",
     phone: data.phone || "",
     balance: data.balance || 0,
     avatar: data.avatar || "",
@@ -180,12 +207,13 @@ export const createUser = async (userData: UserProps): Promise<OpResult> => {
   const client = new MongoClient(uri!);
   const database = client.db("dcp");
   const users = database.collection("users");
+  const statistics = database.collection("statistics");
 
   try {
     const hashword = await bcrypt.hash(userData.password, 10);
-    const created = Long.fromNumber(Date.now());
+    const created = Date.now();
 
-    const User = {
+    const User: User = {
       _id: new ObjectId(),
       email: userData.email,
       username: userData.username,
@@ -200,10 +228,34 @@ export const createUser = async (userData: UserProps): Promise<OpResult> => {
       last_updated: created,
       first_name: "",
       last_name: "",
-      phone: "",
+      phone: null,
     };
 
     const data = await users.insertOne(User);
+
+    const newUserStats: UserStats = {
+      user_id: data.insertedId,
+      username: userData.username,
+      games_played: 0,
+      games_won: 0,
+      total_hands_played: 0,
+      hands_won: 0,
+      main_pot_winnings: 0,
+      side_pot_winnings: 0,
+      main_pots_won: 0,
+      side_pots_won: 0,
+      total_winnings: 0,
+      biggest_pot: 0,
+      last_updated: Date.now(),
+      total_bets: 0,
+      times_called: 0,
+      times_bet: 0,
+      times_raised: 0,
+      times_folded: 0,
+      times_checked: 0,
+    }
+
+    const stats = await statistics.insertOne(newUserStats);
 
     console.log(`User created with _id: ${data.insertedId}`);
 
@@ -253,8 +305,8 @@ export const updateUser = async (userId: string, userData: User): Promise<OpResu
         id: userId,
         username: updatedData.$set.username,
         email: updatedData.$set.email,
-        firstName: updatedData.$set.firstName || "",
-        lastName: updatedData.$set.lastName || "",
+        first_name: updatedData.$set.first_name || "",
+        last_name: updatedData.$set.last_name || "",
         phone: updatedData.$set.phone || null,
         balance: updatedData.$set.balance || 0,
         avatar: updatedData.$set.avatar || "",
@@ -266,6 +318,62 @@ export const updateUser = async (userId: string, userData: User): Promise<OpResu
 
     return result;
   } finally {
+    await client.close();
+  }
+}
+
+const updatePlayerStats = async (playerStatsObject: PlayerStatsComposite) => {
+  const client = new MongoClient(uri!);
+  const database = client.db("dcp");
+  const users = database.collection("users");
+  const statistics = database.collection("statistics");
+  const username = playerStatsObject.name;
+
+  try {
+    const user = await users.findOne({username});
+
+    if (user) {
+      const oldStats = await statistics.findOne({username});
+
+      if (oldStats) {
+
+        let biggestPot: number;
+
+        if (playerStatsObject.personalStats.biggestPot > oldStats.biggest_pot)
+          biggestPot = playerStatsObject.personalStats.biggestPot;
+        else
+          biggestPot = oldStats.biggest_pot;
+
+        const updatedStatsObject = {
+          user_id: user._id,
+          username: username,
+          games_played: playerStatsObject.personalStats.gamesPlayed + oldStats.games_played,
+          games_won: playerStatsObject.personalStats.gamesWon + oldStats.games_won,
+          total_hands_played: playerStatsObject.personalStats.totalHandsPlayed + oldStats.total_hands_played,
+          hands_won: playerStatsObject.personalStats.handsWon + oldStats.hands_won,
+          main_pot_winnings: playerStatsObject.personalStats.mainPotWinnings + oldStats.main_pot_winnings,
+          side_pot_winnings: playerStatsObject.personalStats.sidePotWinnings + oldStats.side_pot_winnings,
+          main_pots_won: playerStatsObject.personalStats.mainPotsWon + oldStats.main_pots_won,
+          side_pots_won: playerStatsObject.personalStats.sidePotsWon + oldStats.side_pots_won,
+          total_winnings: playerStatsObject.personalStats.totalWinnings + oldStats.total_winnings,
+          biggest_pot: biggestPot,
+          last_updated: Date.now(),
+          total_bets: playerStatsObject.personalStats.totalBets + oldStats.total_bets,
+          times_called: playerStatsObject.personalStats.timesCalled + oldStats.times_called,
+          times_bet: playerStatsObject.personalStats.timesBet + oldStats.times_bet,
+          times_raised: playerStatsObject.personalStats.timesRaised + oldStats.times_raised,
+          times_folded: playerStatsObject.personalStats.timesFolded + oldStats.times_folded,
+          times_checked: playerStatsObject.personalStats.timesChecked + oldStats.times_checked,
+          last_played: Date.now()
+        }
+
+        const filter = { username };
+        const stats = await statistics.updateOne(filter, updatedStatsObject);
+        return stats;
+      }
+    }
+  }
+  finally {
     await client.close();
   }
 }

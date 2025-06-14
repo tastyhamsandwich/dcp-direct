@@ -1,4 +1,4 @@
-import type { Player, SuitSymbol, Suit, RankValue, SuitCapitalized, SuitInitial, Winner, HandRank } from './types';
+import type { Player, SuitSymbol, Suit, RankValue, SuitCapitalized, SuitInitial, Winner, HandRank, Hand } from './types';
 import { Card } from '@game/classes';
 import { capitalize, valueToRank } from '@lib/utils';
 
@@ -195,4 +195,14 @@ export function evaluateHand(allCards: Card[]): HandRank {
                     : `High Card (${capitalize(valueToRank(scoredHist[0][0] as RankValue))})`;
   
   return { hand: winningHand, value: bestHand }
+}
+
+export function compareHands(handOne: Card[], handTwo: Card[]) {
+  const evaluatedHandOne = evaluateHand(handOne);
+  const evaluatedHandTwo = evaluateHand(handTwo);
+
+  const evaluatedHands = [evaluatedHandOne, evaluatedHandTwo];
+  evaluatedHands.sort((a, b) => b.value - a.value);
+
+  return { hand: evaluatedHands[0].hand, value: evaluatedHands[0].value };
 }
