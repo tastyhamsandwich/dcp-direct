@@ -29,13 +29,16 @@ export default function GameLobby() {
 		// Initialize WebSocket connection to the socket.io server running on port 3001
 		//const socketInstance = io("http://randomencounter.ddns.net:3001", {
 		if (socketRef.current === null) {
-      socketRef.current = io("http://172.30.152.67:3001", {
-        transports: ["websocket"],
-        withCredentials: true,
-      });
+      socketRef.current = io(
+        `${process.env.SOCKET_HOST}:${process.env.SOCKET_PORT}`,
+        {
+          transports: ["websocket"],
+          withCredentials: true,
+        }
+      );
     }
     
-    const socketInstance = io("172.30.152.67:3001", {
+    const socketInstance = io(`${process.env.SOCKET_HOST}:${process.env.SOCKET_PORT}`, {
       transports: ["websocket"],
       withCredentials: true,
     });

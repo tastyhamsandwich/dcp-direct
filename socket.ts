@@ -465,140 +465,171 @@ export function initializeSocket(io: Server) {
 			let allIn = false;
 
 			switch (actionType) {
-				case "fold":
-					player.previousAction = "fold";
-					player.folded = true;
+        case "fold":
+          player.previousAction = "fold";
+          player.folded = true;
 
-					console.log(`Player ${player.username} folds`);
-					actionSuccess = true;
-					break;
+          console.log(`Player ${player.username} folds`);
+          actionSuccess = true;
 
-				case "check":
-					if (game.currentBet > player.currentBet) {
-						socket.emit("error", {
-							message:
-								"You must call or raise. You cannot check when the current bet is higher than the amount you have bet this round.",
-						});
-						return false;
-					}
+          // Update player stats
+          game.stats.players[player.id].personalStats.timesFolded += 1;
+          game.stats.players[player.id].gameStats.timesFolded += 1;
+          break;
 
-					player.previousAction = "check";
+        case "check":
+          if (game.currentBet > player.currentBet) {
+            socket.emit("error", {
+              message:
+                "You must call or raise. You cannot check when the current bet is higher than the amount you have bet this round.",
+            });
+            return false;
+          }
 
-					// Log player check action
-					console.log(`Player ${player.username} checks`);
+          player.previousAction = "check";
 
-					// No need to adjust currentBet or player.currentBet since a check doesn't change those
-					actionSuccess = true;
-					break;
+          // Log player check action
+          console.log(`Player ${player.username} checks`);
 
-				case "call":
-					const callAmount = game.currentBet - player.currentBet;
-					if (callAmount > player.chips) {
-						// Player is going all-in
-						const allInAmount = player.chips;
-						player.currentBet += allInAmount;
-						player.chips = 0;
-						console.log(
-							`Player ${player.username} goes all-in for ${allInAmount} chips`
-						);
-						player.allIn = true;
-						allIn = true;
+          // No need to adjust currentBet or player.currentBet since a check doesn't change those
+          actionSuccess = true;
 
-						// Create a sidepot for this all-in player
-						game.createSidepot(player, player.currentBet);
-					} else {
-						game.pot += callAmount;
-						player.currentBet = game.currentBet;
-						player.chips -= callAmount;
-						console.log(
-							`Player ${player.username} calls for ${callAmount} chips`
-						);
-					}
-					player.previousAction = "call";
-          game.stats.players[player.id].stats.updateTotalBets(callAmount);
-					actionSuccess = true;
-					break;
+          // Update player stats
+          game.stats.players[player.id].personalStats.timesChecked += 1;
+          game.stats.players[player.id].gameStats.timesChecked += 1;
+          break;
 
-				case "bet":
-					const betAmount = action.amount;
-					if (betAmount > player.chips) {
-						socket.emit("error", {
-							message: "You do not have enough chips to bet that amount.",
-						});
-						return false;
-					}
-					if (game.currentBet > 0) {
-						socket.emit("error", {
-							message:
-								"You cannot bet when there is already a bet in place. You must call or raise.",
-						});
-						return false;
-					}
+        case "call":
+          const callAmount = game.currentBet - player.currentBet;
+          if (callAmount > player.chips) {
+            // Player is going all-in
+            const allInAmount = player.chips;
+            player.currentBet += allInAmount;
+            player.chips = 0;
+            console.log(
+              `Player ${player.username} goes all-in for ${allInAmount} chips`
+            );
+            player.allIn = true;
+            allIn = true;
 
-					// Handle all-in bet
-					if (betAmount === player.chips) {
-						console.log(
-							`Player ${player.username} goes all-in for ${betAmount} chips`
-						);
-						allIn = true;
-						player.allIn = true;
-						player.currentBet = betAmount;
-						player.chips = 0;
-						game.currentBet = betAmount;
-						game.pot += betAmount;
+            // Create a sidepot for this all-in player
+            game.createSidepot(player, player.currentBet);
+          } else {
+            game.pot += callAmount;
+            player.currentBet = game.currentBet;
+            player.chips -= callAmount;
+            console.log(
+              `Player ${player.username} calls for ${callAmount} chips`
+            );
+          }
+          player.previousAction = "call";
+
+          actionSuccess = true;
+
+          // Update player stats
+          game.stats.players[player.id].personalStats.totalBets += callAmount;
+          game.stats.players[player.id].gameStats.totalBets += callAmount;
+          game.stats.players[player.id].personalStats.timesBet += 1;
+          game.stats.players[player.id].gameStats.timesBet += 1;
+          break;
+
+        case "bet":
+          const betAmount = action.amount;
+          if (betAmount > player.chips) {
+            socket.emit("error", {
+              message: "You do not have enough chips to bet that amount.",
+            });
+            return false;
+          }
+          if (game.currentBet > 0) {
+            socket.emit("error", {
+              message:
+                "You cannot bet when there is already a bet in place. You must call or raise.",
+            });
+            return false;
+          }
+
+          // Handle all-in bet
+          if (betAmount === player.chips) {
+            console.log(
+              `Player ${player.username} goes all-in for ${betAmount} chips`
+            );
+            allIn = true;
+            player.allIn = true;
+            player.currentBet = betAmount;
+            player.chips = 0;
+            game.currentBet = betAmount;
+            game.pot += betAmount;
             game.stats[player.id].betTotal += betAmount;
 
-						// Create a sidepot for this all-in player
-						game.createSidepot(player, betAmount);
-					} else {
-						// Normal bet
-						console.log(
-							`Player ${player.username} bets ${betAmount} chips. The current bet is now ${betAmount}`
-						);
-						game.pot += betAmount;
-						player.currentBet = betAmount;
-						player.chips -= betAmount;
-						game.currentBet = betAmount;
-					}
+            // Create a sidepot for this all-in player
+            game.createSidepot(player, betAmount);
+          } else {
+            // Normal bet
+            console.log(
+              `Player ${player.username} bets ${betAmount} chips. The current bet is now ${betAmount}`
+            );
+            game.pot += betAmount;
+            player.currentBet = betAmount;
+            player.chips -= betAmount;
+            game.currentBet = betAmount;
+          }
 
-          game.stats.players[player.id].stats.updateTotalBets(betAmount);
-					player.previousAction = "bet";
-					actionSuccess = true;
-					break;
+          player.previousAction = "bet";
+          actionSuccess = true;
 
-				case "raise":
-					const raiseTotal = game.currentBet + action.amount;
-					const raiseAmount = raiseTotal - player.currentBet;
+          // Update player stats
+          game.stats.players[player.id].personalStats.totalBets += betAmount;
+          game.stats.players[player.id].gameStats.totalBets += betAmount;
+          game.stats.players[player.id].personalStats.timesBet += 1;
+          game.stats.players[player.id].gameStats.timesBet += 1;
+          break;
 
-					if (raiseAmount >= player.chips) {
-						// All-in raise
+        case "raise":
+          const raiseTotal = game.currentBet + action.amount;
+          const raiseAmount = raiseTotal - player.currentBet;
 
-						const allInAmount = player.chips;
-						player.currentBet += allInAmount;
-						player.chips = 0;
-						player.allIn = true;
-						game.currentBet = player.currentBet;
-						allIn = true;
+          if (raiseAmount >= player.chips) {
+            // All-in raise
 
-						console.log(
-							`Player ${player.username} reraises, goes all-in for ${player.chips} chips. The bet is now ${game.currentBet}`
-						);
-						// Create a sidepot for this all-in player
-						game.createSidepot(player, player.currentBet);
-					} else {
-						// Normal raise
-						game.pot += raiseAmount;
-						player.currentBet = raiseTotal;
-						player.chips -= raiseAmount;
-						game.currentBet = raiseTotal;
-						console.log(
-							`Player ${player.username} raises to ${raiseTotal} chips.`
-						);
-					}
-					player.previousAction = "raise";
-					actionSuccess = true;
-					break;
-			}
+            const allInAmount = player.chips;
+            player.currentBet += allInAmount;
+            player.chips = 0;
+            player.allIn = true;
+            game.currentBet = player.currentBet;
+            allIn = true;
+
+            if (!allIn)
+              game.stats.players[player.id].personalStats.totalBets +=
+                raiseAmount;
+            else
+              game.stats.players[player.id].personalStats.totalBets +=
+                allInAmount;
+            console.log(
+              `Player ${player.username} reraises, goes all-in for ${player.chips} chips. The bet is now ${game.currentBet}`
+            );
+            // Create a sidepot for this all-in player
+            game.createSidepot(player, player.currentBet);
+          } else {
+            // Normal raise
+            game.pot += raiseAmount;
+            player.currentBet = raiseTotal;
+            player.chips -= raiseAmount;
+            game.currentBet = raiseTotal;
+            console.log(
+              `Player ${player.username} raises to ${raiseTotal} chips.`
+            );
+          }
+          player.previousAction = "raise";
+          actionSuccess = true;
+
+          // Update player stats
+          game.stats.players[player.id].personalStats.totalBets += raiseAmount;
+          game.stats.players[player.id].gameStats.totalBets += raiseAmount;
+          game.stats.players[player.id].personalStats.timesRaised += 1;
+          game.stats.players[player.id].gameStats.timesRaised += 1;
+          break;
+      }
 
 			// All-in sidepots are now handled in each action case
 
@@ -1160,6 +1191,12 @@ function handleShowdown(game, io) {
 			winner.chips += game.pot;
 			winner.previousAction = "win";
 
+      game.stats.players[winner.id].personalStats.mainPotsWon += 1;
+      game.stats.players[winner.id].personalstats.mainPotWinnings += game.pot;
+      game.stats.players[winner.id].personalStats.totalWinnings += game.pot;
+      game.stats.players[winner.id].personalStats.handsWon += 1;
+      game.stats.players[winner.id].personalStats.totalHandsPlayed += 1;
+
 			// Handle any sidepots (should be empty in this case)
 			if (game.sidepots.length > 0) {
 				console.log(
@@ -1170,6 +1207,10 @@ function handleShowdown(game, io) {
 					const sidepotAmount = sidepot.getAmount();
 					winner.chips += sidepotAmount;
 					totalWinnings += sidepotAmount;
+
+          game.stats.players[winner.id].personalStats.sidePotsWon += 1;
+          game.stats.players[winner.id].personalstats.sidePotWinnings += sidepotAmount;
+          game.stats.players[winner.id].personalStats.totalWinnings += sidepotAmount;
 				});
 			}
 
