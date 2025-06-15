@@ -158,15 +158,15 @@ export function evaluateHand(allCards: Card[]): HandRank {
   const rankedHand = allCards.map(card => card.rankValue).sort((a, b) => a - b);
   
   //* Evaluate for non-histogram based hands and set a flag accordingly, to be used for final evaluation chain
-  const isFlush   = suits.indexOf(5) >= 0;
-  const isWheel   = rankedHand[4] === 14 && rankedHand[0] === 2;
+  const isFlush   = suits.indexOf(5) >= 0; // The reducer function should have one array element with a value of 5 or higher if they have a flush
+  const isWheel   = rankedHand[4] === 14 && rankedHand[0] === 2;  // A wheel is an Ace through Five straight, so the highest card should be a value 14 (Ace) and the lowest should be a 2 (Two)
   const isStraight  = ( rankedHand[4]
     - rankedHand[3] === 1 || isWheel
   ) && (
     rankedHand[3]   - rankedHand[2] === 1 &&
     rankedHand[2]   - rankedHand[1] === 1 &&
     rankedHand[1]   - rankedHand[0] === 1
-  );
+  ); // For normal straights, each card should have a value difference of one from the ones adjacent to it.
   
   //* Final Evaluation Chain
   //* Starting with Royal Flush and working downwards
