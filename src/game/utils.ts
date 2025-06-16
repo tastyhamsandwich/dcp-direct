@@ -1,5 +1,5 @@
-import type { Player, SuitSymbol, Suit, RankValue, SuitCapitalized, SuitInitial, Winner, HandRank, Hand } from './types';
-import { Card } from '@game/classes';
+import type { Player, SuitSymbol, Suit, RankValue, SuitCapitalized, SuitInitial, Winner, HandRank } from './types';
+import { Card, Hand } from '@game/classes';
 import { capitalize, valueToRank } from '@lib/utils';
 
 export function toggleReady(player: Player) {
@@ -262,12 +262,38 @@ export function evaluateHand(allCards: Card[]): HandRank {
   return { hand: winningHand, value: bestHand };
 }
 
-export function compareHands(handOne: Card[], handTwo: Card[]) {
-  const evaluatedHandOne = evaluateHand(handOne);
-  const evaluatedHandTwo = evaluateHand(handTwo);
-
+/**
+ * Compares two poker hands and returns a HandRank object that contains the winning hand and its scored value
+ * @param {Card[] | Hand} handOne An array of Card objects or a Hand object, representing the first hand to compare
+ * @param {Card[] | Hand} handTwo An array of Card objects or a Hand object, the second hand to compare against
+ * @returns {HandRank} An object containing the winning hand in the 'hand' property and the score in the 'value' property.
+ */
+export function compareHands(handOne: Card[] | Hand, handTwo: Card[] | Hand): HandRank {
+  const evaluatedHandOne = evaluateHand(handOne instanceof Hand ? handOne.cards : handOne);
+  const evaluatedHandTwo = evaluateHand(handTwo instanceof Hand ? handTwo.cards : handTwo);
+  
+  // Sort the evaluated hands by value, descending
+  // This will ensure that the hand with the higher value comes first
+  // and the hand with the lower value comes second
   const evaluatedHands = [evaluatedHandOne, evaluatedHandTwo];
   evaluatedHands.sort((a, b) => b.value - a.value);
 
+  // Return standard HandRank style evaluation object
   return { hand: evaluatedHands[0].hand, value: evaluatedHands[0].value };
+}
+
+/**
+ * Compares two poker hands and returns true if handOne is better, false if handTwo is better.
+ * @param handOne An array of Card objects or a Hand object, representing the first hand to compare
+ * @param handTwo An array of Card objects or a Hand object, the second hand to compare against
+ * @returns {boolean} True or false based on handOne's performance against handTwo
+ */
+export function isHandOneBetter(handOne: Card[] | Hand, handTwo: Card[] | Hand): boolean {
+  const evaluatedHandOne = evaluateHand(handOne instanceof Hand ? handOne.cards : handOne);
+  const evaluatedHandTwo = evaluateHand(handTwo instanceof Hand ? handTwo.cards : handTwo);
+
+  // Returns true if handOne is better than handTwo
+  // This provides a simpler interface for checking which hand is better, compared to parsing
+  // a HandRank object
+  return evaluatedHandOne.value > evaluatedHandTwo.value;
 }
