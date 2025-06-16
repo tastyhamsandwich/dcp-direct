@@ -30,7 +30,7 @@ export default function GameLobby() {
 		//const socketInstance = io("http://randomencounter.ddns.net:3001", {
 		if (socketRef.current === null) {
       socketRef.current = io(
-        `${process.env.SOCKET_HOST}:${process.env.SOCKET_PORT}`,
+        'http://172.17.29.148:3001',
         {
           transports: ["websocket"],
           withCredentials: true,
@@ -38,7 +38,7 @@ export default function GameLobby() {
       );
     }
     
-    const socketInstance = io(`${process.env.SOCKET_HOST}:${process.env.SOCKET_PORT}`, {
+    const socketInstance = io(`http://172.17.29.148:3001`, {
       transports: ["websocket"],
       withCredentials: true,
     });

@@ -173,7 +173,7 @@ export default function GamePage({
 		});*/
 
 		socketRef.current = io(
-      `${process.env.SOCKET_HOST}:${process.env.SOCKET_PORT}`,
+      `http://172.17.29.148:3001`,
       {
         transports: ["websocket"],
         withCredentials: true,
