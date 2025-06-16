@@ -2,7 +2,7 @@
 
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { getUserById, validateUser, updateUser, type User } from '@db/database';
+import { getUserById, validateUser, updateUser, type User_DB as User } from '@db/database';
 import { createSession, verifySession, deleteSession, type Session } from '@lib/session';
 import { registerSchema, loginSchema, FormState } from "@lib/zod";
 import { redirect } from 'next/navigation';

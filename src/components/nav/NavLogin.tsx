@@ -116,11 +116,11 @@ const NavLogin = ({ onLoginClicked }) => {
             {loading ? "Logging In..." : "Log In"}
           </button>
           <div className="signup-container text-sm">
-            <Link
-              href="/register"
-              className="signup-link text-[#8aff8e] hover:underline"
-            >
+            <Link href="/register" className="signup-link text-[#8aff8e] hover:underline">
               New user? Sign up!
+            </Link>
+            <Link href="/forgot-password" className="ml-2 text-[#8aff8e] hover:underline">
+              Forgot password?
             </Link>
           </div>
         </div>

@@ -64,7 +64,7 @@ A checklist for ongoing development:
 - [ ]  Support for custom community board setups  
 - [ ]  **Full Dashboard feature set**  
   - [ ] Change display name  
-  - [ ]  Password reset  
+  - [x]  Password reset  
   - [ ]  Change e-mail   
   - [ ]  Light/Dark theme  
   - [ ]  Daily tips  

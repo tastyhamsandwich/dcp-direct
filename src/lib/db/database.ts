@@ -28,6 +28,8 @@ export type User_DB = {
   created_at?: Date | number;
   last_updated?: Date | number;
   active?: boolean;
+  reset_password_token?: string | null;
+  reset_password_expires?: Date | number | null;
 };
 
 export type UserStats_DB = {
@@ -95,6 +97,7 @@ type OpSuccess = {
   success: true;
   message: string;
   user: User_DB;
+  data?: {[key: string]: any};
 };
 
 type OpFailure = {
@@ -109,17 +112,23 @@ const uri = process.env.MONGODB_URI;
 
 const emailRegEx = /^([\w-\.]+)@([\w-]+)\.+([\w-]+)/;
 
-const connectDB = async () => {
+const getClient = async () => {
   const client = new MongoClient(process.env.MONGODB_URI!, {
     serverApi: {
       version: ServerApiVersion.v1,
       strict: true,
       deprecationErrors: true,
-    },
+    }
   });
 
-  const database = client.db("dcp");
-  return database;
+  return client;
+}
+
+const connectDB = async () => {
+  const client = await getClient();
+  await client.connect();
+  return client.db("dcp");
+
 };
 
 const userDB = async () => {
@@ -225,6 +234,52 @@ export async function getUserById(userId: string): Promise<OpResult> {
   return result;
 }
 
+export async function getUserByEmail(email: string): Promise<OpResult> {
+  const users = await userDB();
+
+  const data = await users.findOne({ email: email });
+
+  console.log(data);
+  if (!data) {
+    const result: OpFailure = {
+      success: false,
+      message: "User not found",
+      error: "User not found",
+    };
+    return result;
+  }
+  if (email !== data.email) {
+    const result: OpFailure = {
+      success: false,
+      message: "User Email does not match",
+      error: "User Email does not match",
+    };
+    return result;
+  }
+
+  const user: User_DB = {
+    _id: data._id,
+    username: data.username,
+    email: data.email,
+    first_name: data.first_name || "",
+    last_name: data.last_name || "",
+    phone: data.phone || "",
+    balance: data.balance || 0,
+    avatar: data.avatar || "",
+    level: data.level || 1,
+    exp: data.exp || 0,
+    role: data.role || "USER",
+  };
+
+  const result: OpSuccess = {
+    success: true,
+    message: "User found",
+    user,
+  };
+
+  return result;
+}
+
 async function checkUserExists(email: string): Promise<boolean> {
   const users = await userDB();
 
@@ -236,6 +291,23 @@ async function checkUserExists(email: string): Promise<boolean> {
 
   if (data) return true;
   else return false;
+}
+
+export async function getUserByResetToken(token: string) {
+  const client = new MongoClient(uri!);
+  const users = (await client).db("dcp").collection("users");
+
+  try {
+    const user = await users.findOne({
+      reset_password_token: token,
+      //reset_password_expires: { $gt: Date.now() },
+    });
+    return user;
+  } catch (error) {
+    throw error;
+  } finally {
+    await client.close();
+  }
 }
 
 export const createUser = async (userData: UserProps): Promise<OpResult> => {
@@ -319,15 +391,21 @@ export const createUser = async (userData: UserProps): Promise<OpResult> => {
   }
 };
 
-export const updateUser = async (userId: string, userData: User_DB): Promise<OpResult> => {
+/** Updates a user in the database
+ * @param userIdentifier - The value to be used against the filter to locate the user
+ * @param userData - The object containing the updates to be applied to the user document
+ * @param filter - The filter to locate the user document, defaults to '_id' - other options include 'username' or 'email', and others.
+ * @param upsert - If true, will insert a new document if no document matches the filter. Defaults to false.
+*/
+export const updateUser = async (userIdentifier, userData: User_DB, filter = `_id`, upsert: boolean = false): Promise<OpResult> => {
   const client = new MongoClient(uri!);
   const database = client.db("dcp");
   const users = database.collection("users");
 
   try {
-    const id = new BSON.ObjectId(userId);
+    //const id = new ObjectId(userId);
 
-    const filter = { _id: id };
+    const filterObj = { [filter]: userIdentifier };
     const updatedData = { 
       $set: {
         ...userData,
@@ -335,13 +413,13 @@ export const updateUser = async (userId: string, userData: User_DB): Promise<OpR
       },
     };
 
-    const user = await users.updateOne(filter, updatedData);
+    const user = await users.updateOne(filterObj, updatedData, { upsert });
 
     const result: OpSuccess = {
       success: true,
       message: "User updated successfully",
       user: {
-        id: userId,
+        id: updatedData.$set._id?.toString(),
         username: updatedData.$set.username,
         email: updatedData.$set.email,
         first_name: updatedData.$set.first_name || "",
@@ -353,6 +431,10 @@ export const updateUser = async (userId: string, userData: User_DB): Promise<OpR
         exp: updatedData.$set.exp || 0,
         role: updatedData.$set.role || "USER",
       },
+      data: {
+        matchedCount: user.matchedCount,
+        modifiedCount: user.modifiedCount
+      }
     };
 
     return result;
@@ -492,3 +574,4 @@ export const updatePlayerStats = async (playerStatsObject: PlayerStatsComposite)
     await client.close();
   }
 }
+

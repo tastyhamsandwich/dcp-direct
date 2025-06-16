@@ -1,10 +1,62 @@
 import { redirect } from "next/navigation";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import crypto from "crypto";
 
 type RankValue = 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 100;
 
 const one_day = 60 * 60 * 24;
+
+
+export function generateResetToken(): string {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+export const EMAIL_PROVIDERS = {
+  // Google
+  "gmail.com": "https://gmail.com",
+  "googlemail.com": "https://gmail.com",
+
+  // Microsoft
+  "outlook.com": "https://outlook.live.com",
+  "hotmail.com": "https://outlook.live.com",
+  "live.com": "https://outlook.live.com",
+  "msn.com": "https://outlook.live.com",
+
+  // Yahoo
+  "yahoo.com": "https://mail.yahoo.com",
+  "yahoo.co.uk": "https://mail.yahoo.com",
+  "yahoo.co.jp": "https://mail.yahoo.co.jp",
+  "ymail.com": "https://mail.yahoo.com",
+
+  // Apple
+  "icloud.com": "https://www.icloud.com/mail",
+  "me.com": "https://www.icloud.com/mail",
+  "mac.com": "https://www.icloud.com/mail",
+
+  // AOL
+  "aol.com": "https://mail.aol.com",
+
+  // Proton
+  "proton.me": "https://mail.proton.me",
+  "protonmail.com": "https://mail.proton.me",
+
+  // Other popular providers
+  "zoho.com": "https://mail.zoho.com",
+  "mail.com": "https://www.mail.com",
+  "gmx.com": "https://www.gmx.com",
+  "tutanota.com": "https://mail.tutanota.com",
+  "fastmail.com": "https://www.fastmail.com",
+
+  // Popular international providers
+  "yandex.ru": "https://mail.yandex.ru",
+  "mail.ru": "https://mail.ru",
+  "web.de": "https://web.de/email/",
+  "t-online.de": "https://email.t-online.de",
+  "qq.com": "https://mail.qq.com",
+} as const;
+
+export type EmailProviderDomains = keyof typeof EMAIL_PROVIDERS;
 
 export const USER_COLORS = [
   "text-red-400",
