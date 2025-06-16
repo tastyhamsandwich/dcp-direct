@@ -13,6 +13,7 @@ import { evaluateHand } from "@game/utils";
 import { v4 as uuidv4 } from "uuid";
 import { Playwrite_TZ } from "next/font/google";
 import { createDropdownMenuScope } from "@radix-ui/react-dropdown-menu";
+import { updatePlayerStats } from "@lib/db/database"
 
 export function initializeSocket(io: Server) {
 	// Store active games
@@ -224,54 +225,57 @@ export function initializeSocket(io: Server) {
 					);
 				}
 			} else {
-				const username = user.username;
-				// Fix: Use user.balance instead of user.chips
-				const chips = user.balance || 1000; // Fallback to 1000 if balance is undefined
-				const avatar = user.avatar || user.avatar_url;
+        const username = user.username;
+        // Fix: Use user.balance instead of user.chips
+        const chips = user.balance || 1000; // Fallback to 1000 if balance is undefined
+        const avatar = user.avatar || user.avatar_url;
 
-				console.log(
-					`Player joining with username: ${username}, chips: ${chips} (from balance: ${user.balance}), avatar: ${avatar}`
-				);
+        console.log(
+          `Player joining with username: ${username}, chips: ${chips} (from balance: ${user.balance}), avatar: ${avatar}`
+        );
 
-				// Find an available seat
-				let availableSeat = -1;
-				for (let i = 0; i < game.tablePositions.length; i++) {
-					if (!game.tablePositions[i].occupied) {
-						availableSeat = i;
-						break;
-					}
-				}
+        // Find an available seat
+        let availableSeat = -1;
+        for (let i = 0; i < game.tablePositions.length; i++) {
+          if (!game.tablePositions[i].occupied) {
+            availableSeat = i;
+            break;
+          }
+        }
 
-				if (availableSeat === -1) {
-					socket.emit("error", { message: "No available seats" });
-					return;
-				}
+        if (availableSeat === -1) {
+          socket.emit("error", { message: "No available seats" });
+          return;
+        }
 
-				// Create player object for new player
-				const player: Player = new Player(
-					userId,
-					username,
-					availableSeat,
-					chips,
-					avatar
-				);
-				player.active = false;
-				player.folded = true;
+        // Create player object for new player
+        const player: Player = new Player(
+          userId,
+          username,
+          availableSeat,
+          chips,
+          avatar
+        );
+        player.active = false;
+        player.folded = true;
 
-				// Add player to the game
-				game.players.push(player);
+        // Add player to the game
+        game.players.push(player);
 
-				// Update table positions
-				game.tablePositions[availableSeat].occupied = true;
-				game.tablePositions[availableSeat].playerId = player.id;
+        // Update table positions
+        game.tablePositions[availableSeat].occupied = true;
+        game.tablePositions[availableSeat].playerId = player.id;
 
-				// Sort players by seat number to maintain consistent order
-				game.sortPlayerList();
+        // Sort players by seat number to maintain consistent order
+        game.sortPlayerList();
 
-				console.log(
-					`New player ${player.username} joined game '${game.name}' at seat ${availableSeat}`
-				);
-			}
+        console.log(
+          `New player ${player.username} joined game '${game.name}' at seat ${availableSeat}`
+        );
+
+        // Initialize player's statistis tracking object
+        initializePlayerStatsObject(game, player);
+      }
 
 			// Join the game room
 			console.log(
@@ -308,6 +312,7 @@ export function initializeSocket(io: Server) {
 				gamesArray[gameIndex].isStarted = game.hasStarted;
 				io.emit("games_list", gamesArray);
 			}
+
 		});
 
 		// Handle player ready status separately from actions
@@ -473,8 +478,8 @@ export function initializeSocket(io: Server) {
           actionSuccess = true;
 
           // Update player stats
-          game.stats.players[player.id].personalStats.timesFolded += 1;
-          game.stats.players[player.id].gameStats.timesFolded += 1;
+          game.stats.players[player.username].personalStats.timesFolded += 1;
+          game.stats.players[player.username].gameStats.timesFolded += 1;
           break;
 
         case "check":
@@ -495,8 +500,10 @@ export function initializeSocket(io: Server) {
           actionSuccess = true;
 
           // Update player stats
-          game.stats.players[player.id].personalStats.timesChecked += 1;
-          game.stats.players[player.id].gameStats.timesChecked += 1;
+          if (game.stats.players[player.username]) {
+            game.stats.players[player.username].personalStats.timesChecked += 1;
+            game.stats.players[player.username].gameStats.timesChecked += 1;
+          }
           break;
 
         case "call":
@@ -527,10 +534,12 @@ export function initializeSocket(io: Server) {
           actionSuccess = true;
 
           // Update player stats
-          game.stats.players[player.id].personalStats.totalBets += callAmount;
-          game.stats.players[player.id].gameStats.totalBets += callAmount;
-          game.stats.players[player.id].personalStats.timesBet += 1;
-          game.stats.players[player.id].gameStats.timesBet += 1;
+          if (game.stats.players[player.username]) {
+            game.stats.players[player.username].personalStats.totalBets += callAmount;
+            game.stats.players[player.username].gameStats.totalBets += callAmount;
+            game.stats.players[player.username].personalStats.timesBet += 1;
+            game.stats.players[player.username].gameStats.timesBet += 1;
+          }
           break;
 
         case "bet":
@@ -579,10 +588,12 @@ export function initializeSocket(io: Server) {
           actionSuccess = true;
 
           // Update player stats
-          game.stats.players[player.id].personalStats.totalBets += betAmount;
-          game.stats.players[player.id].gameStats.totalBets += betAmount;
-          game.stats.players[player.id].personalStats.timesBet += 1;
-          game.stats.players[player.id].gameStats.timesBet += 1;
+          if (game.stats.players[player.username]) {
+            game.stats.players[player.username].personalStats.totalBets += betAmount;
+            game.stats.players[player.username].gameStats.totalBets += betAmount;
+            game.stats.players[player.username].personalStats.timesBet += 1;
+            game.stats.players[player.username].gameStats.timesBet += 1;
+          }
           break;
 
         case "raise":
@@ -599,12 +610,13 @@ export function initializeSocket(io: Server) {
             game.currentBet = player.currentBet;
             allIn = true;
 
-            if (!allIn)
-              game.stats.players[player.id].personalStats.totalBets +=
-                raiseAmount;
-            else
-              game.stats.players[player.id].personalStats.totalBets +=
-                allInAmount;
+
+            if (game.stats.players[player.username]) {
+              if (!allIn)
+                game.stats.players[player.username].personalStats.totalBets += raiseAmount;
+              else
+                game.stats.players[player.username].personalStats.totalBets += allInAmount;
+            }
             console.log(
               `Player ${player.username} reraises, goes all-in for ${player.chips} chips. The bet is now ${game.currentBet}`
             );
@@ -624,10 +636,12 @@ export function initializeSocket(io: Server) {
           actionSuccess = true;
 
           // Update player stats
-          game.stats.players[player.id].personalStats.totalBets += raiseAmount;
-          game.stats.players[player.id].gameStats.totalBets += raiseAmount;
-          game.stats.players[player.id].personalStats.timesRaised += 1;
-          game.stats.players[player.id].gameStats.timesRaised += 1;
+          if (game.stats.players[player.username]) {
+            game.stats.players[player.username].personalStats.totalBets += raiseAmount;
+            game.stats.players[player.username].gameStats.totalBets += raiseAmount;
+            game.stats.players[player.username].personalStats.timesRaised += 1;
+            game.stats.players[player.username].gameStats.timesRaised += 1;
+          }
           break;
       }
 
@@ -1296,6 +1310,10 @@ function handleShowdown(game, io) {
 			showdown: true,
 		});
 
+  game.players.forEach((player) => {
+    updatePlayerStats(game.stats.players[player.username]);
+  })
+
 	resetForNextRound(game, io);
 
 	}
@@ -1392,4 +1410,49 @@ function formatTimestamp(timestamp: number | string | Date) {
 
 function insertTimestamp(): string {
   return `${formatTimestamp(Date.now())}`;
+}
+
+function initializePlayerStatsObject(game: Game, player: Player): void {
+  if (!game.stats.players[player.username]) {
+    game.stats.players[player.username] = {
+      id: '',
+      name: player.username,
+      personalStats: {
+        totalBets: 0,
+        timesCalled: 0,
+        timesBet: 0,
+        timesRaised: 0,
+        timesFolded: 0,
+        timesChecked: 0,
+        totalWinnings: 0,
+        mainPotsWon: 0,
+        sidePotsWon: 0,
+        mainPotWinnings: 0,
+        sidePotWinnings: 0,
+        handsWon: 0,
+        totalHandsPlayed: 0,
+        gamesPlayed: 0,
+        gamesWon: 0,
+        biggestPot: 0,
+        lastUpdated: Date.now().toString(),
+      },
+      gameStats: {
+        gameId: game.id,
+        gameName: game.name,
+        buyIn: 0,
+        cashOut: 0,
+        handsPlayed: 0,
+        handsWon: 0,
+        biggestPot: 0,
+        joinedAt: Date.now().toString(),
+        leftAt: '',
+        totalBets: 0,
+        timesCalled: 0,
+        timesBet: 0,
+        timesRaised: 0,
+        timesFolded: 0,
+        timesChecked: 0,
+      },
+    };
+  }
 }

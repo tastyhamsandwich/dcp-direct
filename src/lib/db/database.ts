@@ -1,5 +1,6 @@
 import { MongoClient, ServerApiVersion, ObjectId, Long, WithId, Db, BSON } from "mongodb";
 import bcrypt from "bcryptjs";
+import { Card, Hand } from "@game/classes";
 import { PlayerStatsComposite, GameSessionStats } from '@game/stats/types';
 import { statsBuffer } from "framer-motion";
 
@@ -10,7 +11,7 @@ type UserProps = {
   dob?: Date;
 };
 
-export type User = {
+export type User_DB = {
   _id?: ObjectId;
   id?: string;
   username?: string;
@@ -29,7 +30,7 @@ export type User = {
   active?: boolean;
 };
 
-export type UserStats = {
+export type UserStats_DB = {
   user_id?: ObjectId;
   username?: string;
   games_played?: number;
@@ -52,10 +53,48 @@ export type UserStats = {
   last_played?: Date | number
 }
 
+export type GameSessionStats_DB = {
+  id: ObjectId;
+  started_at?: string;
+  ended_at?: string | null;
+  game_variants?: { [key: string]: number };
+  buy_in?: number | null;
+  creator?: string;
+  players?: string[];
+  game_id?: string;
+  game_name?: string;
+  best_hand?: Hand | Card[] | null;
+  best_hand_player?: string | null;
+  biggest_pot?: number;
+  biggest_pot_winner?: string | null;
+  total_pot?: number;
+  hardcore_mode?: boolean;
+  ranked_game?: boolean;
+  total_hands?: number;
+  rounds?: {
+    [key: number]: {
+      round_number?: number;
+      variant?: string;
+      total_bets?: number;
+      main_pot?: number;
+      side_pots?: number[];
+      playerStats?: { [key: string]: {
+        bets?: number;
+        calls?: number;
+        raises?: number;
+        folded?: boolean;
+        checks?: number;
+        winnings?: number;
+        hand?: Card[] | null;
+      }}
+    }
+  }
+}
+
 type OpSuccess = {
   success: true;
   message: string;
-  user: User;
+  user: User_DB;
 };
 
 type OpFailure = {
@@ -163,7 +202,7 @@ export async function getUserById(userId: string): Promise<OpResult> {
     return result;
   }
   
-  const user: User = {
+  const user: User_DB = {
     id: userId,
     username: data.username,
     email: data.email,
@@ -213,7 +252,7 @@ export const createUser = async (userData: UserProps): Promise<OpResult> => {
     const hashword = await bcrypt.hash(userData.password, 10);
     const created = Date.now();
 
-    const User: User = {
+    const User: User_DB = {
       _id: new ObjectId(),
       email: userData.email,
       username: userData.username,
@@ -233,7 +272,7 @@ export const createUser = async (userData: UserProps): Promise<OpResult> => {
 
     const data = await users.insertOne(User);
 
-    const newUserStats: UserStats = {
+    const newUserStats: UserStats_DB = {
       user_id: data.insertedId,
       username: userData.username,
       games_played: 0,
@@ -280,7 +319,7 @@ export const createUser = async (userData: UserProps): Promise<OpResult> => {
   }
 };
 
-export const updateUser = async (userId: string, userData: User): Promise<OpResult> => {
+export const updateUser = async (userId: string, userData: User_DB): Promise<OpResult> => {
   const client = new MongoClient(uri!);
   const database = client.db("dcp");
   const users = database.collection("users");
@@ -322,7 +361,76 @@ export const updateUser = async (userId: string, userData: User): Promise<OpResu
   }
 }
 
-const updatePlayerStats = async (playerStatsObject: PlayerStatsComposite) => {
+export const updateGameSessionStats = async (gameStatsObject: GameSessionStats) => {
+  const client = new MongoClient(uri!);
+  const database = client.db("dcp");
+  const gameStats = database.collection("game_stats");
+
+  try {
+
+    const gameStatsDB: GameSessionStats_DB = {
+    id: new ObjectId(),
+    started_at: gameStatsObject.startedAt ? new Date(gameStatsObject.startedAt).toISOString() : undefined,
+    ended_at: gameStatsObject.endedAt ? new Date(gameStatsObject.endedAt).toISOString() : null,
+    game_variants: { },
+    buy_in: gameStatsObject.buyIn || null,
+    creator: gameStatsObject.creator || '',
+    players: gameStatsObject.players || [],
+    game_id: gameStatsObject.gameId || '',
+    game_name: gameStatsObject.gameName || '',
+    best_hand: gameStatsObject.bestHand,
+    best_hand_player: gameStatsObject.bestHandPlayer,
+    biggest_pot: gameStatsObject.biggestPot,
+    biggest_pot_winner: gameStatsObject.biggestPotWinner,
+    total_pot: gameStatsObject.totalPot,
+    hardcore_mode: gameStatsObject.hardcoreMode ?? false,
+    ranked_game: gameStatsObject.rankedGame ?? false,
+    total_hands: gameStatsObject.totalHands,
+    rounds: gameStatsObject.rounds ? Object.fromEntries(
+      Object.entries(gameStatsObject.rounds).map(([key, round]) => [
+        parseInt(key),
+        {
+          round_number: round.roundNumber,
+          variant: round.variant,
+          total_bets: round.totalBets,
+          main_pot: round.mainPot,
+          side_pots: round.sidePots || [],
+          playerStats: round.playerStats ? Object.fromEntries(
+            Object.entries(round.playerStats).map(([playerId, stats]) => [
+              playerId,
+              {
+                bets: stats.bets || 0,
+                calls: stats.calls || 0,
+                raises: stats.raises || 0,
+                folded: stats.folded || false,
+                checks: stats.checks || 0,
+                winnings: stats.winnings || 0,
+                hand: stats.hand || null,
+              }
+            ]
+          )
+        ) : undefined,
+      }
+    ])
+    ) : undefined,
+  };
+
+    const game = await gameStats.insertOne(gameStatsObject);
+
+    if (game.acknowledged) {
+      console.log(`Game session stats updated with ID: ${game.insertedId}`);
+      return {
+        success: true,
+        message: "Game session stats updated successfully",
+        gameId: game.insertedId.toString(),
+      };
+    }
+  } finally {
+    await client.close();
+  }
+}
+
+export const updatePlayerStats = async (playerStatsObject: PlayerStatsComposite) => {
   const client = new MongoClient(uri!);
   const database = client.db("dcp");
   const users = database.collection("users");
@@ -369,11 +477,18 @@ const updatePlayerStats = async (playerStatsObject: PlayerStatsComposite) => {
 
         const filter = { username };
         const stats = await statistics.updateOne(filter, updatedStatsObject);
-        return stats;
+
+        if (stats.acknowledged) {
+          console.log(`Player stats updated for user: ${username}`);
+          return {
+            success: true,
+            message: "Player stats updated successfully",
+            playerId: user._id.toString(),
+          };
+        }
       }
     }
-  }
-  finally {
+  } finally {
     await client.close();
   }
 }
