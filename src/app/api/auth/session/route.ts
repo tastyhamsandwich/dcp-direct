@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifySession } from "@lib/session";
-import { getUserById } from "@db/database";
+import { getUserById } from "@lib/database";
 
 export async function GET() {
   const session = await verifySession();

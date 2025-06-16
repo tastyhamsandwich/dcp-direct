@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { registerSchema } from "@lib/zod";
-import { createUser } from "@db/database";
+import { createUser } from "@lib/database";
 import { createSession } from "@lib/session";
 
 export async function POST(req: NextRequest) {

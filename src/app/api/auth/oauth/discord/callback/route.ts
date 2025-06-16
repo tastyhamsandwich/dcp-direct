@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSession } from "@lib/session";
-import { getUserById, createUser } from "@db/database";
+import { getUserById, createUser } from "@lib/database";
 import { MongoClient } from "mongodb";
 
 export async function GET(req: NextRequest) {

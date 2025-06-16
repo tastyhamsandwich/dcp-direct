@@ -12,6 +12,10 @@ export function generateResetToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
+export const generateVerificationToken = (): string => {
+  return crypto.randomBytes(32).toString("hex");
+};
+
 export const EMAIL_PROVIDERS = {
   // Google
   "gmail.com": "https://gmail.com",

@@ -1,4 +1,4 @@
-import { getUserById, type OpResult } from '@db/database';
+import { getUserById, type OpResult } from '@lib/database';
 
 export async function POST(req: Request, res: Response) {
   try {

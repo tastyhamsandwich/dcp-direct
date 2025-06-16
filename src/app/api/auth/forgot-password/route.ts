@@ -1,5 +1,5 @@
 import { NextResponse, NextRequest } from "next/server";
-import { getUserByEmail, updateUser } from '@lib/db/database';
+import { getUserByEmail, updateUser } from '@lib/database';
 import { generateResetToken } from '@lib/utils';
 import nodemailer from 'nodemailer';
 

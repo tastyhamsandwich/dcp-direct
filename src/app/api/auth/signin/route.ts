@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSession } from "@lib/session";
-import { validateUser } from "@db/database";
+import { validateUser } from "@lib/database";
 
 export async function POST(req: NextRequest) {
   try {

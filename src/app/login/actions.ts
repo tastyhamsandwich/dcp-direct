@@ -3,7 +3,7 @@
 import { createClient } from '@supabaseS'
 import { redirect } from 'next/navigation'
 import { loginSchema } from '@lib/zod';
-import { validateUser } from '@db/database';
+import { validateUser } from '@lib/database';
 import { createSession } from '@lib/session';
 
 export async function loginAction(prevState: any, formData: FormData) {

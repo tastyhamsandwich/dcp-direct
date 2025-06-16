@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updateUser } from "@db/database";
+import { updateUser } from "@lib/database";
 import { getUserIdFromSession } from "@lib/session";
 import { writeFile } from "fs/promises";
 import path from "path";

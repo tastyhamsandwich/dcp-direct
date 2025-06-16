@@ -1,6 +1,6 @@
 "use server";
 
-import { createUser } from "@db/database";
+import { createUser } from "@lib/database";
 import { registerSchema, FormState } from "@lib/zod";
 import signUp from "@contexts/authContext";
 import { redirect } from "next/navigation";

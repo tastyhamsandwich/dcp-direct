@@ -1,5 +1,5 @@
 import { verifySession } from '@lib/session';
-import { getUserById } from '@db/database';
+import { getUserById } from '@lib/database';
 import { userAgent } from 'next/server';
 import { testIsEmail } from '../utils';
 

@@ -1,5 +1,5 @@
 import { NextResponse, NextRequest } from "next/server";
-import { getUserByResetToken, updateUser } from "@lib/db/database";
+import { getUserByResetToken, updateUser } from "@lib/database";
 import bcrypt from "bcryptjs";
 
 export async function POST(req: NextRequest) {

@@ -234,6 +234,44 @@ export async function getUserById(userId: string): Promise<OpResult> {
   return result;
 }
 
+export async function getUserByUsername(username: string): Promise<OpResult> {
+  const users = await userDB();
+
+  const data = await users.findOne({ username: username });
+
+  if (!data) {
+    const result: OpFailure = {
+      success: false,
+      message: "User not found",
+      error: "User not found",
+    };
+    return result;
+  }
+
+  const user: User_DB = {
+    _id: data._id,
+    username: data.username,
+    email: data.email,
+    first_name: data.first_name || "",
+    last_name: data.last_name || "",
+    phone: data.phone || "",
+    balance: data.balance || 0,
+    avatar: data.avatar || "",
+    level: data.level || 1,
+    exp: data.exp || 0,
+    role: data.role || "USER",
+    created_at: data.created_at || Date.now(),
+    last_updated: data.last_updated || Date.now(),
+  };
+  const result: OpSuccess = {
+    success: true,
+    message: "User found",
+    user: data,
+  };
+  console.log(`User found: ${user.username}`);
+  return result;
+}
+
 export async function getUserByEmail(email: string): Promise<OpResult> {
   const users = await userDB();
 
