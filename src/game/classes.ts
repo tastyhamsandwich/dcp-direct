@@ -1,5 +1,5 @@
 import { Ruge_Boogie, Truculenta } from 'next/font/google';
-import { Stringable, Suit, Rank, RankValue, CardName, RoomStatus, TGamePhase, TGamePhaseCommon, GamePhases, TGamePhaseStud, GameVariant, GameState, TableSeat, RoleIds, User, CustomGameRules, Hand, Action, Winner, RoomPhase} from './types';
+import { Stringable, Suit, Rank, RankValue, CardName, RoomStatus, TGamePhase, TGamePhaseCommon, GamePhases, TGamePhaseStud, GameVariant, GameState, TableSeat, RoleIds, User, CustomGameRules, Action, Winner, RoomPhase} from './types';
 import { capitalize, valueToRank } from '@lib/utils';
 import { evaluateHand, evaluateHands } from '@game/utils';
 import { Socket, Server } from 'socket.io';
@@ -630,6 +630,79 @@ export class Card implements Stringable {
   }
 }
 
+export class Hand {
+  cards: Card[];
+
+  constructor(cards: Array<CardName | Card | Array<Rank | Suit>>) {
+    cards.forEach((card) => {
+      if (typeof card === 'string') {
+        // If card is a string, assume it's a CardName
+        this.cards.push(new Card(card as CardName));
+      } else if (card instanceof Card) {
+        // If card is already a Card instance, push it directly
+        this.cards.push(card);
+      } else if (Array.isArray(card)) {
+        // If card is an array, assume it's [Rank, Suit]
+        if (card.length === 2) {
+          if (typeof card[0] === 'string') {
+            if (card[0].toLowerCase() === 'hearts' || card[0].toLowerCase() === 'diamonds' || card[0].toLowerCase() === 'clubs' || card[0].toLowerCase() === 'spades') {
+              if (card[1] && typeof card[1] === 'number') {
+                this.cards.push(new Card(card[1] as Rank, card[0] as Suit))
+              }
+            }
+          } else if (typeof card[0] === 'number' && typeof card[1] === 'string') {
+            this.cards.push(new Card(card[0] as Rank, card[1] as Suit));
+          }
+        }
+      } else {
+        throw new Error('Invalid card type. Must be CardName, Card, or [Rank, Suit].');
+      }
+    })
+  }
+
+  [Symbol.iterator]() {
+    let index = 0;
+    let cards = this.cards;
+    
+    return {
+      next: function() {
+        return {
+          value: cards[index++],
+          done: index > cards.length
+        };
+      }
+    };
+  }
+
+  add(card: CardName | Card | Array<Rank | Suit>) {
+    if (card instanceof Card)
+      this.cards.push(card);
+
+    if (typeof card === 'string' && card.length === 2) {
+      this.cards.push(new Card(card));
+    }
+
+    if (Array.isArray(card)) {
+      if (card.length === 2 && typeof card[0] === 'number' && typeof card[1] === 'string')
+        this.cards.push(new Card(card[0] as Rank, card[1] as Suit));
+    }
+  }
+
+  evaluate(): HandRank {
+    return evaluateHand(this.cards);
+  }
+
+  compareTo(otherHand: Hand | Card[]) {
+    let otherCardsArray: Card[] = [];
+    if (otherHand instanceof Hand)
+      otherCardsArray = otherHand.cards;
+    if (Array.isArray(otherHand) && otherHand[0] instanceof Card)
+      otherCardsArray = otherHand;
+
+
+  }
+}
+
 /**  Represents a deck of cards.
  * @class
  * @param autoShuffle - Whether to shuffle the deck automatically.
@@ -890,7 +963,7 @@ export class Game {
 
       const playerStats: PlayerStatsComposite = {id: player.id, name: player.username, personalStats, gameStats};
 
-      this.stats.players[player.id] = playerStats;
+      this.stats.players[player.username] = playerStats;
     });
 
     this.updateCardsPerPlayer(this.gameVariant, customRules)
@@ -1279,7 +1352,11 @@ export class Game {
     smallBlindPlayer.allIn = smallBlindPlayer.chips === 0;
     smallBlindPlayer.previousAction = 'bet'; 
 
-    this.stats.game.totalPot += sbAmount;
+    if (this.stats.game && this.stats.game.totalPot)
+      this.stats.game.totalPot += sbAmount;
+    else
+      this.stats.game.totalPot = sbAmount;
+    
 
     const bbAmount = Math.min(this.bigBlind, bigBlindPlayer.chips);
     this.pot += bbAmount;
@@ -1288,7 +1365,10 @@ export class Game {
     bigBlindPlayer.allIn = bigBlindPlayer.chips === 0;
     bigBlindPlayer.previousAction = 'none'; 
 
-    this.stats.game.totalPot += bbAmount;
+    if (this.stats.game && this.stats.game.totalPot)
+      this.stats.game.totalPot += bbAmount;
+    else 
+      this.stats.game.totalPot = bbAmount;
     // Big blind previous action is 'none' to allow the action to return to them in first round. 
   }
 
@@ -1782,11 +1862,11 @@ export class Game {
       winner.chips += this.pot;
       winner.previousAction = 'win';
 
-      this.stats.players[winner.id].personalStats.handsWon += 1;
-      this.stats.players[winner.id].personalStats.totalHandsPlayed += 1;
-      this.stats.players[winner.id].personalStats.totalWinnings += this.pot;
-      this.stats.players[winner.id].personalStats.mainPotWinnings += this.pot;
-      this.stats.players[winner.id].personalStats.mainPotsWon += 1;
+      this.stats.players[winner.username].personalStats.handsWon += 1;
+      this.stats.players[winner.username].personalStats.totalHandsPlayed += 1;
+      this.stats.players[winner.username].personalStats.totalWinnings += this.pot;
+      this.stats.players[winner.username].personalStats.mainPotWinnings += this.pot;
+      this.stats.players[winner.username].personalStats.mainPotsWon += 1;
 
       // Handle any sidepots
       if (this.sidepots.length > 0) {
@@ -1794,8 +1874,8 @@ export class Game {
           const sidepotAmount = sidepot.getAmount();
           winner.chips += sidepotAmount;
           totalWinnings += sidepotAmount;
-          this.stats.players[winner.id].personalStats.sidePotWinnings += sidepotAmount;
-          this.stats.players[winner.id].personalStats.sidePotsWon += 1;
+          this.stats.players[winner.username].personalStats.sidePotWinnings += sidepotAmount;
+          this.stats.players[winner.username].personalStats.sidePotsWon += 1;
         });
       }
       
@@ -2301,15 +2381,15 @@ export class Game {
         });
 
         // Update player stats
-        this.stats.players[winner.id].personalStats.totalHandsPlayed += 1;
-        this.stats.players[winner.id].personalStats.handsWon += 1;
-        this.stats.players[winner.id].personalStats.totalWinnings += sidepot.getAmount();
+        this.stats.players[winner.username].personalStats.totalHandsPlayed += 1;
+        this.stats.players[winner.username].personalStats.handsWon += 1;
+        this.stats.players[winner.username].personalStats.totalWinnings += sidepot.getAmount();
 
         // Update player game stats
-        this.stats.players[winner.id].gameStats.handsWon += 1;
+        this.stats.players[winner.username].gameStats.handsWon += 1;
 
-        if (sidepot.getAmount() > this.stats.players[winner.id].personalStats.biggestPot)
-          this.stats.players[winner.id].personalStats.biggestPot = sidepot.getAmount();
+        if (sidepot.getAmount() > this.stats.players[winner.username].personalStats.biggestPot)
+          this.stats.players[winner.username].personalStats.biggestPot = sidepot.getAmount();
 
       } else {
         // Multiple eligible players, evaluate hands
@@ -2333,16 +2413,16 @@ export class Game {
               potType: `Sidepot ${potIndex}`
             });
 
-            this.stats.players[winner.id].personalStats.totalHandsPlayed += 1;
-            this.stats.players[winner.id].personalStats.handsWon += 1;
-            this.stats.players[winner.id].personalStats.totalWinnings +=
+            this.stats.players[winner.username].personalStats.totalHandsPlayed += 1;
+            this.stats.players[winner.username].personalStats.handsWon += 1;
+            this.stats.players[winner.username].personalStats.totalWinnings +=
               sidepot.getAmount();
 
             if (
               sidepot.getAmount() >
-              this.stats.players[winner.id].personalStats.biggestPot
+              this.stats.players[winner.username].personalStats.biggestPot
             )
-              this.stats.players[winner.id].personalStats.biggestPot =
+              this.stats.players[winner.username].personalStats.biggestPot =
                 sidepot.getAmount();
           });
           
