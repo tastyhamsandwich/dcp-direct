@@ -2,6 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@contexts/authContext';
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { emailSchema } from '@lib/zod';
+import { toast } from "sonner";
 import { Button } from '@components/ui/Button';
 import { Input } from '@components/ui/Input';
 import './settings.modules.css';
@@ -28,6 +33,20 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  type EmailFormData = {
+    email: string;
+  };
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+  } = useForm<EmailFormData>({
+    resolver: zodResolver(emailSchema),
+  });
     
   // Load user data
   useEffect(() => {
@@ -40,7 +59,7 @@ export default function SettingsPage() {
         try {
           // TODO Replace with actual user data fetching logic using MongoDB
           
-          const data: any = await fetch(`dummydata`); // TODO Replace with actual API call
+          const data: any = await fetch(`api/dashboard/fetch-user-data/`); 
           
           if (data) {
             setFirstName(data.first_name || '');
@@ -58,11 +77,6 @@ export default function SettingsPage() {
           // Fetch payment methods
           // TODO Replace with actual payment method fetching logic using MongoDB
           
-          const paymentData: any = await fetch(`dummydata`); // TODO Replace with actual API call
-          
-          if (paymentData) {
-            setPaymentMethods(paymentData);
-          }
         } catch (err) {
           console.error('Error fetching user data:', err);
         }
@@ -91,25 +105,29 @@ export default function SettingsPage() {
   };
   
   // Update email
-  const handleUpdateEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage('');
-    setError('');
-    
+  const handleUpdateEmail = async (data: EmailFormData) => {
+    setIsSubmitting(true);
     try {
-      // TODO Replace with actual email update logic using MongoDB
-      
-      if (error) {
-        throw error;
+      const response = await fetch("/api/user/email/update", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      const result = await response.json() as { error: string, message?: string };
+
+      if (!response.ok) {
+        throw new Error(result.error);
       }
-      
-      setMessage('Email update confirmation sent to your email address');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update email');
-      console.error(err);
+
+      toast.success("Verification email sent! Please check your inbox.");
+      reset();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update email"
+      );
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
   
@@ -262,15 +280,15 @@ export default function SettingsPage() {
   return (
     <div className="outer-container">
       <h2 className="text-2xl font-bold mb-6">Account Settings</h2>
-      
+
       {message && <div className="success-message mb-4">{message}</div>}
       {error && <div className="error-message mb-4">{error}</div>}
-      
+
       <div className="settings-grid">
         {/* Profile Section */}
         <div className="settings-section">
           <h3 className="settings-heading">Profile Settings</h3>
-          
+
           <form onSubmit={handleUpdateDisplayName} className="settings-form">
             <div className="form-group">
               <label htmlFor="displayName">Display Name</label>
@@ -283,34 +301,50 @@ export default function SettingsPage() {
               />
             </div>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Updating...' : 'Update Display Name'}
+              {loading ? "Updating..." : "Update Display Name"}
             </Button>
           </form>
-          
-          <form onSubmit={handleUpdateEmail} className="settings-form">
-            <div className="form-group">
-              <label htmlFor="email">Email Address</label>
-              <Input
-                id="email"
+
+          <form onSubmit={handleSubmit(handleUpdateEmail)} className="space-y-4">
+            <div>
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-gray-700"
+              >
+                New Email Address
+              </label>
+              <input
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
+                id="email"
+                {...register("email")}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                placeholder="Enter your new email address"
+                disabled={isSubmitting}
               />
+              {errors.email && (
+                <p className="mt-1 text-sm text-red-600">
+                  {errors.email.message}
+                </p>
+              )}
             </div>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Updating...' : 'Update Email'}
-            </Button>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? "Sending..." : "Update Email"}
+            </button>
           </form>
-          
+
           <div className="settings-form">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setShowResetPassword(!showResetPassword)}
             >
               Reset Password
             </Button>
-            
+
             {showResetPassword && (
               <form onSubmit={handleResetPassword} className="mt-4">
                 <p className="text-sm mb-2">
@@ -322,18 +356,18 @@ export default function SettingsPage() {
                   </div>
                 ) : (
                   <Button type="submit" disabled={loading}>
-                    {loading ? 'Sending...' : 'Send Reset Link'}
+                    {loading ? "Sending..." : "Send Reset Link"}
                   </Button>
                 )}
               </form>
             )}
           </div>
         </div>
-        
+
         {/* Personal Information Section */}
         <div className="settings-section">
           <h3 className="settings-heading">Personal Information</h3>
-          
+
           <form onSubmit={handleUpdatePersonalInfo} className="settings-form">
             <div className="form-group">
               <label htmlFor="firstName">First Name</label>
@@ -344,7 +378,7 @@ export default function SettingsPage() {
                 onChange={(e) => setFirstName(e.target.value)}
               />
             </div>
-            
+
             <div className="form-group">
               <label htmlFor="lastName">Last Name</label>
               <Input
@@ -354,7 +388,7 @@ export default function SettingsPage() {
                 onChange={(e) => setLastName(e.target.value)}
               />
             </div>
-            
+
             <div className="form-group">
               <label htmlFor="address">Address</label>
               <Input
@@ -364,37 +398,37 @@ export default function SettingsPage() {
                 onChange={(e) => setAddress(e.target.value)}
               />
             </div>
-            
+
             <Button type="submit" disabled={loading}>
-              {loading ? 'Updating...' : 'Update Personal Info'}
+              {loading ? "Updating..." : "Update Personal Info"}
             </Button>
           </form>
         </div>
-        
+
         {/* Preferences Section */}
         <div className="settings-section">
           <h3 className="settings-heading">Preferences</h3>
-          
+
           <div className="settings-form">
             <div className="form-group">
               <label>Theme</label>
               <div className="flex gap-4 mt-2">
                 <Button
-                  variant={theme === 'light' ? 'default' : 'outline'}
-                  onClick={() => handleThemeChange('light')}
+                  variant={theme === "light" ? "default" : "outline"}
+                  onClick={() => handleThemeChange("light")}
                 >
                   Light
                 </Button>
                 <Button
-                  variant={theme === 'dark' ? 'default' : 'outline'}
-                  onClick={() => handleThemeChange('dark')}
+                  variant={theme === "dark" ? "default" : "outline"}
+                  onClick={() => handleThemeChange("dark")}
                 >
                   Dark
                 </Button>
               </div>
             </div>
           </div>
-          
+
           <form onSubmit={handleUpdateTimezone} className="settings-form">
             <div className="form-group">
               <label htmlFor="timezone">Timezone</label>
@@ -408,22 +442,24 @@ export default function SettingsPage() {
                 <option value="America/New_York">Eastern Time (GMT -4)</option>
                 <option value="America/Chicago">Central Time (GMT -5)</option>
                 <option value="America/Denver">Mountain Time (GMT -6)</option>
-                <option value="America/Los_Angeles">Pacific Time (GMT -7)</option>
+                <option value="America/Los_Angeles">
+                  Pacific Time (GMT -7)
+                </option>
                 <option value="Europe/London">London (GMT +0)</option>
                 <option value="Asia/Tokyo">Tokyo (JST)</option>
                 <option value="Australia/Sydney">Sydney (AEST)</option>
               </select>
             </div>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Updating...' : 'Update Timezone'}
+              {loading ? "Updating..." : "Update Timezone"}
             </Button>
           </form>
         </div>
-        
+
         {/* Payment Methods Section */}
         <div className="settings-section">
           <h3 className="settings-heading">Payment Methods</h3>
-          
+
           <div className="payment-methods">
             {paymentMethods.length === 0 ? (
               <p>No payment methods added yet.</p>
@@ -434,10 +470,12 @@ export default function SettingsPage() {
                     <div className="payment-info">
                       <span>{method.card_type}</span>
                       <span>•••• •••• •••• {method.last_four}</span>
-                      <span>Expires: {method.expiry_month}/{method.expiry_year}</span>
+                      <span>
+                        Expires: {method.expiry_month}/{method.expiry_year}
+                      </span>
                     </div>
-                    <Button 
-                      variant="destructive" 
+                    <Button
+                      variant="destructive"
                       size="sm"
                       onClick={() => handleRemovePaymentMethod(method.id)}
                     >
@@ -447,9 +485,9 @@ export default function SettingsPage() {
                 ))}
               </ul>
             )}
-            
-            <Button 
-              variant="outline" 
+
+            <Button
+              variant="outline"
               className="mt-4"
               onClick={handleAddPaymentMethod}
             >
@@ -457,23 +495,24 @@ export default function SettingsPage() {
             </Button>
           </div>
         </div>
-        
+
         {/* Game Statistics Section */}
         <div className="settings-section">
           <h3 className="settings-heading">Game Statistics</h3>
-          
+
           <div className="settings-form">
             <p className="text-sm mb-4">
-              Reset your game statistics. This will clear all your game history, wins, losses,
-              and performance metrics. This action cannot be undone.
+              Reset your game statistics. This will clear all your game history,
+              wins, losses, and performance metrics. This action cannot be
+              undone.
             </p>
-            
+
             <Button
               variant="destructive"
               onClick={handleResetStats}
               disabled={loading}
             >
-              {loading ? 'Resetting...' : 'Reset Statistics'}
+              {loading ? "Resetting..." : "Reset Statistics"}
             </Button>
           </div>
         </div>
