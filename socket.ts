@@ -13,7 +13,7 @@ import { evaluateHand } from "@game/utils";
 import { v4 as uuidv4 } from "uuid";
 import { Playwrite_TZ } from "next/font/google";
 import { createDropdownMenuScope } from "@radix-ui/react-dropdown-menu";
-import { updatePlayerStats } from "@lib/db/database"
+import { updatePlayerStats } from "@lib/database"
 
 export function initializeSocket(io: Server) {
 	// Store active games
