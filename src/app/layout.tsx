@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import NavBar from '@comps/nav/NavBar';
 import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 import { AuthProvider } from '@contexts/authContext';
 
@@ -25,15 +26,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-		<html lang="en">
-			<body
-				className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-			>
-				<AuthProvider>
-					<NavBar />
-					<div className="main-content">{children}</div>
-				</AuthProvider>
-			</body>
-		</html>
-	);
+    <html lang="en">
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
+        <AuthProvider>
+          <NavBar />
+          <div className="main-content">{children}</div>
+          <Toaster position="top-right" />
+        </AuthProvider>
+      </body>
+    </html>
+  );
 }
