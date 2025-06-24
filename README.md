@@ -1,16 +1,33 @@
 # 🃏 Dealer's Choice Poker
 
+## 🃏 Table of Contents
+- [Overview](#🃏-overview)
+- [Why?](#🃏-why)
+- [Key Architecture Points](#🃏-key-architecture-points)
+- [Getting Started](#🃏-getting-started)
+- [Future Development](#🃏-future-development)
+- [Contributing](#🃏-contributing)
+
 ## 🃏 Overview
 
 DCP is a real-time multiplayer card game application built with Next.js and WebSockets. The application features user authentication, real-time gameplay, and a responsive UI. It will eventually feature extensive stat-tracking and a custom game variant editor to allow players to deal any kind of poker game they can think of.
 
+***
 ## 🃏 Why?
 
-There are lots of online poker games out there already, what's different about this one? 
+#### *There are lots of online poker games out there already, so what's different about this one?*
 
-I really enjoy playing poker, but I get freakin' tired of playing Texas Hold'Em all the time. It's all anyone seems to know or understand, at least in the casual poker player arena. I always played Dealer's Choice with my friends, where we could deal any kind of poker game we wanted when it was our turn. And I mean any kind. Anything we could come up with, crazy community boards, different layouts, different rules for how you could combine the cards on the board, and it made it WAY MORE FUN.
+Indulge me a moment to share with you what I seek to do differently
 
-So, I wanted to capture that awesome unpredictability and excitement, but in an online poker format. That's why!
+I really enjoy playing poker, but I get freakin' tired of playing Texas Hold'Em all the time. It's all anyone seems to know or understand, at least in the casual poker player arena. I always played Dealer's Choice with my friends, where we could deal any kind of poker game we wanted when it was our turn. And I do mean <u>**any**</u> kind. 
+
+Anything we would come up with was fair game: all sorts of community board setup using different layouts, different rules for how you could combine the cards on the board, how many cards were on the board, if wildcards were in play, and whether we were playing Texas, or Omaha, or even stud or draw style variants if we felt like it. 
+
+Believe me, we came up with some totally off-the-wall stuff. But it worked, and it was always still just poker, no matter how complicated it could get, and so remained easy to assimilate and understand, and as a result it remained fresh and engaging even after hours and hours of playing, day after day after day.
+
+That creativity and energy that playing with "whatever you can dream up"-style Dealer's Choice injected into the game... It is *that* which is what I want to capture and share with others through an online poker format: that awesome unpredictability and excitement, beacause I think it can make it a whle new game for others too!
+
+[Back to Top](#🃏-dealers-choice-poker)
 
 ## 🃏 Key Architecture Points
 
@@ -20,9 +37,13 @@ So, I wanted to capture that awesome unpredictability and excitement, but in an 
 - **WebSockets**: Real-time communication between clients and server
 - **Tailwind CSS**: Utility-first styling approach
 
+[Back to Top](#🃏-dealers-choice-poker)
+
 ## 🃏 Getting Started
 
 To setup the project in a development environment, see the Contributing section at the bottom of this README. For developer guides and function descriptions, please see the individual documentation files in the `/docs` directory. Finally, once the project is in a state worthy of going live, the URL of the site will be posted.
+
+[Back to Top](#🃏-dealers-choice-poker)
 
 ## 🃏 Future Development
 
@@ -34,6 +55,8 @@ Areas for future development and improvement include:
 - Adding social features like friends lists and private games
 - Comprehensive statistics-tracking and leaderboards
 - Improved UI layouts
+
+[Back to Top](#🃏-dealers-choice-poker)
 
 ## 🃏 Tasks and Milestones
 
@@ -84,6 +107,7 @@ A checklist for ongoing development:
 - [ ]  AI players   
 - [ ]  Extras? (I'm always open to ideas for features!)   
 
+[Back to Top](#🃏-dealers-choice-poker)
 
 ## 🃏 Contributing
 
@@ -113,3 +137,4 @@ Then submit a pull request
 
 If you'd like to contribute, please fork the repository and open a pull request to the primary branch
 
+[Back to Top](#🃏-dealers-choice-poker)
