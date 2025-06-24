@@ -1,11 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabaseS';
 import { cookies } from 'next/headers';
 import type { GameRoom, ExtendedWebSocket, WSMessageType, WSMessage, WSJoinGame, WSPlayerAction, WSStartRound, WSChatMessage, WSGetGamesList, WSCreateGame } from '@lib/socketTypes';
-import { socket } from '../../../../socket';
 import Player from '@comps/game/Player';
-import { Player as IPlayer, GameState } from '@src/game/classes';
-
 
 /*
 // In-memory game state storage - in production you'd use Redis or similar

@@ -3,6 +3,13 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
 	/* config options here */
 	reactStrictMode: true,
+  allowedDevOrigins: [
+    "http://localhost:3001",
+    "http://localhost:3003",
+    "http://172.*.*.*:3003",
+    "http://172.*.*.*:3001",
+  ],
+  
 	async headers() {
 		return [
 			{

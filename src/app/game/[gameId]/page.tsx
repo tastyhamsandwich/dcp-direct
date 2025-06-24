@@ -166,13 +166,13 @@ export default function GamePage({
 		if (!unwrappedParams.gameId || !user) return;
 
 		// Initialize WebSocket connection to the socket.io server
-		//const socketRef.current = io("http://randomencounter.ddns.net:3001", {
-		/*const socketRef.current = io("localhost:3001", {
+		//const socketRef.current = io("http://randomencounter.ddns.net:${process.env.SOCKET_PORT}", {
+		/*const socketRef.current = io("localhost:${process.env.SOCKET_PORT}", {
 			transports: ["websocket"],
 			withCredentials: true,
 		});*/
 
-		socketRef.current = io(`http://172.21.143.125:3001`, {
+		socketRef.current = io(`http://${process.env.HOST}:${process.env.SOCKET_PORT}`, {
       transports: ["websocket"],
       withCredentials: true,
     });
