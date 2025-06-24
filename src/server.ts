@@ -1,14 +1,14 @@
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
-import { initializeSocket } from "../socket";
+import { initializeSocket } from "./socket";
 import { socketManager } from "./lib/socketManager";
 
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
 	cors: {
-		origin: ["http://localhost:3003"],
+		origin: ["http://localhost:3003", `http://${process.env.HOST}:3003`],
 		methods: ["GET", "POST"],
 		credentials: true,
 	},
