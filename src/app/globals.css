@@ -176,6 +176,74 @@ body {
   }
 }
 
+.light,
+.light-theme {
+  --background: #f7f8fa; /* off-white for main background */
+  --foreground: #171717;
+
+  --blue-1: #eaf2fb;
+  --blue-2: #dbe8f7;
+  --blue-3: #b7d0ee;
+  --blue-4: #a0c0e7;
+  --blue-5: #7ba7db;
+  --blue-6: #5b8fd0;
+  --blue-7: #3971cc;
+  --blue-8: #3169c3;
+  --blue-9: #2958a4;
+  --blue-10: #1e488d;
+  --blue-11: #133b7b;
+  --blue-12: #0a192f;
+
+  --blue-a1: #eaf2fbcc;
+  --blue-a2: #dbe8f7cc;
+  --blue-a3: #b7d0eeb3;
+  --blue-a4: #a0c0e7b3;
+  --blue-a5: #7ba7dbb3;
+  --blue-a6: #5b8fd0b3;
+  --blue-a7: #3971ccb3;
+  --blue-a8: #3169c3b3;
+  --blue-a9: #2958a4b3;
+  --blue-a10: #1e488db3;
+  --blue-a11: #133b7bb3;
+  --blue-a12: #0a192fb3;
+
+  --blue-contrast: #171717;
+  --blue-surface: #fff; /* for cards/divs */
+  --blue-indicator: #3971cc;
+  --blue-track: #3971cc;
+
+  --gray-1: #f7f8fa;
+  --gray-2: #f0f1f4;
+  --gray-3: #e5e7eb;
+  --gray-4: #d1d5db;
+  --gray-5: #bfc5ce;
+  --gray-6: #aeb4be;
+  --gray-7: #8e96a3;
+  --gray-8: #6b7280;
+  --gray-9: #4b5563;
+  --gray-10: #374151;
+  --gray-11: #22262e;
+  --gray-12: #171717;
+
+  --gray-a1: #f7f8faee;
+  --gray-a2: #f0f1f4ee;
+  --gray-a3: #e5e7ebee;
+  --gray-a4: #d1d5dbee;
+  --gray-a5: #bfc5ceee;
+  --gray-a6: #aeb4beee;
+  --gray-a7: #8e96a3ee;
+  --gray-a8: #6b7280ee;
+  --gray-a9: #4b5563ee;
+  --gray-a10: #374151ee;
+  --gray-a11: #22262eee;
+  --gray-a12: #171717ee;
+
+  --gray-contrast: #171717;
+  --gray-surface: #fff;
+  --gray-indicator: #4b5563;
+  --gray-track: #4b5563;
+}
+
 .dark,
 .dark-theme,
 :is(.dark, .dark-theme) :where(.radix-themes:not(.light, .light-theme)) {
