@@ -258,9 +258,10 @@ export function initializeSocket(io: Server) {
         );
         player.active = false;
         player.folded = true;
+        player.game = game;
 
         // Add player to the game
-        game.players.push(player);
+        game.addPlayer(player);
 
         // Update table positions
         game.tablePositions[availableSeat].occupied = true;

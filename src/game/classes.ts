@@ -310,6 +310,7 @@ export class Player implements User {
   previousAction: Action
   avatar: string;
   handRank: HandRank;
+  game: Game;
 
   constructor(id, username, seatNumber, chips, avatar) {
     this.id = id;
@@ -329,31 +330,35 @@ export class Player implements User {
       hand: '',
       value: 0
     }
-    
     // Log player creation for debugging
     console.log(`Player created: ${username} with ${this.chips} chips at seat ${seatNumber}`);
   }
 
-  getId() { return this.id; }
-  getChips() { return this.chips; }
-  getCards() { return this.cards; }
-  getSeat() { return this.seatNumber; }
-  getActive() { return this.active; }
-  getReady() { return this.ready; }
-  getAllIn() { return this.allIn; }
-  getCurrentBet() { return this.currentBet; }
-  getPrevAction() { return this.previousAction; }
-  setId(value) { return this.id = value; }
-  setChips(amount) { return this.chips = amount; }
-  addChips(amountToAdd) { return this.chips += amountToAdd; }
-  setSeat(seatNum) { return this.seatNumber = seatNum; }
-  setActive(value) { return this.active = value; }
-  setReady(value) { return this.ready = value; }
-  toggleReady() { return this.ready = !this.ready; }
-  setAllIn(value) { return this.allIn = value; }
-  setCurrentBet(value) { return this.currentBet = value; }
-  setPrevAction(action) { return this.previousAction = action; }
+  get stats() {
+    // Use username as key, as in Game.stats.players
+    return this.game?.stats.players[this.username];
+  }
+  get playerId() { return this.id; }
+  get chipCount() { return this.chips; }
+  get playerCards() { return this.cards; }
+  get seat() { return this.seatNumber; }
+  get activeState() { return this.active; }
+  get readyState() { return this.ready; }
+  get isAllIn() { return this.allIn; }
+  get currBet() { return this.currentBet; }
+  get prevAction() { return this.previousAction; }
 
+  set playerId(value) { this.id = value; }
+  set chipCount(amount) { this.chips = amount; }
+  set seat(seatNum) { this.seatNumber = seatNum; }
+  set activeState(value) { this.active = value; }
+  set readyState(value) { this.ready = value; }
+  set isAllIn(value) { this.allIn = value; }
+  set currBet(value) { this.currentBet = value; }
+  set prevAction(action) { this.previousAction = action; }
+  
+  addChips(amountToAdd) { return this.chips += amountToAdd; }
+  toggleReady() { return this.ready = !this.ready; }
 }
 
 /** Represents a playing card.
@@ -923,7 +928,10 @@ export class Game {
       },
       players: {},
     }
+    // Set creator's game property
+    this.creator.game = this;
     this.players.forEach((player) => {
+      player.game = this;
       const personalStats: PlayerStats = {
         gamesPlayed: 0,
         gamesWon: 0,
@@ -960,12 +968,9 @@ export class Game {
         totalBets: 0,
         biggestPot: 0
       }
-
       const playerStats: PlayerStatsComposite = {id: player.id, name: player.username, personalStats, gameStats};
-
       this.stats.players[player.username] = playerStats;
     });
-
     this.updateCardsPerPlayer(this.gameVariant, customRules)
     switch (gameVariant) {
       case 'TexasHoldEm':
@@ -2011,7 +2016,7 @@ export class Game {
 		// 2. Player has enough chips for minimum raise
 		const minRaise = this.currentBet * 2 - player.currentBet;
 		if (this.currentBet > 0 && player.chips >= minRaise) {
-			actions.push("raise");
+		actions.push("raise");
 		}
 
 		console.log(
@@ -2148,6 +2153,7 @@ export class Game {
       p.folded = false;
       p.cards = [];
       p.ready = false;
+      p.stats.gameStats.handsPlayed += 1;
     });
 
     if (this.players.every(p => {
@@ -2351,7 +2357,7 @@ export class Game {
    * Handles both main pot and sidepots.
    * @returns An array of winner information containing player IDs and amounts won
    */
-  distributePots(): { playerId: string, playerName: string, amount: number, potType: string }[] {
+  distributePots(): boolean | { playerId: string, playerName: string, amount: number, potType: string }[]  {
     const winnerInfo: { playerId: string, playerName: string, amount: number, potType: string }[] = [];
     
     // First deal with any sidepots (from earliest to latest)
@@ -2381,16 +2387,31 @@ export class Game {
         });
 
         // Update player stats
-        this.stats.players[winner.username].personalStats.totalHandsPlayed += 1;
         this.stats.players[winner.username].personalStats.handsWon += 1;
+        this.stats.players[winner.username].personalStats.totalHandsPlayed += 1;
         this.stats.players[winner.username].personalStats.totalWinnings += sidepot.getAmount();
+        this.stats.players[winner.username].personalStats.mainPotWinnings += sidepot.getAmount();
+        this.stats.players[winner.username].personalStats.mainPotsWon += 1;
 
-        // Update player game stats
-        this.stats.players[winner.username].gameStats.handsWon += 1;
+        // Handle any sidepots
+        if (this.sidepots.length > 0) {
+          this.sidepots.forEach(sidepot => {
+            const sidepotAmount = sidepot.getAmount();
+            winner.chips += sidepotAmount;
+            this.stats.players[winner.username].personalStats.totalWinnings += sidepotAmount;
+            this.stats.players[winner.username].personalStats.sidePotWinnings += sidepotAmount;
+            this.stats.players[winner.username].personalStats.sidePotsWon += 1;
+          });
+        }
+        
+        this.pot = 0;
+        this.sidepots = [];
 
-        if (sidepot.getAmount() > this.stats.players[winner.username].personalStats.biggestPot)
-          this.stats.players[winner.username].personalStats.biggestPot = sidepot.getAmount();
-
+        if (this.resetRound()) {
+          this.dealCards(this.gameVariant);
+          return false;
+        }
+        return false;
       } else {
         // Multiple eligible players, evaluate hands
         if (Array.isArray(this.communityCards) && this.communityCards.length > 0) {
@@ -2538,5 +2559,70 @@ export class Game {
     this.sidepots = [];
     
     return winnerInfo;
+  }
+
+  /**
+   * Adds a player to the game, sets up their game property and stats.
+   * @param player The player to add
+   * @returns true if added, false if already present
+   */
+  addPlayer(player: Player): boolean {
+    // Prevent duplicate addition
+    if (this.players.some(p => p.id === player.id)) return false;
+    // Set game reference
+    player.game = this;
+    // Add to players array
+    this.players.push(player);
+    // Initialize stats if not present
+    if (!this.stats.players[player.username]) {
+      this.stats.players[player.username] = Game.createPlayerStatsComposite(player, this.id, this.name);
+    }
+    return true;
+  }
+
+  /**
+   * Helper to create a PlayerStatsComposite for a player
+   * @param player The player
+   * @param gameId The game id
+   * @param gameName The game name
+   */
+  static createPlayerStatsComposite(player: Player, gameId: string, gameName: string): PlayerStatsComposite {
+    const personalStats: PlayerStats = {
+      gamesPlayed: 0,
+      gamesWon: 0,
+      totalHandsPlayed: 0,
+      handsWon: 0,
+      totalWinnings: 0,
+      biggestPot: 0,
+      lastUpdated: '',
+      totalBets: 0,
+      mainPotWinnings: 0,
+      sidePotWinnings: 0,
+      mainPotsWon: 0,
+      sidePotsWon: 0,
+      timesCalled: 0,
+      timesBet: 0,
+      timesRaised: 0,
+      timesFolded: 0,
+      timesChecked: 0
+    };
+    const gameStats: PlayerGameStats = {
+      gameId,
+      gameName,
+      buyIn: null,
+      cashOut: null,
+      handsPlayed: 0,
+      handsWon: 0,
+      joinedAt: '',
+      leftAt: '',
+      timesCalled: 0,
+      timesBet: 0,
+      timesRaised: 0,
+      timesFolded: 0,
+      timesChecked: 0,
+      totalBets: 0,
+      biggestPot: 0
+    };
+    return { id: player.id, name: player.username, personalStats, gameStats };
   }
 }
