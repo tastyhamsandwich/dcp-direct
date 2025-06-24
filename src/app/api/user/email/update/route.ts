@@ -3,18 +3,18 @@ import { generateVerificationToken } from "@lib/utils";
 import { sendVerificationEmail } from "@lib/mailers";
 import { EmailVerification } from "@lib/mongoose/schema/email";
 import { testIsEmail as isValidEmail } from "@lib/utils";
-import { auth } from '@/auth';
+import { verifySession } from '@/lib/session';;
 
 export async function PUT(req: NextRequest) {
   try {
-    const session = await auth();
+    const session = await verifySession();
 
-    if (!session?.user?._id) {
+    if (!session?.userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const { newEmail } = await req.json() as { newEmail: string };
-    const userId = session.user.id;
+    const userId = session.userId;  
 
     if (!isValidEmail(newEmail)) {
       return NextResponse.json(

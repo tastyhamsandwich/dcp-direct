@@ -2,7 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { redirect } from "next/navigation";
-import type { User } from "@lib/database";
+import type { User_DB as User } from "@lib/database";
 
 export type SessionPayload = {
   /** The user's _id (ObjectId by default, cast to string) from their database entry */

@@ -172,13 +172,10 @@ export default function GamePage({
 			withCredentials: true,
 		});*/
 
-		socketRef.current = io(
-      `http://172.17.29.148:3001`,
-      {
-        transports: ["websocket"],
-        withCredentials: true,
-      }
-    );
+		socketRef.current = io(`http://172.21.143.125:3001`, {
+      transports: ["websocket"],
+      withCredentials: true,
+    });
 
     socketRef.current.on(
       "player_ready_status",

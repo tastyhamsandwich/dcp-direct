@@ -38,6 +38,7 @@
 			"@db/*": ["./src/lib/db/*"],
       "@api/*": ["./src/app/api/*"],
       "@mongoose/*": ["./src/lib/mongoose/*"],
+      "@schema/*": ["./src/lib/mongoose/schema/*"],
 		}
 	},
   "include": ["./socket.ts", "./src/*.ts", "next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/server.js"],

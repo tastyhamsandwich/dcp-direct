@@ -87,7 +87,7 @@ export default function DashboardLayout({
 	}, [user?.avatar, isImageLoading, imageError]);
 
 	return (
-    <div className="flex h-screen bg-[#1a1a2e] m-0 p-0">
+    <div className="flex h-[93.8vh] bg-[#1a1a2e] m-0 p-0">
       {/* Sidebar */}
       <div className="w-64 bg-[#333] text-white shadow-xl relative">
         {/* Profile Section */}

@@ -34,6 +34,7 @@ export default function SettingsPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
 
   type EmailFormData = {
     email: string;
@@ -65,7 +66,8 @@ export default function SettingsPage() {
             setFirstName(data.first_name || '');
             setLastName(data.last_name || '');
             setAddress(data.address || '');
-            
+            setEmailVerified(data.email_verified || false);
+
             // Set and apply theme
             const currentTheme = data.theme || 'light';
             setTheme(currentTheme);
@@ -115,7 +117,7 @@ export default function SettingsPage() {
       });
 
       const result = await response.json() as { error: string, message?: string };
-
+      
       if (!response.ok) {
         throw new Error(result.error);
       }
@@ -278,245 +280,283 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="outer-container">
-      <h2 className="text-2xl font-bold mb-6">Account Settings</h2>
-
-      {message && <div className="success-message mb-4">{message}</div>}
-      {error && <div className="error-message mb-4">{error}</div>}
-
-      <div className="settings-grid">
-        {/* Profile Section */}
-        <div className="settings-section">
-          <h3 className="settings-heading">Profile Settings</h3>
-
-          <form onSubmit={handleUpdateDisplayName} className="settings-form">
-            <div className="form-group">
-              <label htmlFor="displayName">Display Name</label>
-              <Input
-                id="displayName"
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                required
-              />
-            </div>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Updating..." : "Update Display Name"}
-            </Button>
-          </form>
-
-          <form onSubmit={handleSubmit(handleUpdateEmail)} className="space-y-4">
-            <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-gray-700"
+    <>
+      <h2 className="text-4xl font-bold mb-6 text-center mt-15 text-shadow-lg/30 text-shadow-gray-700">
+        Account Settings
+      </h2>
+      <div className="items-center justify-center text-center">
+        {!emailVerified && (
+          <div className="alert alert-warning mb-4 block">
+            <p className="text-sm">
+              Your email address is not verified. <br />
+              Please check your inbox for a verification email.
+              <br />
+              <a
+                href="/dashboard/settings/verify-email"
+                className="text-blue-500 hover:underline ml-1"
               >
-                New Email Address
-              </label>
-              <input
-                type="email"
-                id="email"
-                {...register("email")}
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                placeholder="Enter your new email address"
-                disabled={isSubmitting}
-              />
-              {errors.email && (
-                <p className="mt-1 text-sm text-red-600">
-                  {errors.email.message}
-                </p>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? "Sending..." : "Update Email"}
-            </button>
-          </form>
-
-          <div className="settings-form">
-            <Button
-              variant="outline"
-              onClick={() => setShowResetPassword(!showResetPassword)}
-            >
-              Reset Password
-            </Button>
-
-            {showResetPassword && (
-              <form onSubmit={handleResetPassword} className="mt-4">
-                <p className="text-sm mb-2">
-                  A password reset link will be sent to your email address.
-                </p>
-                {resetPasswordSuccess ? (
-                  <div className="success-message">
-                    Password reset email sent. Please check your inbox.
-                  </div>
-                ) : (
-                  <Button type="submit" disabled={loading}>
-                    {loading ? "Sending..." : "Send Reset Link"}
-                  </Button>
-                )}
-              </form>
-            )}
+                Resend Verification Email
+              </a>
+            </p>
           </div>
+        )}
+        <div className="flex justify-center text-center items-center">
+          {message && (
+            <div className="flex success-message mb-4 max-w-md ">{message}</div>
+          )}
+          {error && <div className="error-message mb-4">{error}</div>}
         </div>
+        <div className="outer-container">
+          <div className="settings-grid">
+            {/* Profile Section */}
+            <div className="settings-section">
+              <h3 className="settings-heading">Profile Settings</h3>
 
-        {/* Personal Information Section */}
-        <div className="settings-section">
-          <h3 className="settings-heading">Personal Information</h3>
-
-          <form onSubmit={handleUpdatePersonalInfo} className="settings-form">
-            <div className="form-group">
-              <label htmlFor="firstName">First Name</label>
-              <Input
-                id="firstName"
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="lastName">Last Name</label>
-              <Input
-                id="lastName"
-                type="text"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-              />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="address">Address</label>
-              <Input
-                id="address"
-                type="text"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-              />
-            </div>
-
-            <Button type="submit" disabled={loading}>
-              {loading ? "Updating..." : "Update Personal Info"}
-            </Button>
-          </form>
-        </div>
-
-        {/* Preferences Section */}
-        <div className="settings-section">
-          <h3 className="settings-heading">Preferences</h3>
-
-          <div className="settings-form">
-            <div className="form-group">
-              <label>Theme</label>
-              <div className="flex gap-4 mt-2">
-                <Button
-                  variant={theme === "light" ? "default" : "outline"}
-                  onClick={() => handleThemeChange("light")}
-                >
-                  Light
+              <form
+                onSubmit={handleUpdateDisplayName}
+                className="settings-form"
+              >
+                <div className="form-group">
+                  <label htmlFor="displayName">Display Name</label>
+                  <Input
+                    id="displayName"
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    required
+                  />
+                </div>
+                <Button type="submit" disabled={loading}>
+                  {loading ? "Updating..." : "Update Display Name"}
                 </Button>
-                <Button
-                  variant={theme === "dark" ? "default" : "outline"}
-                  onClick={() => handleThemeChange("dark")}
+              </form>
+
+              <form
+                onSubmit={handleSubmit(handleUpdateEmail)}
+                className="space-y-4"
+              >
+                <div>
+                  <label
+                    htmlFor="email"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    New Email Address
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    {...register("email")}
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    placeholder="Enter your new email address"
+                    disabled={isSubmitting}
+                  />
+                  {errors.email && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {errors.email.message}
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Dark
+                  {isSubmitting ? "Sending..." : "Update Email"}
+                </button>
+              </form>
+
+              <div className="settings-form">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowResetPassword(!showResetPassword)}
+                >
+                  Reset Password
+                </Button>
+
+                {showResetPassword && (
+                  <form onSubmit={handleResetPassword} className="mt-4">
+                    <p className="text-sm mb-2">
+                      A password reset link will be sent to your email address.
+                    </p>
+                    {resetPasswordSuccess ? (
+                      <div className="success-message">
+                        Password reset email sent. Please check your inbox.
+                      </div>
+                    ) : (
+                      <Button type="submit" disabled={loading}>
+                        {loading ? "Sending..." : "Send Reset Link"}
+                      </Button>
+                    )}
+                  </form>
+                )}
+              </div>
+            </div>
+
+            {/* Personal Information Section */}
+            <div className="settings-section">
+              <h3 className="settings-heading">Personal Information</h3>
+
+              <form
+                onSubmit={handleUpdatePersonalInfo}
+                className="settings-form"
+              >
+                <div className="form-group">
+                  <label htmlFor="firstName">First Name</label>
+                  <Input
+                    id="firstName"
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="lastName">Last Name</label>
+                  <Input
+                    id="lastName"
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="address">Address</label>
+                  <Input
+                    id="address"
+                    type="text"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                  />
+                </div>
+
+                <Button type="submit" disabled={loading}>
+                  {loading ? "Updating..." : "Update Personal Info"}
+                </Button>
+              </form>
+            </div>
+
+            {/* Preferences Section */}
+            <div className="settings-section">
+              <h3 className="settings-heading">Preferences</h3>
+
+              <div className="settings-form">
+                <div className="form-group">
+                  <label>Theme</label>
+                  <div className="flex gap-4 mt-2">
+                    <Button
+                      variant={theme === "light" ? "outline" : "default"}
+                      onClick={() => handleThemeChange("light")}
+                    >
+                      Light
+                    </Button>
+                    <Button
+                      variant={theme === "dark" ? "outline" : "default"}
+                      onClick={() => handleThemeChange("dark")}
+                    >
+                      Dark
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleUpdateTimezone} className="settings-form">
+                <div className="form-group">
+                  <label htmlFor="timezone">Timezone</label>
+                  <select
+                    id="timezone"
+                    className="w-full p-2 border rounded"
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                  >
+                    <option value="UTC">UTC</option>
+                    <option value="America/New_York">
+                      Eastern Time (GMT -4)
+                    </option>
+                    <option value="America/Chicago">
+                      Central Time (GMT -5)
+                    </option>
+                    <option value="America/Denver">
+                      Mountain Time (GMT -6)
+                    </option>
+                    <option value="America/Los_Angeles">
+                      Pacific Time (GMT -7)
+                    </option>
+                    <option value="Europe/London">London (GMT +0)</option>
+                    <option value="Asia/Tokyo">Tokyo (JST)</option>
+                    <option value="Australia/Sydney">Sydney (AEST)</option>
+                  </select>
+                </div>
+                <Button type="submit" disabled={loading}>
+                  {loading ? "Updating..." : "Update Timezone"}
+                </Button>
+              </form>
+            </div>
+
+            {/* Payment Methods Section */}
+            <div className="settings-section">
+              <h3 className="settings-heading">Payment Methods</h3>
+
+              <div className="payment-methods">
+                {paymentMethods.length === 0 ? (
+                  <p>No payment methods added yet.</p>
+                ) : (
+                  <ul className="payment-list">
+                    {paymentMethods.map((method) => (
+                      <li key={method.id} className="payment-item">
+                        <div className="payment-info">
+                          <span>{method.card_type}</span>
+                          <span>•••• •••• •••• {method.last_four}</span>
+                          <span>
+                            Expires: {method.expiry_month}/{method.expiry_year}
+                          </span>
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleRemovePaymentMethod(method.id)}
+                        >
+                          Remove
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={handleAddPaymentMethod}
+                >
+                  Add Payment Method
+                </Button>
+              </div>
+            </div>
+
+            {/* Game Statistics Section */}
+            <div className="settings-section">
+              <h3 className="settings-heading">Game Statistics</h3>
+
+              <div className="settings-form">
+                <p className="text-sm mb-4">
+                  Reset your game statistics. This will clear all your game
+                  history, wins, losses, and performance metrics. This action
+                  cannot be undone.
+                </p>
+
+                <Button
+                  variant="destructive"
+                  onClick={handleResetStats}
+                  disabled={loading}
+                >
+                  {loading ? "Resetting..." : "Reset Statistics"}
                 </Button>
               </div>
             </div>
           </div>
-
-          <form onSubmit={handleUpdateTimezone} className="settings-form">
-            <div className="form-group">
-              <label htmlFor="timezone">Timezone</label>
-              <select
-                id="timezone"
-                className="w-full p-2 border rounded"
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-              >
-                <option value="UTC">UTC</option>
-                <option value="America/New_York">Eastern Time (GMT -4)</option>
-                <option value="America/Chicago">Central Time (GMT -5)</option>
-                <option value="America/Denver">Mountain Time (GMT -6)</option>
-                <option value="America/Los_Angeles">
-                  Pacific Time (GMT -7)
-                </option>
-                <option value="Europe/London">London (GMT +0)</option>
-                <option value="Asia/Tokyo">Tokyo (JST)</option>
-                <option value="Australia/Sydney">Sydney (AEST)</option>
-              </select>
-            </div>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Updating..." : "Update Timezone"}
-            </Button>
-          </form>
-        </div>
-
-        {/* Payment Methods Section */}
-        <div className="settings-section">
-          <h3 className="settings-heading">Payment Methods</h3>
-
-          <div className="payment-methods">
-            {paymentMethods.length === 0 ? (
-              <p>No payment methods added yet.</p>
-            ) : (
-              <ul className="payment-list">
-                {paymentMethods.map((method) => (
-                  <li key={method.id} className="payment-item">
-                    <div className="payment-info">
-                      <span>{method.card_type}</span>
-                      <span>•••• •••• •••• {method.last_four}</span>
-                      <span>
-                        Expires: {method.expiry_month}/{method.expiry_year}
-                      </span>
-                    </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleRemovePaymentMethod(method.id)}
-                    >
-                      Remove
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <Button
-              variant="outline"
-              className="mt-4"
-              onClick={handleAddPaymentMethod}
-            >
-              Add Payment Method
-            </Button>
-          </div>
-        </div>
-
-        {/* Game Statistics Section */}
-        <div className="settings-section">
-          <h3 className="settings-heading">Game Statistics</h3>
-
-          <div className="settings-form">
-            <p className="text-sm mb-4">
-              Reset your game statistics. This will clear all your game history,
-              wins, losses, and performance metrics. This action cannot be
-              undone.
-            </p>
-
-            <Button
-              variant="destructive"
-              onClick={handleResetStats}
-              disabled={loading}
-            >
-              {loading ? "Resetting..." : "Reset Statistics"}
-            </Button>
-          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

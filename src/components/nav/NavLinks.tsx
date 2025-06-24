@@ -34,7 +34,7 @@ const NavLinks = () => {
     if (!item.protected || (isLoggedIn && item.protected)) {
       return (
         <li className="nav-item" key={item.name}>
-          <Link href={item.path} className={clsx("rounded-lg px-4 py-2 duration-300 hover:duration-300 hover:translate-y-2 shadow-2xl hover:rounded-3xl mx-2 hover:border-slate-600 text-slate-700 hover:bg-slate-100 hover:text-slate-900", { "font-bold bg-[#222] s": isActive, "font-medium": !isActive })}>
+          <Link href={item.path} className={clsx("rounded-lg px-4 py-2 duration-300 hover:duration-300 hover:translate-x-1 text-shadow-2xl hover:rounded-3xl mx-2 hover:border-slate-600 text-slate-700 hover:bg-slate-100 hover:text-slate-900", { "font-bold bg-[#222] s": isActive, "font-medium": !isActive })}>
             {item.name}
           </Link>
         </li>

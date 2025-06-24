@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { EmailVerification } from "@lib/mongoose/schema/email";
-import { UserModel as User } from "@lib/mongoose/schema/user";
+import { EmailVerification } from "@schema/email";
+import { UserModel as User } from "@schema/user";
 import mongoose from "mongoose";
 
 export async function GET(req: NextRequest) {
