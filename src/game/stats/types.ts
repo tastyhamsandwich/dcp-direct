@@ -57,42 +57,54 @@ export interface PlayerGameStats {
 // The stats and details of a game session as a whole, independent of any one player
 export interface GameSessionStats {
   id: string;
-  startedAt?: string;
-  endedAt?: string | null;
-  gameVariants?: { [key: string]: number };
-  buyIn?: number | null;
-  creator?: string;
-  players?: string[];
-  gameId?: string;
-  gameName?: string;
-  bestHand?: Card[] | Hand | null;
-  bestHandPlayer?: string | null;
-  biggestPot?: number;
-  biggestPotWinner?: string | null;
-  totalPot?: number;
-  hardcoreMode?: boolean;
-  rankedGame?: boolean;
-  totalHands?: number;
-  rounds?: {
-    [key: number]: {
-      roundNumber?: number;
-      variant?: string;
-      totalBets?: number;
-      mainPot?: number;
-      sidePots?: number[];
-      playerStats?: { [key: string]: {
-        bets?: number;
-        calls?: number;
-        raises?: number;
-        folded?: boolean;
-        checks?: number;
-        winnings?: number;
-        hand?: Card[] | null;
-      }}
-    }
-  }
+  startedAt: string;
+  endedAt: string | null;
+  gameVariants: { [key: string]: number };
+  buyIn: number | null;
+  creator: string;
+  players: string[];
+  gameId: string;
+  name: string;
+  bestHand: Card[] | Hand | null;
+  bestHandName?: string;
+  bestHandPlayer: string | null;
+  biggestPot: number;
+  biggestPotWinner: string | null;
+  totalPot: number;
+  hardcoreMode: boolean;
+  rankedGame: boolean;
+  totalRounds: number;
+  rounds: { [key: number]: RoundStats }
 }
 
+export interface RoundStats {
+  roundNumber: number;
+  variant: string;
+  mainPot: number;
+  winner: string;
+  winningHand: Card[] | Hand | null;
+  winningHandName?: string;
+  sidePots?: SidepotStats[];
+  playerStats: { [key: string]: PlayerRoundStats };
+}
+
+export interface SidepotStats {
+  amount: number;
+  winner: string;
+  winningHand: Card[] | Hand | null;
+  winningHandName?: string;
+}
+
+export interface PlayerRoundStats {
+  bets: number;
+  calls: number;
+  raises: number;
+  checks: number;
+  folded: boolean;
+  winnings: number;
+  hand?: Card[] | Hand | null;
+  handName?: string;
+}
 // Stats and details about the poker site as a whole
 export interface PokerSiteStats {
   launchedOn: string;

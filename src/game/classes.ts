@@ -1,8 +1,8 @@
-import { Ruge_Boogie, Truculenta } from 'next/font/google';
-import { Stringable, Suit, Rank, RankValue, CardName, RoomStatus, TGamePhase, TGamePhaseCommon, GamePhases, TGamePhaseStud, GameVariant, GameState, TableSeat, RoleIds, User, CustomGameRules, Action, Winner, RoomPhase} from './types';
+import { Stringable, Suit, Rank, RankValue, CardName, RoomStatus, TGamePhase, TGamePhaseCommon, GamePhases, TGamePhaseStud, GameVariant, GameState, TableSeat, RoleIds, User, CustomGameRules, Action, Winner, RoomPhase, WinnerInfo} from './types';
 import { capitalize, valueToRank } from '@lib/utils';
-import { evaluateHand, evaluateHands } from '@game/utils';
+import { evaluateHand, evaluateHands, isHandOneBetter } from '@game/utils';
 import { Socket, Server } from 'socket.io';
+import { v4 as uuidv4 } from "uuid";
 import { socketManager, type SocketManager } from '@lib/socketManager';
 import {
   CompositeStatsObject,
@@ -10,231 +10,101 @@ import {
   PlayerStats,
   PlayerGameStats,
   GameSessionStats,
+  SidepotStats
 } from "@game/stats/types";
-import { clearAllModuleContexts } from 'next/dist/server/lib/render-server';
-/*
-class PlayerStatsComposite {
-  stats: PlayerStatsObject;
-  gameStats: PlayerGameStatsObject;
-}
-class GameSessionStatsObject {
-  id: string;
-  startedAt: string;
-  endedAt: string | null;
-  gameVariants: {[key: string]: number;};
-  buyIn: number;
-  creator: string;
-  players: string[];
-  gameId: string;
-  gameName: string;
-  bestHand: string | null;
-  bestHandPlayer: string | null;
-  biggestPot: number;
-  biggestPotWinner: string | null;
-  totalPot: number;
-  hardcoreMode: boolean;
-  rankedGame: boolean;
-  totalHands: number;
 
-  constructor(id, creator, players, gameId, gameName, hardcoreMode, rankedGame) {
-    this.id = '';
-    this.startedAt = Date.now().toString();
-    this.endedAt = '';
-    this.gameVariants = {};
-    this.buyIn = 0;
-    this.creator = creator;
-    this.players = players;
-    this.gameId = gameId;
-    this.gameName = gameName;
-    this.bestHand = '';
-    this.bestHandPlayer = '';
-    this.biggestPot = 0;
-    this.biggestPotWinner = '';
-    this.totalPot = 0;
-    this.hardcoreMode = hardcoreMode;
-    this.rankedGame = rankedGame;
-    this.totalHands = 0;
+export class RoundStats {
+  roundNumber: number;
+  variant: string;
+  mainPot: number;
+  winner: string;
+  winningHand: Card[] | Hand | null;
+  winningHandName?: string;
+  sidePots?: SidepotStats[];
+  playerStats: { [key: string]: PlayerRoundStats };
+
+  constructor(roundNum: number, variant: GameVariant, game: Game) {
+    this.roundNumber = roundNum;
+    this.variant = variant;
+    this.mainPot = 0;
+    this.winner = '';
+    this.winningHand = null;
+    this.winningHandName = '';
+    this.sidePots = [];
+    this.playerStats = {};
+
+    game.players.forEach((player) => {
+      const playerRoundStat = new PlayerRoundStats();
+      this.playerStats[player.username] = playerRoundStat;
+    });
   }
 
-  updateEndedAt() {
-    this.endedAt = Date.now().toString();
-    return this.endedAt;
-  }
-
-  updateBestHand(hand) {
-    this.bestHand = hand;
-    return this.bestHand;
-  }
-
-
-
-  updateBestHandPlayer(player) {
-    this.bestHandPlayer = player;
-    return this.bestHandPlayer;
-  }
-
-  updateBiggestPot(amount) {
-    this.biggestPot = amount;
-    return this.biggestPot;
-  }
-
-  updateBiggestPotWinner(player) {
-    this.biggestPotWinner = player;
-    return this.biggestPotWinner;
-  }
-
-  updateTotalPot(amount) {
-    this.totalPot += amount;
-    return this.totalPot;
-  }
-
-  updateTotalHands() {
-    this.totalHands += 1;
-    return this.totalHands;
+  get roundNum() { return this.roundNumber; }
+  get variantName() { return this.variant; }
+  get mainPotAmount() { return this.mainPot; }
+  get winnerName() { return this.winner; }
+  get winHand() { return this.winningHand; }
+  get sidePot() { return this.sidePots; }
+  get allPlayerStats() { return this.playerStats; }
+  set roundNum(number) { this.roundNumber = number; }
+  set variantName(variant) { this.variant = variant; }
+  set mainPotAmount(amount) { this.mainPot = amount; }
+  set winnerName(name) { this.winner = name; }
+  set winHand(hand) { this.winningHand = hand; }
+  set addSidepot(sidepot: SidepotStats) { 
+    if (!this.sidePots)
+      this.sidePots = [];
+      
+    this.sidePots.push(sidepot);
   }
 
 }
 
-class PlayerStatsObject {
-  id: string;
-  gamesPlayed: number;
-  gamesWon: number;
-  totalHandsPlayed: number;
-  handsWon: number;
-  totalWinnings: number;
-  biggestPot: number;
-  lastUpdated: string;
-  totalBets: number;
+export class PlayerRoundStats {
+  bets: number;
+  calls: number;
+  raises: number;
+  checks: number;
+  folded: boolean;
+  winnings: number;
+  hand?: Card[] | Hand | null;
+  handName?: string;
 
-  constructor(id) {
-    this.id = id;
-    this.gamesPlayed = 0;
-    this.gamesWon = 0;
-    this.totalHandsPlayed = 0;
-    this.handsWon = 0;
-    this.totalWinnings = 0;
-    this.biggestPot = 0;
-    this.lastUpdated = Date.now().toString();
-    this.totalBets = 0;
+  constructor() {
+    this.bets = 0;
+    this.calls = 0;
+    this.raises = 0;
+    this.checks = 0;
+    this.folded = false;
+    this.winnings = 0;
+    this.hand = null;
+    this.handName = "";
   }
 
-  getGamesPlayed() {
-    return this.gamesPlayed;
-  }
+  get playerBets() { return this.bets; }
+  get playerCalls() { return this.calls; }
+  get playerRaises() { return this.raises; }
+  get playerChecks() { return this.checks; }
+  get playerFolded() { return this.folded; }
+  get playerWinnings() { return this.winnings; }
+  get playerHand() { return this.hand; }
+  get playerHandName() { return this.handName; }
+  set playerBets(amount) { this.bets = amount; }
+  set playerCalls(amount) { this.bets = amount; }
+  set playerRaises(amount) { this.raises = amount; }
+  set playerChecks(amount) { this.checks = amount; }
+  set playerFolded(folded) { this.folded = folded; }
+  set playerWinnings(amount) { this.winnings = amount; }
+  set playerHand(hand) { this.hand = hand; }
+  set playerHandName(name) { this.handName = name; }
 
-  addGamePlayed() {
-    this.gamesPlayed += 1;
-    return this.gamesPlayed;
-  }
+  get addBet() { return this.bets++; }
+  get addCall() { return this.calls++; }
+  get addRaise() { return this.raises++; }
+  get addCheck() { return this.checks++; }
+  get fold() { return this.folded = true; }
 
-  getGamesWon() {
-    return this.gamesWon;
-  }
-
-  addGameWon() {
-    this.gamesWon += 1;
-    return this.gamesWon;
-  }
-
-  getTotalHandsPlayed() {
-    return this.totalHandsPlayed;
-  }
-
-  addTotalHandsPlayed() {
-    this.totalHandsPlayed += 1;
-    return this.totalHandsPlayed;
-  }
-
-  getHandsWon() {
-    return this.handsWon;
-  }
-
-  addHandWon() {
-    this.handsWon += 1;
-    return this.handsWon;
-  }
-
-  getTotalWinnings() {
-    return this.totalWinnings;
-  }
-
-  addTotalWinnings(amount) {
-    this.totalWinnings += amount;
-    return this.totalWinnings;
-  }
-
-  getBiggestPot() {
-    return this.biggestPot;
-  }
-
-  updateBiggestPot(amount) {
-    this.biggestPot = amount;
-    return this.biggestPot;
-  }
-
-  getLastUpdated() {
-    return this.lastUpdated;
-  }
-
-  updateLastUpdated() {
-    this.lastUpdated = Date.now().toString();
-    return this.lastUpdated;
-  }
-
-  getTotalBets() {
-    return this.totalBets;
-  }
-
-  updateTotalBets(amount) {
-    this.totalBets += amount;
-    return this.totalBets;
-  }
 }
-
-class PlayerGameStatsObject {
-  id: string;
-  playerId: string;
-  gameId: string;
-  buyIn: number;
-  cashOut: number;
-  handsPlayed: number;
-  handsWon: number;
-  joinedAt: string;
-  leftAt: string;
-
-  constructor(id, playerId, gameId, buyIn, cashOut) {
-    this.id = id;
-    this.playerId = playerId;
-    this.gameId = gameId;
-    this.buyIn = buyIn;
-    this.cashOut = 0;
-    this.handsPlayed = 0;
-    this.handsWon = 0;
-    this.joinedAt = Date.now().toString();
-    this.leftAt = '';
-  }
-
-  updateCashOut(amount) {
-    this.cashOut = amount;
-    return this.cashOut;
-  }
-
-  updateHandsPlayed() {
-    this.handsPlayed += 1;
-    return this.handsPlayed;
-  }
-
-  updatedHandsWon() {
-    this.handsWon += 1;
-    return this.handsWon;
-  }
-
-  updateLeftAt() {
-    this.leftAt = Date.now().toString();
-    return this.leftAt;
-  }
-}
-*/
 
 type HandRank = {
   hand: string,
@@ -694,7 +564,7 @@ export class Hand {
   }
 
   evaluate(): HandRank {
-    return evaluateHand(this.cards);
+    return evaluateHand(this.cards) as HandRank;
   }
 
   compareTo(otherHand: Hand | Card[]) {
@@ -703,8 +573,10 @@ export class Hand {
       otherCardsArray = otherHand.cards;
     if (Array.isArray(otherHand) && otherHand[0] instanceof Card)
       otherCardsArray = otherHand;
+  }
 
-
+  getHandName(): string {
+    return evaluateHand(this.cards, true) as string;
   }
 }
 
@@ -875,6 +747,8 @@ export class Game {
   variantSelectionTimeout: NodeJS.Timeout | null;
   wildcard: Rank | Card | null;
   stats: CompositeStatsObject;
+  hardcoreMode: boolean;
+  rankedGame: boolean;
 
   constructor(id: string, name: string, creator: Player, maxPlayers?: number, smallBlind?: number, bigBlind?: number, gameVariant?: GameVariant, customRules?: CustomGameRules) {
     this.id = id;
@@ -906,71 +780,16 @@ export class Game {
     this.nextRoundVariant = this.gameVariant;
     this.variantSelectionActive = false;
     this.variantSelectionTimeout = null;
+    this.hardcoreMode = false;
+    this.rankedGame = false;
     this.stats = {
-      game: {
-        id: '',
-        startedAt: Date.now().toString(),
-        endedAt: '',
-        gameVariants: {},
-        buyIn: null,
-        creator: this.creator.username,
-        players: [],
-        gameId: this.id,
-        gameName: this.name,
-        bestHand: null,
-        bestHandPlayer: null,
-        biggestPot: 0,
-        biggestPotWinner: null,
-        totalPot: 0,
-        hardcoreMode: false,
-        rankedGame: false,
-        totalHands: 0
-      },
+      game: Game.createGameSessionStats(this),
       players: {},
     }
+
     // Set creator's game property
     this.creator.game = this;
-    this.players.forEach((player) => {
-      player.game = this;
-      const personalStats: PlayerStats = {
-        gamesPlayed: 0,
-        gamesWon: 0,
-        totalHandsPlayed: 0,
-        handsWon: 0,
-        totalWinnings: 0,
-        biggestPot: 0,
-        lastUpdated: '',
-        totalBets: 0,
-        mainPotWinnings: 0,
-        sidePotWinnings: 0,
-        mainPotsWon: 0,
-        sidePotsWon: 0,
-        timesCalled: 0,
-        timesBet: 0,
-        timesRaised: 0,
-        timesFolded: 0,
-        timesChecked: 0
-      }
-      const gameStats: PlayerGameStats = {
-        gameId: this.id,
-        gameName: this.name,
-        buyIn: null,
-        cashOut: null,
-        handsPlayed: 0,
-        handsWon: 0,
-        joinedAt: '',
-        leftAt: '',
-        timesCalled: 0,
-        timesBet: 0,
-        timesRaised: 0,
-        timesFolded: 0,
-        timesChecked: 0,
-        totalBets: 0,
-        biggestPot: 0
-      }
-      const playerStats: PlayerStatsComposite = {id: player.id, name: player.username, personalStats, gameStats};
-      this.stats.players[player.username] = playerStats;
-    });
+
     this.updateCardsPerPlayer(this.gameVariant, customRules)
     switch (gameVariant) {
       case 'TexasHoldEm':
@@ -2577,7 +2396,11 @@ export class Game {
     if (!this.stats.players[player.username]) {
       this.stats.players[player.username] = Game.createPlayerStatsComposite(player, this.id, this.name);
     }
-    return true;
+
+    if (this.stats.players[player.username])
+      return true;
+    else
+      return false;
   }
 
   /**
@@ -2624,5 +2447,80 @@ export class Game {
       biggestPot: 0
     };
     return { id: player.id, name: player.username, personalStats, gameStats };
+  }
+
+  static createGameSessionStats(game): GameSessionStats {
+    const stats: GameSessionStats = {
+      id: uuidv4(),
+      name: game.name,
+      players: [],
+      startedAt: Date.now().toString(),
+      endedAt: null,
+      gameVariants: {},
+      buyIn: null,
+      creator: game.creator.username,
+      gameId: game.id,
+      bestHand: null,
+      bestHandPlayer: null,
+      biggestPot: 0,
+      biggestPotWinner: null,
+      totalPot: 0,
+      hardcoreMode: game.hardcoreMode,
+      rankedGame: game.rankedGame,
+      totalRounds: 0,
+      rounds: {}
+    };    
+    return stats;
+  }
+
+  setGameSessionEndedAt(): void {
+    this.stats.game.endedAt = Date.now().toString();
+  }
+
+  updateGameSessionStats(): boolean {
+    const stats = this.stats.game;
+    if (!stats)
+      return false;
+
+    this.players.forEach((player) => {
+      if (!stats.players.includes(player.username))
+        stats.players.push(player.username);
+    })
+
+    if (!Object.keys(stats.gameVariants).includes(this.gameVariant))
+      stats.gameVariants[this.gameVariant] = 0;
+    else
+      stats.gameVariants[this.gameVariant] += 1;
+
+    if (stats.biggestPot < this.pot)
+      stats.biggestPot = this.pot;
+
+    stats.totalPot += this.pot;
+
+    this.setGameSessionEndedAt();
+
+    return true;
+  }
+
+  updateBestHand(winnerInfo: WinnerInfo): boolean {
+
+    const stats = this.stats.game;
+
+    if (!stats.bestHand) {
+      stats.bestHand = winnerInfo.cards!;
+      stats.bestHandPlayer = winnerInfo.playerName
+    } 
+    else {
+      // Compare current best hand with new winner's hand
+      const currentBestHand = stats.bestHand;
+      const newWinnerHand = winnerInfo.cards!;
+      
+      if (isHandOneBetter(newWinnerHand, currentBestHand)) {
+        stats.bestHand = newWinnerHand;
+        stats.bestHandName = evaluateHand(newWinnerHand, true) as string;
+      }
+    }
+
+    return true;
   }
 }
