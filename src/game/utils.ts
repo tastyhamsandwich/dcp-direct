@@ -66,7 +66,8 @@ export function suitNameToInitial(suit: Suit | SuitCapitalized): string {
 		suitLetter === "H"
 	)
 		return suitLetter;
-	else return "H";
+	
+  return "H";
 }
 
 export function suitToSymbol(suit: SuitInitial | Suit | SuitCapitalized): SuitSymbol {
@@ -95,7 +96,7 @@ export function suitToSymbol(suit: SuitInitial | Suit | SuitCapitalized): SuitSy
 export function evaluateHands(players: Player[], communityCards: Card[]): Winner[] {
   const evaluatedHands = players.map(player => {
     const allCards: Card[] = [...player.cards,...communityCards] as Card[];
-    const handRank = evaluateHand(allCards);
+    const handRank: HandRank = evaluateHand(allCards) as HandRank;
     
     return {
         ...player,
@@ -113,7 +114,7 @@ export function evaluateHands(players: Player[], communityCards: Card[]): Winner
   return winners;
   }
   
-export function evaluateHand(allCards: Card[]): HandRank {
+export function evaluateHand(allCards: Card[], returnNameOnly = false): HandRank | string {
   let winningHand = "";
 
   //* Check if hand is empty
@@ -259,7 +260,10 @@ export function evaluateHand(allCards: Card[]): HandRank {
       : `High Card (${capitalize(valueToRank(scoredHist[0][0] as RankValue))})`;
 
   //  ...And output the score and the string description in an object. Whee!!!
-  return { hand: winningHand, value: bestHand };
+  if (returnNameOnly)
+    return winningHand
+  else
+    return { hand: winningHand, value: bestHand };
 }
 
 /**
@@ -269,8 +273,8 @@ export function evaluateHand(allCards: Card[]): HandRank {
  * @returns {HandRank} An object containing the winning hand in the 'hand' property and the score in the 'value' property.
  */
 export function compareHands(handOne: Card[] | Hand, handTwo: Card[] | Hand): HandRank {
-  const evaluatedHandOne = evaluateHand(handOne instanceof Hand ? handOne.cards : handOne);
-  const evaluatedHandTwo = evaluateHand(handTwo instanceof Hand ? handTwo.cards : handTwo);
+  const evaluatedHandOne: HandRank = evaluateHand(handOne instanceof Hand ? handOne.cards : handOne) as HandRank;
+  const evaluatedHandTwo: HandRank = evaluateHand(handTwo instanceof Hand ? handTwo.cards : handTwo) as HandRank;
   
   // Sort the evaluated hands by value, descending
   // This will ensure that the hand with the higher value comes first
@@ -289,8 +293,8 @@ export function compareHands(handOne: Card[] | Hand, handTwo: Card[] | Hand): Ha
  * @returns {boolean} True or false based on handOne's performance against handTwo
  */
 export function isHandOneBetter(handOne: Card[] | Hand, handTwo: Card[] | Hand): boolean {
-  const evaluatedHandOne = evaluateHand(handOne instanceof Hand ? handOne.cards : handOne);
-  const evaluatedHandTwo = evaluateHand(handTwo instanceof Hand ? handTwo.cards : handTwo);
+  const evaluatedHandOne = evaluateHand(handOne instanceof Hand ? handOne.cards : handOne) as HandRank;
+  const evaluatedHandTwo = evaluateHand(handTwo instanceof Hand ? handTwo.cards : handTwo) as HandRank;
 
   // Returns true if handOne is better than handTwo
   // This provides a simpler interface for checking which hand is better, compared to parsing

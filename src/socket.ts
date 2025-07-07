@@ -7,6 +7,7 @@ import {
 	TGamePhaseCommon,
 	TGamePhaseHoldEm,
 	TableSeat,
+  HandRank
 } from "@game/types";
 import { Player, Game, Sidepot } from "@game/classes";
 import { evaluateHand } from "@game/utils";
@@ -201,29 +202,22 @@ export function initializeSocket(io: Server) {
 			}
 
 			// Check if player is already in the game (by username, not socket id)
-			const existingPlayerIndex = game.players.findIndex(
-				(p) => p.username === users[userId].username
-			);
+			const existingPlayerIndex = game.players.findIndex((p) => p.username === users[userId].username);
+
 			if (existingPlayerIndex >= 0) {
+
 				// Update the player's socket ID
 				const oldId = game.players[existingPlayerIndex].id;
 				game.players[existingPlayerIndex].id = userId;
-				console.log(
-					`Player ${users[userId].username} reconnected to game '${game.name}' with new socket ID ${userId}`
-				);
+				console.log(`Player ${users[userId].username} reconnected to game '${game.name}' with new socket ID ${userId}`);
 
 				// Also update tablePositions to match the new player id
 				const seatNum = game.players[existingPlayerIndex].seatNumber;
-				if (
-					seatNum >= 0 &&
-					seatNum < game.tablePositions.length &&
-					game.tablePositions[seatNum].playerId === oldId
-				) {
+				if (seatNum >= 0 && seatNum < game.tablePositions.length &&	game.tablePositions[seatNum].playerId === oldId) {
 					game.tablePositions[seatNum].playerId = userId;
-					console.log(
-						`Updated tablePositions for seat ${seatNum} to new playerId ${userId}`
-					);
+					console.log(`Updated tablePositions for seat ${seatNum} to new playerId ${userId}`);
 				}
+
 			} else {
         const username = user.username;
         // Fix: Use user.balance instead of user.chips
@@ -279,18 +273,14 @@ export function initializeSocket(io: Server) {
       }
 
 			// Join the game room
-			console.log(
-				`Socket.join(${gameId}) executing for user '${user.username}'...`
-			);
+			console.log(`Socket.join(${gameId}) executing for user '${user.username}'...`);
 			socket.join(gameId);
 
 			// Update the game state for the player who just joined
 			socket.emit("game_state", { game: games[gameId].returnGameState() });
 
 			// Let everyone know someone joined
-			console.log(
-				`Player '${users[userId].username} joining game room '${games[gameId].name}'...`
-			);
+			console.log(`Player '${users[userId].username} joining game room '${games[gameId].name}'...`);
 			io.to(gameId).emit("player_joined", {
 				player: users[userId],
 				game: games[gameId].returnGameState(),
@@ -1275,7 +1265,7 @@ function handleShowdown(game, io) {
 				? player.cards.concat(game.communityCards)
 				: player.cards;
 
-			const handEval = evaluateHand(hand);
+			const handEval = evaluateHand(hand) as HandRank;
 
 			console.log(`Evaluating hand for player ${player.username}...`);
 			console.log(
