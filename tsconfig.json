@@ -23,7 +23,6 @@
 				"name": "next"
 			}
 		],
-		"baseUrl": "./",
 		"paths": {
 			"@comps/*": ["./src/components/*"],
 			"@components/*": ["./src/components/*"],
