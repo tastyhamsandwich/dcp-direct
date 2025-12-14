@@ -401,6 +401,26 @@ export class Card implements Stringable {
     return this.rankToValue(this.rank);
   }
 
+  getPinochleValue(): RankValue {
+    return this.rankToPinochleValue(this.rank);
+  }
+
+  rankToPinochleValue(rank: Rank): RankValue {
+    switch (rank) {
+      case "jack":
+        return 7;
+      case "queen":
+        return 8;
+      case "king":
+        return 9;
+      case "ten":
+        return 10;
+      case "ace":
+        return 11;
+      default:
+        throw new Error(`Invalid rank value: ${rank}`);
+    }
+  }
   /**
    * Converts a rank to its value.
    * @param rank - The rank to convert.
@@ -588,15 +608,18 @@ export class Deck {
 
   cards: Card[];
 
-  constructor(autoShuffle: boolean = false) {
+  constructor(autoShuffle: boolean = false, pinochle: boolean = false) {
     
     // Construct new deck, and shuffle if shuffle flag is set true
     if (autoShuffle === true) {
-    this.cards = this.generateDeck();
-    this.shuffle();
+      this.cards = this.generateDeck();
+      this.shuffle();
+    } else if (pinochle === true) {
+      this.cards = this.generatePinochleDeck();
+      this.shuffle();
     // If no shuffle flag is set, just generate new deck in order
     } else {
-    this.cards = this.generateDeck();
+      this.cards = this.generateDeck();
     }
   }
 
@@ -624,11 +647,29 @@ export class Deck {
 
     // Generate deck contents in order, so that the deck is always the same
     for (const suit of suits) {
-    for (const rank of ranks) {
-      const card = new Card(rank, suit);
-      cardArray.push(card);
+      for (const rank of ranks) {
+        const card = new Card(rank, suit);
+        cardArray.push(card);
+      }
     }
+    return cardArray;
+  }
+
+  private generatePinochleDeck(): Card[] {
+    const suits: Suit[] = ['hearts', 'diamonds', 'clubs', 'spades'];
+    const ranks: Rank[] = ['jack', 'queen', 'king', 'ten', 'ace'];
+
+    let cardArray: Card[] = [];
+
+    for (const suit of suits) {
+      for (const rank of ranks) {
+        for (let i = 0; i < 4; i++) {
+          const card = new Card(rank, suit);
+          cardArray.push(card);
+        }
+      }
     }
+
     return cardArray;
   }
 

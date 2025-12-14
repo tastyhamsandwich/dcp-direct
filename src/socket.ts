@@ -7,18 +7,84 @@ import {
 	TGamePhaseCommon,
 	TGamePhaseHoldEm,
 	TableSeat,
-  HandRank
+  HandRank,
+  GameType,
+  Suit,
+  Rank,
 } from "@game/types";
-import { Player, Game, Sidepot } from "@game/classes";
+import { Player, Game, Sidepot, Card } from "@game/classes";
 import { evaluateHand } from "@game/utils";
 import { v4 as uuidv4 } from "uuid";
 import { Playwrite_TZ } from "next/font/google";
 import { createDropdownMenuScope } from "@radix-ui/react-dropdown-menu";
 import { updatePlayerStats } from "@lib/database"
+import { PinochleDeck } from "@game/pinochle";
+
+type TeamId = "A" | "B";
+type PinochleTrickCard = { playerId: string; card: Card };
+type PinochleTrickState = { leadSuit: Suit | null; cards: PinochleTrickCard[] };
+type MeldCount = {
+  acesAround: number;
+  kingsAround: number;
+  queensAround: number;
+  jacksAround: number;
+  pinochles: number;
+  trumpRuns: number;
+  marriages: {
+    spades: number;
+    clubs: number;
+    hearts: number;
+    diamonds: number;
+  };
+};
+
+type PinochlePlayerState = {
+  id: string;
+  username: string;
+  seatNumber: number;
+  team: TeamId;
+  ready: boolean;
+  cards: Card[];
+  tricksWon: number;
+  meldScore: number;
+  meldCards: Card[];
+  totalScore: number;
+  passedBid: boolean;
+  roundPoints: number;
+};
+
+type PinochleGame = {
+  id: string;
+  name: string;
+  players: PinochlePlayerState[];
+  phase: "waiting" | "dealing" | "bid" | "playing" | "scoring" | "postgame";
+  status?: string;
+  dealerIndex: number;
+  dealerId?: string;
+  activePlayerId?: string;
+  activePlayerIndex?: number;
+  roundBid: number;
+  bidLeaderId?: string;
+  biddingTeam?: TeamId;
+  trumpSuit?: Suit | null;
+  deck: PinochleDeck;
+  trick: PinochleTrickState;
+  scoreTeamA: number;
+  scoreTeamB: number;
+  meldTeamA: number;
+  meldTeamB: number;
+  trickPointsTeamA: number;
+  trickPointsTeamB: number;
+  setsTeamA: number;
+  setsTeamB: number;
+  roundNumber: number;
+  roundActive: boolean;
+};
 
 export function initializeSocket(io: Server) {
 	// Store active games
 	const games: { [key: string]: Game } = {};
+	const pinochleGames: { [key: string]: PinochleGame } = {};
 	const gamesArray: ListEntry[] = [];
 
 	// Track recently disconnected users to allow for page navigation
@@ -87,6 +153,10 @@ export function initializeSocket(io: Server) {
 			console.log(`Received request to create game lobby...`);
 
 			const { tableName, creator, maxPlayers, blinds, gameVariant } = data;
+			const requestedGameType: GameType =
+				(data?.gameType || "").toLowerCase() === "pinochle"
+					? "Pinochle"
+					: "Poker";
 			const gameId = uuidv4();
 			const userId = socket.id;
 
@@ -99,6 +169,60 @@ export function initializeSocket(io: Server) {
 			console.log(
 				`Creating new game: ${tableName} by ${creator.username}, variant: ${gameVariant}, max players: ${maxPlayers}`
 			);
+
+			if (requestedGameType === "Pinochle") {
+				const creatorPlayer = buildPinochlePlayerState(
+					userId,
+					creator.username,
+					0,
+					creator.avatar || creator.avatar_url
+				);
+
+				pinochleGames[gameId] = {
+					id: gameId,
+					name: tableName,
+					players: [creatorPlayer],
+					phase: "waiting",
+					status: "waitingForPlayers",
+					dealerIndex: 0,
+					dealerId: userId,
+					activePlayerId: undefined,
+					activePlayerIndex: undefined,
+					roundBid: 0,
+					bidLeaderId: undefined,
+					biddingTeam: undefined,
+					trumpSuit: null,
+					deck: new PinochleDeck(),
+					trick: { leadSuit: null, cards: [] },
+					scoreTeamA: 0,
+					scoreTeamB: 0,
+					meldTeamA: 0,
+					meldTeamB: 0,
+					trickPointsTeamA: 0,
+					trickPointsTeamB: 0,
+					setsTeamA: 0,
+					setsTeamB: 0,
+					roundNumber: 0,
+					roundActive: false,
+				};
+
+				const listEntry: ListEntry = {
+					index: gamesArray.length,
+					id: gameId,
+					name: tableName,
+					playerCount: 1,
+					maxPlayers: 4,
+					isStarted: false,
+					gameType: requestedGameType,
+				};
+
+				gamesArray.push(listEntry);
+				socket.join(gameId);
+				socket.emit("game_created", { gameId, gameType: requestedGameType });
+				io.emit("games_list", gamesArray);
+				io.to(gameId).emit("pinochle_state", buildPinochleState(pinochleGames[gameId]));
+				return;
+			}
 
 			// Ensure creator has valid chips value
 			if (typeof creator.chips !== "number" || isNaN(creator.chips)) {
@@ -125,6 +249,7 @@ export function initializeSocket(io: Server) {
 				playerCount: games[gameId].players.length,
 				maxPlayers: games[gameId].maxPlayers,
 				isStarted: games[gameId].hasStarted,
+				gameType: requestedGameType,
 			};
 
 			gamesArray.push(listEntry);
@@ -135,7 +260,7 @@ export function initializeSocket(io: Server) {
 			socket.join(gameId);
 
 			console.log(`Emitting socket event 'game_created'...`);
-			socket.emit("game_created", { gameId });
+			socket.emit("game_created", { gameId, gameType: requestedGameType });
 
 			// Update all clients with the new games list
 			io.emit("games_list", gamesArray);
@@ -165,6 +290,24 @@ export function initializeSocket(io: Server) {
 			}
 
 			const { gameId, user } = data;
+			const resolvedGameType: GameType =
+				(data?.gameType || gamesArray.find((g) => g.id === gameId)?.gameType || "Poker")
+					.toString()
+					.toLowerCase() === "pinochle"
+					? "Pinochle"
+					: "Poker";
+
+			if (resolvedGameType === "Pinochle" || pinochleGames[gameId]) {
+				handlePinochleJoin({
+					socket,
+					io,
+					gameId,
+					user,
+					gamesArray,
+					pinochleGames,
+				});
+				return;
+			}
 
 			// Check if this is a reconnection after page navigation
 			if (
@@ -306,6 +449,23 @@ export function initializeSocket(io: Server) {
 
 		});
 
+		socket.on("pinochle_join", (data) => {
+			const { gameId, user } = data || {};
+			if (!gameId || !user) {
+				socket.emit("error", { message: "Invalid join_game data" });
+				return;
+			}
+
+			handlePinochleJoin({
+				socket,
+				io,
+				gameId,
+				user,
+				gamesArray,
+				pinochleGames,
+			});
+		});
+
 		// Handle player ready status separately from actions
 		socket.on("player_ready", (data) => {
       console.log(`Received socket event 'player_ready'...`, data);
@@ -315,6 +475,11 @@ export function initializeSocket(io: Server) {
 			}
 
 			const { gameId } = data;
+			const pinochleGame = pinochleGames[gameId];
+			if (pinochleGame) {
+				handlePinochleReady(pinochleGame, socket, io, gamesArray);
+				return;
+			}
 			const game = games[gameId];
 			const userId = socket.id;
 
@@ -410,6 +575,41 @@ export function initializeSocket(io: Server) {
 					}
 				}
 			}
+		});
+
+		socket.on("pinochle_deal", (data) => {
+			const { gameId } = data || {};
+			const game = pinochleGames[gameId];
+			if (!game) return;
+			if (game.dealerId && game.dealerId !== socket.id) {
+				socket.emit("error", { message: "Only the dealer can deal." });
+				return;
+			}
+			startPinochleRound(game, io, gamesArray);
+		});
+
+		socket.on("pinochle_bid", (data) => {
+			const { gameId, amount } = data || {};
+			if (!gameId || typeof amount !== "number") return;
+			handlePinochleBid(pinochleGames[gameId], socket, io, amount);
+		});
+
+		socket.on("pinochle_bid_pass", (data) => {
+			const { gameId } = data || {};
+			if (!gameId) return;
+			handlePinochleBidPass(pinochleGames[gameId], socket, io);
+		});
+
+		socket.on("pinochle_set_trump", (data) => {
+			const { gameId, trump } = data || {};
+			if (!gameId || !trump) return;
+			handlePinochleSetTrump(pinochleGames[gameId], socket, io, trump);
+		});
+
+		socket.on("pinochle_play_card", (data) => {
+			const { gameId, card } = data || {};
+			if (!gameId || !card) return;
+			handlePinochlePlayCard(pinochleGames[gameId], socket, io, card);
 		});
 
 		// Handle player actions (fold, check, call, raise)
@@ -758,6 +958,9 @@ export function initializeSocket(io: Server) {
       } else if (scope === "game" && gameId) {
         // Send to all users in the game room
         io.to(gameId).emit("chat_message", chatPayload);
+      } else if (scope === "pinochle" && gameId) {
+        // Send to all users in the game room
+        io.to(gameId).emit("chat_message", chatPayload);
       } else {
         console.error(`Invalid chat scope: ${scope}`);
         socket.emit("error", { message: "Invalid chat scope" });
@@ -988,6 +1191,45 @@ export function initializeSocket(io: Server) {
 
 			// Remove user from users list
 			delete users[userId];
+
+			// Handle Pinochle disconnects
+			Object.keys(pinochleGames).forEach((gameId) => {
+				const game = pinochleGames[gameId];
+				const playerIndex = game.players.findIndex((p) => p.id === userId);
+				if (playerIndex >= 0) {
+					game.players.splice(playerIndex, 1);
+					game.roundActive = false;
+					game.phase = "waiting";
+					game.status = "waitingForPlayers";
+					game.trumpSuit = null;
+					game.roundBid = 0;
+					game.bidLeaderId = undefined;
+					game.biddingTeam = undefined;
+					game.trick = { leadSuit: null, cards: [] };
+					game.activePlayerId = undefined;
+					game.activePlayerIndex = undefined;
+					game.meldTeamA = 0;
+					game.meldTeamB = 0;
+					game.trickPointsTeamA = 0;
+					game.trickPointsTeamB = 0;
+
+					if (game.players.length === 0) {
+						delete pinochleGames[gameId];
+						const idx = gamesArray.findIndex((g) => g.id === gameId);
+						if (idx !== -1) gamesArray.splice(idx, 1);
+					} else {
+						game.dealerIndex = 0;
+						game.dealerId = game.players[0].id;
+						const listEntry = gamesArray.find((g) => g.id === gameId);
+						if (listEntry) {
+							listEntry.playerCount = game.players.length;
+							listEntry.isStarted = game.roundActive;
+						}
+						io.to(gameId).emit("pinochle_update", buildPinochleState(game));
+					}
+					io.emit("games_list", gamesArray);
+				}
+			});
 		});
 	});
 }
@@ -1375,6 +1617,958 @@ function resetForNextRound(game, io) {
 		});
 	}
     */
+}
+
+// ---------- Pinochle helpers ----------
+function buildPinochlePlayerState(
+	id: string,
+	username: string,
+	seatNumber: number,
+	avatar?: string
+): PinochlePlayerState {
+	return {
+		id,
+		username,
+		seatNumber,
+		team: seatNumber % 2 === 0 ? "A" : "B",
+		ready: false,
+		cards: [],
+		tricksWon: 0,
+		meldScore: 0,
+		meldCards: [],
+		totalScore: 0,
+		passedBid: false,
+		roundPoints: 0,
+	};
+}
+
+function buildPinochleState(game?: PinochleGame | null) {
+	if (!game) return null;
+	return {
+		id: game.id,
+		name: game.name,
+		players: game.players.map((p) => ({
+			id: p.id,
+			username: p.username,
+			seatNumber: p.seatNumber,
+			team: p.team,
+			ready: p.ready,
+			cards: p.cards,
+			tricksWon: p.tricksWon,
+			meldScore: p.meldScore,
+			totalScore: p.totalScore,
+		})),
+		phase: game.phase,
+		status: game.status,
+		dealerId: game.dealerId,
+		activePlayerId: game.activePlayerId,
+		roundBid: game.roundBid || undefined,
+		bidLeaderId: game.bidLeaderId,
+		biddingTeam: game.biddingTeam,
+		trumpSuit: game.trumpSuit ?? null,
+		trick: game.trick,
+		scoreTeamA: game.scoreTeamA,
+		scoreTeamB: game.scoreTeamB,
+		meldTeamA: game.meldTeamA,
+		meldTeamB: game.meldTeamB,
+		deckCount: game.deck?.cards?.length ?? 0,
+	};
+}
+
+function handlePinochleJoin({
+	socket,
+	io,
+	gameId,
+	user,
+	gamesArray,
+	pinochleGames,
+}: {
+	socket: any;
+	io: Server;
+	gameId: string;
+	user: any;
+	gamesArray: ListEntry[];
+	pinochleGames: Record<string, PinochleGame>;
+}) {
+	const game = pinochleGames[gameId];
+	if (!game) {
+		socket.emit("error", { message: "Game not found" });
+		return;
+	}
+
+	// Allow reconnect by username
+	const existingPlayer = game.players.find((p) => p.username === user.username);
+	if (existingPlayer) {
+		existingPlayer.id = socket.id;
+		existingPlayer.ready = false;
+	} else {
+		if (game.players.length >= 4) {
+			socket.emit("error", { message: "Game is full" });
+			return;
+		}
+		const takenSeats = new Set(game.players.map((p) => p.seatNumber));
+		let seatNumber = 0;
+		for (let i = 0; i < 4; i++) {
+			if (!takenSeats.has(i)) {
+				seatNumber = i;
+				break;
+			}
+		}
+		const newPlayer = buildPinochlePlayerState(
+			socket.id,
+			user.username,
+			seatNumber,
+			user.avatar || user.avatar_url
+		);
+		game.players.push(newPlayer);
+		game.players.sort((a, b) => a.seatNumber - b.seatNumber);
+	}
+
+	if (!game.dealerId) {
+		game.dealerIndex = 0;
+		game.dealerId = game.players[0].id;
+	}
+
+	socket.join(gameId);
+
+	// Update games list entry
+	const gameIndex = gamesArray.findIndex((g) => g.id === gameId);
+	if (gameIndex !== -1) {
+		gamesArray[gameIndex].playerCount = game.players.length;
+		gamesArray[gameIndex].isStarted = game.roundActive;
+	} else {
+		gamesArray.push({
+			index: gamesArray.length,
+			id: gameId,
+			name: game.name,
+			playerCount: game.players.length,
+			maxPlayers: 4,
+			isStarted: game.roundActive,
+			gameType: "Pinochle",
+		});
+	}
+
+	const state = buildPinochleState(game);
+	socket.emit("pinochle_state", state);
+	io.to(gameId).emit("pinochle_update", state);
+	io.emit("games_list", gamesArray);
+}
+
+function handlePinochleReady(
+	game: PinochleGame,
+	socket,
+	io: Server,
+	gamesArray?: ListEntry[]
+) {
+	if (!game) return;
+	const player = game.players.find((p) => p.id === socket.id);
+	if (!player) {
+		socket.emit("error", { message: "Player not found" });
+		return;
+	}
+	player.ready = !player.ready;
+
+	io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+
+	const allReady =
+		game.players.length === 4 && game.players.every((p) => p.ready);
+	if (allReady && game.phase === "waiting") {
+		startPinochleRound(game, io, gamesArray);
+	}
+}
+
+function startPinochleRound(game: PinochleGame, io: Server, gamesArray?: ListEntry[]) {
+	if (!game || game.players.length !== 4) return;
+	const readyToStart = game.players.length === 4 && game.players.every((p) => p.ready);
+	if (!readyToStart) {
+		io.to(game.id).emit("error", {
+			message: "Four ready players are required to start a round.",
+		});
+		return;
+	}
+	if (game.roundActive) return;
+	game.roundNumber += 1;
+	game.roundActive = true;
+	game.phase = "dealing";
+	game.status = "dealing";
+	game.trumpSuit = null;
+	game.roundBid = 49; // next bid after this is 50
+	game.bidLeaderId = undefined;
+	game.biddingTeam = undefined;
+	game.trick = { leadSuit: null, cards: [] };
+	game.trickPointsTeamA = 0;
+	game.trickPointsTeamB = 0;
+	game.meldTeamA = 0;
+	game.meldTeamB = 0;
+
+	// Reset per-player round state
+	game.players.forEach((p) => {
+		p.cards = [];
+		p.tricksWon = 0;
+		p.passedBid = false;
+		p.meldScore = 0;
+		p.meldCards = [];
+		p.roundPoints = 0;
+		if (game.roundNumber > 1) p.ready = false;
+	});
+
+	dealPinochleHands(game);
+
+	const nextIndex = (game.dealerIndex + 1) % game.players.length;
+	game.activePlayerIndex = nextIndex;
+	game.activePlayerId = game.players[nextIndex].id;
+	game.phase = "bid";
+	game.status = "bidding";
+
+	if (gamesArray) {
+		const listEntry = gamesArray.find((g) => g.id === game.id);
+		if (listEntry) {
+			listEntry.isStarted = true;
+		}
+		io.emit("games_list", gamesArray);
+	}
+
+	io.to(game.id).emit("pinochle_hand_dealt", buildPinochleState(game));
+	io.to(game.id).emit("pinochle_bid_update", {
+		roundBid: game.roundBid,
+		activePlayerId: game.activePlayerId,
+		bidLeaderId: game.bidLeaderId,
+	});
+	io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+}
+
+function dealPinochleHands(game: PinochleGame) {
+	game.deck = new PinochleDeck();
+	game.deck.shuffle();
+
+	for (let r = 0; r < 4; r++) {
+		for (let p = 0; p < game.players.length; p++) {
+			const currentPosition = (game.dealerIndex + 1) % game.players.length;
+			const playerIndex = (currentPosition + p) % game.players.length;
+			const player = game.players[playerIndex];
+			const drawFive: Card[] = [];
+			for (let i = 0; i < 5; i++) {
+				const card = game.deck.draw();
+				card.faceUp = false;
+				drawFive.push(card);
+			}
+			drawFive.forEach((card) => player.cards.push(card));
+		}
+	}
+}
+
+function handlePinochleBid(
+	game: PinochleGame,
+	socket,
+	io: Server,
+	amount: number
+) {
+	if (!game || game.phase !== "bid" || game.activePlayerId !== socket.id) {
+		socket.emit("error", { message: "Not your turn to bid" });
+		return;
+	}
+	const player = game.players.find((p) => p.id === socket.id);
+	if (!player) {
+		socket.emit("error", { message: "Player not found" });
+		return;
+	}
+
+	const normalized = normalizePinochleBid(amount);
+	const minBid = nextPinochleBid(game.roundBid || 49);
+	if (normalized < minBid) {
+		socket.emit("error", { message: `Minimum bid is ${minBid}` });
+		return;
+	}
+
+	game.roundBid = normalized;
+	game.bidLeaderId = player.id;
+	game.biddingTeam = player.team;
+	player.passedBid = false;
+
+	const remaining = game.players.filter((p) => !p.passedBid).length;
+	if (remaining > 1) {
+		const nextIndex = findNextActiveBidder(game, player.seatNumber);
+		game.activePlayerIndex = nextIndex;
+		game.activePlayerId = game.players[nextIndex].id;
+	} else {
+		// Only one bidder left, await trump selection from bid leader
+		game.activePlayerIndex = game.players.findIndex(
+			(p) => p.id === game.bidLeaderId
+		);
+		game.activePlayerId = game.bidLeaderId;
+		game.status = "awaiting_trump";
+	}
+
+	io.to(game.id).emit("pinochle_bid_update", {
+		roundBid: game.roundBid,
+		bidLeaderId: game.bidLeaderId,
+		biddingTeam: game.biddingTeam,
+		activePlayerId: game.activePlayerId,
+		trumpSuit: game.trumpSuit,
+	});
+	io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+}
+
+function handlePinochleBidPass(game: PinochleGame, socket, io: Server) {
+	if (!game || game.phase !== "bid") return;
+	const player = game.players.find((p) => p.id === socket.id);
+	if (!player) {
+		socket.emit("error", { message: "Player not found" });
+		return;
+	}
+	player.passedBid = true;
+
+	const remainingPlayers = game.players.filter((p) => !p.passedBid);
+	if (remainingPlayers.length === 0) {
+		game.status = "All players passed. Redeal.";
+		game.roundActive = false;
+		game.phase = "waiting";
+		io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+		return;
+	}
+
+	if (remainingPlayers.length === 1) {
+		const lastBidder = remainingPlayers[0];
+		game.bidLeaderId = lastBidder.id;
+		game.biddingTeam = lastBidder.team;
+		if (game.roundBid < 50) game.roundBid = 50;
+		game.activePlayerId = lastBidder.id;
+		game.activePlayerIndex = game.players.findIndex(
+			(p) => p.id === lastBidder.id
+		);
+		game.status = "awaiting_trump";
+	} else {
+		const nextIndex = findNextActiveBidder(game, player.seatNumber);
+		game.activePlayerIndex = nextIndex;
+		game.activePlayerId = game.players[nextIndex].id;
+	}
+
+	game.phase = "bid";
+	io.to(game.id).emit("pinochle_bid_update", {
+		roundBid: game.roundBid,
+		bidLeaderId: game.bidLeaderId,
+		biddingTeam: game.biddingTeam,
+		activePlayerId: game.activePlayerId,
+		trumpSuit: game.trumpSuit,
+	});
+	io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+}
+
+function handlePinochleSetTrump(
+	game: PinochleGame,
+	socket,
+	io: Server,
+	trump: Suit
+) {
+	if (!game || game.phase !== "bid" || game.bidLeaderId !== socket.id) {
+		socket.emit("error", { message: "You cannot set trump now" });
+		return;
+	}
+	const player = game.players.find((p) => p.id === socket.id);
+	if (!player) {
+		socket.emit("error", { message: "Player not found" });
+		return;
+	}
+
+	const marriageSuits = getMarriageSuits(player.cards);
+	if (marriageSuits.length === 0) {
+		game.status = "Bidder had no marriages - automatic set";
+		completePinochleRound(game, io, { bidderAutoSet: true });
+		return;
+	}
+	if (!marriageSuits.includes(trump)) {
+		socket.emit("error", {
+			message: `Invalid trump. You must choose a suit where you have a marriage.`,
+		});
+		return;
+	}
+
+	game.trumpSuit = trump;
+	game.phase = "playing";
+	game.status = "playing";
+
+	game.meldTeamA = 0;
+	game.meldTeamB = 0;
+	game.players.forEach((p) => {
+		const meldResult = calculatePinochleMeld(p.cards, trump);
+		p.meldScore = meldResult.total;
+		p.meldCards = meldResult.meldCards;
+		if (p.team === "A") game.meldTeamA += p.meldScore;
+		else game.meldTeamB += p.meldScore;
+	});
+
+	game.activePlayerIndex = game.players.findIndex(
+		(p) => p.id === game.bidLeaderId
+	);
+	game.activePlayerId = game.bidLeaderId;
+	game.trick = { leadSuit: null, cards: [] };
+
+	io.to(game.id).emit("pinochle_bid_update", {
+		roundBid: game.roundBid,
+		bidLeaderId: game.bidLeaderId,
+		biddingTeam: game.biddingTeam,
+		trumpSuit: game.trumpSuit,
+		activePlayerId: game.activePlayerId,
+	});
+	io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+}
+
+function handlePinochlePlayCard(
+	game: PinochleGame,
+	socket,
+	io: Server,
+	payloadCard: any
+) {
+	if (!game || game.phase !== "playing") return;
+	if (game.activePlayerId !== socket.id) {
+		socket.emit("error", { message: "Not your turn" });
+		return;
+	}
+	const playerIndex = game.players.findIndex((p) => p.id === socket.id);
+	if (playerIndex === -1) {
+		socket.emit("error", { message: "Player not found" });
+		return;
+	}
+	const player = game.players[playerIndex];
+
+	const selectedIndex = findCardIndex(player.cards, payloadCard);
+	if (selectedIndex === -1) {
+		socket.emit("error", { message: "Card not in hand" });
+		return;
+	}
+
+	const allowed = getAllowedPinochleCards(
+		player.cards,
+		game.trick,
+		game.trumpSuit
+	);
+	const selectedCard = player.cards[selectedIndex];
+	if (!allowed.some((c) => c === selectedCard)) {
+		socket.emit("error", { message: "You must follow suit / beat if able" });
+		return;
+	}
+
+	// Play the card
+	player.cards.splice(selectedIndex, 1);
+	if (game.trick.cards.length === 0) {
+		game.trick.leadSuit = selectedCard.suit;
+	}
+	game.trick.cards.push({ playerId: player.id, card: selectedCard });
+
+	// Determine next action
+	if (game.trick.cards.length === game.players.length) {
+		// Complete trick
+		const winner = determineTrickWinner(
+			game.trick,
+			game.trumpSuit,
+			game.players
+		);
+		const winnerPlayer = game.players.find((p) => p.id === winner.playerId);
+		if (winnerPlayer) winnerPlayer.tricksWon += 1;
+
+		const trickPoints = game.trick.cards.reduce((sum, entry) => {
+			return ["ace", "ten", "king"].includes(entry.card.rank as string)
+				? sum + 1
+				: sum;
+		}, 0);
+
+		if (winnerPlayer?.team === "A") game.trickPointsTeamA += trickPoints;
+		else if (winnerPlayer?.team === "B") game.trickPointsTeamB += trickPoints;
+
+		const isLastTrick = game.players.every((p) => p.cards.length === 0);
+		if (isLastTrick && winnerPlayer) {
+			if (winnerPlayer.team === "A") game.trickPointsTeamA += 2;
+			else game.trickPointsTeamB += 2;
+		}
+
+		game.trick = { leadSuit: null, cards: [] };
+		game.activePlayerId = winner.playerId;
+		game.activePlayerIndex = game.players.findIndex(
+			(p) => p.id === winner.playerId
+		);
+
+		io.to(game.id).emit("pinochle_trick_update", {
+			trick: game.trick,
+			activePlayerId: game.activePlayerId,
+		});
+		io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+
+		if (isLastTrick) {
+			completePinochleRound(game, io);
+		}
+	} else {
+		// Pass turn to next player clockwise
+		game.activePlayerIndex = (game.activePlayerIndex! + 1) % game.players.length;
+		game.activePlayerId = game.players[game.activePlayerIndex].id;
+		io.to(game.id).emit("pinochle_trick_update", {
+			trick: game.trick,
+			activePlayerId: game.activePlayerId,
+		});
+		io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+	}
+}
+
+function completePinochleRound(
+	game: PinochleGame,
+	io: Server,
+	options: { bidderAutoSet?: boolean } = {}
+) {
+	if (!game) return;
+	const biddingTeam = game.biddingTeam;
+	if (!biddingTeam) {
+		game.phase = "waiting";
+		game.status = "No bid winner";
+		game.roundActive = false;
+		io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+		return;
+	}
+	const bidderPoints =
+		biddingTeam === "A" ? game.trickPointsTeamA : game.trickPointsTeamB;
+	const bidderMeld =
+		biddingTeam === "A" ? game.meldTeamA : game.meldTeamB;
+	const defenderPoints =
+		biddingTeam === "A" ? game.trickPointsTeamB : game.trickPointsTeamA;
+	const defenderMeld =
+		biddingTeam === "A" ? game.meldTeamB : game.meldTeamA;
+
+	const required = Math.max(game.roundBid - bidderMeld, 20);
+	const bidderMetBid = !options.bidderAutoSet && bidderPoints >= required;
+
+	let bidderGain = bidderMetBid ? bidderPoints + bidderMeld : 0;
+	let defenderGain =
+		defenderMeld >= 20 && defenderPoints >= 20
+			? defenderPoints + defenderMeld
+			: 0;
+
+	if (biddingTeam === "A") {
+		if (bidderGain > 0) game.scoreTeamA += bidderGain;
+		else game.setsTeamA += 1;
+		game.scoreTeamB += defenderGain;
+	} else {
+		if (bidderGain > 0) game.scoreTeamB += bidderGain;
+		else game.setsTeamB += 1;
+		game.scoreTeamA += defenderGain;
+	}
+
+	game.phase = "scoring";
+	game.status = bidderGain > 0 ? "round_complete" : "bid_set";
+	game.roundActive = false;
+
+	const winner = determinePinochleWinner(game, biddingTeam);
+	if (winner) {
+		game.phase = "postgame";
+		game.status = "game_complete";
+		io.to(game.id).emit("pinochle_game_end", {
+			...buildPinochleState(game),
+			winner,
+		});
+	} else {
+		rotateDealer(game);
+		io.to(game.id).emit("pinochle_round_end", buildPinochleState(game));
+		game.phase = "waiting";
+		game.trumpSuit = null;
+		game.roundBid = 0;
+		game.bidLeaderId = undefined;
+		game.biddingTeam = undefined;
+		game.trick = { leadSuit: null, cards: [] };
+		game.players.forEach((p) => {
+			p.passedBid = false;
+			p.ready = false;
+			p.cards = [];
+			p.tricksWon = 0;
+			p.meldCards = [];
+			p.meldScore = 0;
+			p.roundPoints = 0;
+		});
+		io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+	}
+}
+
+function determinePinochleWinner(game: PinochleGame, biddingTeam?: TeamId) {
+	const { scoreTeamA, scoreTeamB, setsTeamA, setsTeamB } = game;
+	if (setsTeamA >= 2 && setsTeamB >= 2) return biddingTeam;
+	if (setsTeamA >= 2) return "B";
+	if (setsTeamB >= 2) return "A";
+	if (scoreTeamA >= 350 && scoreTeamB >= 350) return biddingTeam;
+	if (scoreTeamA >= 350) return "A";
+	if (scoreTeamB >= 350) return "B";
+	return null;
+}
+
+function rotateDealer(game: PinochleGame) {
+	game.dealerIndex = (game.dealerIndex + 1) % game.players.length;
+	game.dealerId = game.players[game.dealerIndex].id;
+}
+
+function findNextActiveBidder(game: PinochleGame, currentSeat: number) {
+	for (let i = 1; i <= game.players.length; i++) {
+		const idx = (currentSeat + i) % game.players.length;
+		if (!game.players[idx].passedBid) return idx;
+	}
+	return game.activePlayerIndex ?? 0;
+}
+
+function normalizePinochleBid(raw: number): number {
+	let bid = Math.max(50, Math.floor(raw || 0));
+	if (bid <= 60) return bid;
+	if (bid < 100) return 60 + Math.floor((bid - 60) / 5) * 5;
+	return 100 + Math.floor((bid - 100) / 10) * 10;
+}
+
+function nextPinochleBid(current: number): number {
+	const increment = current >= 100 ? 10 : current >= 60 ? 5 : 1;
+	const candidate = current + increment;
+	return normalizePinochleBid(candidate);
+}
+
+function getMarriageSuits(hand: Card[]): Suit[] {
+	const suits: Suit[] = ["spades", "clubs", "hearts", "diamonds"];
+	const hasMarriage = (suit: Suit) => {
+		const kings = hand.filter((c) => c.suit === suit && c.rank === "king")
+			.length;
+		const queens = hand.filter((c) => c.suit === suit && c.rank === "queen")
+			.length;
+		return Math.min(kings, queens) > 0;
+	};
+	return suits.filter(hasMarriage);
+}
+
+function calculatePinochleMeld(hand: Card[], trumpSuit: Suit): {
+	total: number;
+	meldCards: Card[];
+	meldCount: MeldCount;
+} {
+	const meldCount = countMeldTypes(hand, trumpSuit);
+	const meldCards = determineMeldCards(hand, trumpSuit, meldCount);
+	const total = scoreMeld(meldCount);
+	return { total, meldCards, meldCount };
+}
+
+function countMeldTypes(hand: Card[], trumpSuit: Suit): MeldCount {
+	const countAround = (rank: Rank) => {
+		const suits: Suit[] = ["spades", "clubs", "hearts", "diamonds"];
+		const perSuit = suits.map(
+			(suit) =>
+				hand.filter((card) => card.suit === suit && card.rank === rank).length
+		);
+		return Math.min(...perSuit);
+	};
+	const pinochleSets = Math.min(
+		hand.filter((c) => c.suit === "spades" && c.rank === "queen").length,
+		hand.filter((c) => c.suit === "diamonds" && c.rank === "jack").length
+	);
+
+	const runRanks: Rank[] = ["ace", "ten", "king", "queen", "jack"];
+	const trumpCounts = runRanks.map(
+		(rank) =>
+			hand.filter((c) => c.suit === trumpSuit && c.rank === rank).length
+	);
+	const trumpRuns = Math.min(...trumpCounts);
+
+	const marriageCount = (suit: Suit) => {
+		const kings = hand.filter((c) => c.suit === suit && c.rank === "king")
+			.length;
+		const queens = hand.filter((c) => c.suit === suit && c.rank === "queen")
+			.length;
+		const base = Math.min(kings, queens);
+		return base * (suit === trumpSuit ? 4 : 2);
+	};
+
+	return {
+		acesAround: countAround("ace"),
+		kingsAround: countAround("king"),
+		queensAround: countAround("queen"),
+		jacksAround: countAround("jack"),
+		pinochles: pinochleSets,
+		trumpRuns,
+		marriages: {
+			spades: marriageCount("spades"),
+			clubs: marriageCount("clubs"),
+			hearts: marriageCount("hearts"),
+			diamonds: marriageCount("diamonds"),
+		},
+	};
+}
+
+function scoreMeld(meldObject: MeldCount): number {
+	let totalMeld = 0;
+
+	switch (meldObject.acesAround) {
+		case 1:
+			totalMeld += 10;
+			break;
+		case 2:
+			totalMeld += 100;
+			break;
+		case 3:
+			totalMeld += 200;
+			break;
+		case 4:
+			totalMeld += 300;
+			break;
+	}
+
+	switch (meldObject.kingsAround) {
+		case 1:
+			totalMeld += 8;
+			break;
+		case 2:
+			totalMeld += 80;
+			break;
+		case 3:
+			totalMeld += 160;
+			break;
+		case 4:
+			totalMeld += 240;
+			break;
+	}
+
+	switch (meldObject.queensAround) {
+		case 1:
+			totalMeld += 6;
+			break;
+		case 2:
+			totalMeld += 60;
+			break;
+		case 3:
+			totalMeld += 120;
+			break;
+		case 4:
+			totalMeld += 180;
+			break;
+	}
+
+	switch (meldObject.jacksAround) {
+		case 1:
+			totalMeld += 4;
+			break;
+		case 2:
+			totalMeld += 40;
+			break;
+		case 3:
+			totalMeld += 80;
+			break;
+		case 4:
+			totalMeld += 120;
+			break;
+	}
+
+	switch (meldObject.pinochles) {
+		case 1:
+			totalMeld += 4;
+			break;
+		case 2:
+			totalMeld += 30;
+			break;
+		case 3:
+			totalMeld += 90;
+			break;
+		case 4:
+			totalMeld += 300;
+			break;
+	}
+
+	switch (meldObject.trumpRuns) {
+		case 1:
+			totalMeld += 11;
+			break;
+		case 2:
+			totalMeld += 142;
+			break;
+		case 3:
+			totalMeld += 288;
+			break;
+		case 4:
+			totalMeld += 334;
+			break;
+	}
+
+	totalMeld += meldObject.marriages.spades;
+	totalMeld += meldObject.marriages.clubs;
+	totalMeld += meldObject.marriages.hearts;
+	totalMeld += meldObject.marriages.diamonds;
+
+	return totalMeld;
+}
+
+function determineMeldCards(
+	hand: Card[],
+	trumpSuit: Suit,
+	meldObject: MeldCount
+): Card[] {
+	const suits: Suit[] = ["spades", "clubs", "hearts", "diamonds"];
+	const highlight = new Set<Card>();
+	const cardsBySuit: Record<Suit, Card[]> = {
+		spades: hand.filter((card) => card.suit === "spades"),
+		clubs: hand.filter((card) => card.suit === "clubs"),
+		hearts: hand.filter((card) => card.suit === "hearts"),
+		diamonds: hand.filter((card) => card.suit === "diamonds"),
+	};
+	const bySuitAndRank = (suit: Suit, rank: Rank) =>
+		cardsBySuit[suit].filter((card) => card.rank === rank);
+	const addFirstN = (cards: Card[], n: number) => {
+		for (let i = 0; i < Math.min(n, cards.length); i++) {
+			highlight.add(cards[i]);
+		}
+	};
+
+	const addAround = (rank: Rank, count: number) => {
+		const perSuit = suits.map((suit) => bySuitAndRank(suit, rank));
+		for (let i = 0; i < count; i++) {
+			perSuit.forEach((arr) => arr[i] && highlight.add(arr[i]));
+		}
+	};
+
+	addAround("ace", meldObject.acesAround);
+	addAround("king", meldObject.kingsAround);
+	addAround("queen", meldObject.queensAround);
+	addAround("jack", meldObject.jacksAround);
+
+	const queensSpades = bySuitAndRank("spades", "queen");
+	const jacksDiamonds = bySuitAndRank("diamonds", "jack");
+	const pinochleSets = Math.min(queensSpades.length, jacksDiamonds.length);
+	for (let i = 0; i < pinochleSets; i++) {
+		highlight.add(queensSpades[i]);
+		highlight.add(jacksDiamonds[i]);
+	}
+
+	const runRanks: Rank[] = ["ace", "ten", "king", "queen", "jack"];
+	const trumpRankCards = runRanks.map((rank) =>
+		bySuitAndRank(trumpSuit, rank)
+	);
+	const runSets = Math.min(...trumpRankCards.map((arr) => arr.length));
+	for (let i = 0; i < runSets; i++) {
+		trumpRankCards.forEach((arr) => highlight.add(arr[i]));
+	}
+
+	suits.forEach((suit) => {
+		const kings = bySuitAndRank(suit, "king");
+		const queens = bySuitAndRank(suit, "queen");
+		const marriageSets = Math.min(kings.length, queens.length);
+		for (let i = 0; i < marriageSets; i++) {
+			highlight.add(kings[i]);
+			highlight.add(queens[i]);
+		}
+	});
+
+	return Array.from(highlight);
+}
+
+function getAllowedPinochleCards(
+	playerHand: Card[],
+	trick: PinochleTrickState,
+	trumpSuit: Suit | null | undefined
+): Card[] {
+	if (!trumpSuit) return playerHand;
+	if (trick.cards.length === 0 || !trick.leadSuit) return playerHand;
+
+	const leadingSuit = trick.leadSuit;
+	const leadSuitCardsOnTable = trick.cards.filter(
+		(entry) => entry.card.suit === leadingSuit
+	);
+	const highestLeadValue = leadSuitCardsOnTable.reduce(
+		(max, entry) => Math.max(max, entry.card.getPinochleValue()),
+		-Infinity
+	);
+	const trumpCardsOnTable = trick.cards.filter(
+		(entry) => entry.card.suit === trumpSuit
+	);
+	const trumpPlayed = trumpCardsOnTable.length > 0;
+	const highestTrumpValue = trumpCardsOnTable.reduce(
+		(max, entry) => Math.max(max, entry.card.getPinochleValue()),
+		-Infinity
+	);
+
+	const playerLeadSuitCards = playerHand.filter(
+		(card) => card.suit === leadingSuit
+	);
+	const playerTrumpCards = playerHand.filter(
+		(card) => card.suit === trumpSuit
+	);
+
+	if (!trumpPlayed || leadingSuit === trumpSuit) {
+		if (playerLeadSuitCards.length > 0) {
+			const higherLeadCards = playerLeadSuitCards.filter(
+				(card) => card.getPinochleValue() > highestLeadValue
+			);
+			return higherLeadCards.length > 0
+				? higherLeadCards
+				: playerLeadSuitCards;
+		}
+		return playerHand;
+	}
+
+	if (playerLeadSuitCards.length > 0) {
+		return playerLeadSuitCards;
+	}
+
+	if (playerTrumpCards.length > 0) {
+		const winningTrumps = playerTrumpCards.filter(
+			(card) => card.getPinochleValue() > highestTrumpValue
+		);
+		return winningTrumps.length > 0 ? winningTrumps : playerTrumpCards;
+	}
+
+	return playerHand;
+}
+
+function findCardIndex(hand: Card[], payload: any): number {
+	if (!payload) return -1;
+	const targetSuit: Suit | undefined = payload.suit;
+	const targetRank: Rank | undefined = payload.rank;
+	const targetName: string | undefined = payload.name;
+	return hand.findIndex((card) => {
+		if (targetSuit && targetRank) {
+			return card.suit === targetSuit && card.rank === targetRank;
+		}
+		if (targetName && targetName.length >= 2) {
+			const rankCode = targetName[0];
+			const suitCode = targetName[1];
+			const rankMap: Record<string, Rank> = {
+				A: "ace",
+				K: "king",
+				Q: "queen",
+				J: "jack",
+				T: "ten",
+				9: "nine",
+			};
+			const suitMap: Record<string, Suit> = {
+				S: "spades",
+				H: "hearts",
+				D: "diamonds",
+				C: "clubs",
+			};
+			return (
+				card.rank === rankMap[rankCode?.toUpperCase()] &&
+				card.suit === suitMap[suitCode?.toUpperCase()]
+			);
+		}
+		return false;
+	});
+}
+
+function determineTrickWinner(
+	trick: PinochleTrickState,
+	trumpSuit: Suit | null | undefined,
+	players: PinochlePlayerState[]
+): { playerId: string } {
+	const leadSuit = trick.leadSuit;
+	const cards = trick.cards;
+	let contenders = cards;
+	if (trumpSuit) {
+		const trumpCards = cards.filter((c) => c.card.suit === trumpSuit);
+		if (trumpCards.length > 0) contenders = trumpCards;
+		else contenders = cards.filter((c) => c.card.suit === leadSuit);
+	} else {
+		contenders = cards.filter((c) => c.card.suit === leadSuit);
+	}
+	const winning = contenders.reduce((best, current) => {
+		if (!best) return current;
+		return current.card.getPinochleValue() > best.card.getPinochleValue()
+			? current
+			: best;
+	}, contenders[0]);
+	return { playerId: winning.playerId };
 }
 
 function getSocketIdByUsername(

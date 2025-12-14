@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
+import Image from 'next/image';
 import ReactCrop, { type Crop } from "react-image-crop";
-import "react-image-crop/dist/ReactCrop.css";
+import "./reactcrop.module.css";
 import { imageConfig } from "@lib/image";
 
 interface ImageCropperProps {
@@ -168,7 +169,7 @@ export default function ImageCropper({
             aspect={1}
             circularCrop
           >
-            <img
+            <Image
               ref={imgRef}
               src={imgSrc}
               alt="Crop me"

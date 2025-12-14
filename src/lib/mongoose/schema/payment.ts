@@ -42,14 +42,13 @@ const paymentMethodSchema = new mongoose.Schema({
   versionKey: false // Disable __v field
 });
 
-paymentMethodSchema.pre('save', async function(next) {
+paymentMethodSchema.pre('save', async function() {
   if (this.is_default) {
     await (this as mongoose.Document).model('PaymentMethod').updateMany(
       { user_id: this.user_id, _id: { $ne: this._id } },
       { $set: { is_default: false } }
     );
   }
-  next();
 });
 
 export const PaymentMethod = mongoose.model('PaymentMethod', paymentMethodSchema);

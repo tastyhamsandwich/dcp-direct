@@ -16,6 +16,8 @@ export type HandType = Array<CardName | Card | Array<Rank | Suit>>;
 export type TableRole = 'Dealer' | 'SmallBlind' | 'BigBlind' | 'None';
 export type BlindType = 'small' | 'big';
 
+export type GameType = 'Poker' | 'Pinochle';
+
 export type GameVariant =
   | 'TexasHoldEm'
   | 'Omaha'
@@ -169,6 +171,7 @@ export interface CustomGameRules {
  * @property {number} playerCount - The number of players in the game.
  * @property {number} maxPlayers - The maximum number of players allowed.
  * @property {boolean} isStarted - Indicates whether the game has started.
+ * @property {GameType} [gameType] - Indicates the type of game (Poker or Pinochle)
  */
 export interface ListEntry {
   index: number;
@@ -177,6 +180,7 @@ export interface ListEntry {
   playerCount: number;
   maxPlayers: number;
   isStarted: boolean;
+  gameType?: GameType;
 }
 
 /** Represents the role IDs of the players.

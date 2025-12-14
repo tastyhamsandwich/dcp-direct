@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import ReactCrop, { type Crop } from 'react-image-crop';
-import 'react-image-crop/dist/ReactCrop.css';
+import './reactcrop.module.css';
 import { imageConfig } from '@lib/image';
 
 interface ImageCropperProps {

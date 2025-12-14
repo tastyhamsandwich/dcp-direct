@@ -1,5 +1,6 @@
 import { useReducer, useEffect } from 'react';
-import { GamePhase, TableSeat, Sidepot, Deck, Card, Action as PlayerAction, Player } from '@src/game/classes';
+import { Sidepot, Deck, Card, Player } from '@game/classes';
+import type { TGamePhase, TableSeat, Action as PlayerAction } from '@game/types';
 import { Socket } from 'socket.io-client';
 
 type GameState = {
@@ -8,7 +9,7 @@ type GameState = {
   creator: Player;        
   players: Player[];
   status: 'waiting' | 'playing' | 'paused';
-  phase: GamePhase;
+  phase: TGamePhase;
   maxPlayers: number;
   hasStarted: boolean;
   roundActive: boolean;

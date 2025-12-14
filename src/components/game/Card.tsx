@@ -71,7 +71,7 @@ const Card: React.FC<CardProps> = ({
   const transitionProps = animate ? {
     delay: index * 0.1,
     duration: 0.4,
-    ease: "easeOut"
+    ease: [0.16, 1, 0.3, 1] as const
   } : {};
 
   const flipAnimation = {
@@ -80,7 +80,7 @@ const Card: React.FC<CardProps> = ({
 
   const flipTransition = {
     duration: 0.4,
-    ease: "easeInOut"
+    ease: [0.42, 0, 0.58, 1] as const
   };
 
   return (

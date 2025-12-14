@@ -1,20 +1,31 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Player, GameVariant } from '@game/types';
+import { Player, GameType, GameVariant } from '@game/types';
 
 interface CreateGameModalProps {
-  onClose: () => void;
-  onSubmit: (gameData: any) => void;
-  player: Player;
+  onClose?: () => void;
+  onSubmit?: (gameData: any) => void;
+  player?: Player;
 }
 
-const CreateGameModal: React.FC<CreateGameModalProps> = ({ onClose, onSubmit, player }) => {
-  const [gameData, setGameData] = useState({
+const CreateGameModal: React.FC<CreateGameModalProps> = ({
+  onClose = () => {},
+  onSubmit = () => {},
+  player
+}) => {
+  const [gameData, setGameData] = useState<{
+    name: string;
+    maxPlayers: number;
+    smallBlind: number;
+    gameVariant: GameVariant;
+    gameType: GameType;
+  }>({
     name: '',
     maxPlayers: 6,
     smallBlind: 5,
-    gameVariant: 'TexasHoldEm' as GameVariant
+    gameVariant: 'TexasHoldEm',
+    gameType: 'Poker'
   });
 
   const [errors, setErrors] = useState({
@@ -25,13 +36,16 @@ const CreateGameModal: React.FC<CreateGameModalProps> = ({ onClose, onSubmit, pl
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    const numericFields = ['maxPlayers', 'smallBlind'];
+    const clearableErrors = ['name', 'maxPlayers', 'smallBlind'];
+
     setGameData(prev => ({
       ...prev,
-      [name]: name === 'name' || name === 'gameVariant' ? value : parseInt(value) || 0
+      [name]: numericFields.includes(name) ? parseInt(value) || 0 : value
     }));
 
     // Clear error when user starts typing
-    if (errors[name as keyof typeof errors]) {
+    if (clearableErrors.includes(name) && errors[name as keyof typeof errors]) {
       setErrors(prev => ({
         ...prev,
         [name]: ''
@@ -87,9 +101,28 @@ const CreateGameModal: React.FC<CreateGameModalProps> = ({ onClose, onSubmit, pl
               value={gameData.name}
               onChange={handleChange}
               className="w-full border border-gray-600 bg-gray-700 text-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
-              placeholder="My Poker Table"
+              placeholder="My Game Table"
             />
             {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-gray-300 font-medium mb-2" htmlFor="gameType">
+              Game Type
+            </label>
+            <select
+              id="gameType"
+              name="gameType"
+              value={gameData.gameType}
+              onChange={handleChange}
+              className="w-full border border-gray-600 bg-gray-700 text-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent"
+            >
+              <option value="Poker">Poker</option>
+              <option value="Pinochle">Pinochle</option>
+            </select>
+            <p className="text-gray-400 text-sm mt-1">
+              Choose the game experience to launch.
+            </p>
           </div>
           
           <div className="mb-4">

@@ -1,14 +1,12 @@
 import React, { useRef } from 'react';
 import { imageConfig } from '@lib/image';
 import ImageCropper from './ImageCropperOld'
-import { useAuth } from '@contexts/authContext';
 
 export default function AvatarUpload() {
     const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
     const [error, setError] = React.useState<string | null>(null);
     const [isUploading, setIsUploading] = React.useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const { profile } = useAuth();
 
     
     const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {

@@ -1,6 +1,6 @@
 import React from "react";
 import Card from "./Card";
-import "./player.modules.css";
+import "./player.module.css";
 import { motion } from "framer-motion";
 import Image from 'next/image';
 import { getUsernameColor } from '@lib/utils';

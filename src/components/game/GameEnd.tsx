@@ -1,13 +1,15 @@
+/** Client component that notifies the server when a game finishes so it can record stats in MongoDB. */
+"use client";
+
 import { useEffect } from "react";
 import { useAuth } from "@contexts/authContext";
-import { updatePlayerStats, recordGameStats } from "@lib/supabase/stats";
-import { createClient } from "@supabaseC";
 
 interface GameEndProps {
 	gameId: string;
 	gameType: string;
 	players: {
 		id: string;
+		username?: string;
 		buyIn: number;
 		cashOut: number;
 		handsPlayed: number;
@@ -62,59 +64,29 @@ interface PlayerGameStats {
 
 export function GameEnd({ gameId, gameType, players }: GameEndProps) {
 	const { user } = useAuth();
-	const supabase = createClient();
 
 	useEffect(() => {
-		// Record individual player stats
-		async function saveGameStats() {
-			// Update game session to mark it as ended
-			await supabase
-				.from("game_sessions")
-				.update({ ended_at: new Date().toISOString() })
-				.eq("id", gameId);
+		// Hand off to the server to persist results with the Mongo-backed helpers in /lib/database.ts
+		const persistResults = async () => {
+			if (!gameId || !players?.length) return;
 
-			// Record stats for each player
-			for (const player of players) {
-				// Record per-game stats
-				await recordGameStats({
-					player_id: player.id,
-					game_id: gameId,
-					buy_in: player.buyIn,
-					cash_out: player.cashOut,
-					hands_played: player.handsPlayed,
-					hands_won: player.handsWon,
-					joined_at: player.joinedAt,
-					left_at: player.leftAt,
+			try {
+				const response = await fetch("/api/game/end", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ gameId, gameType, players }),
 				});
 
-				// Update aggregate stats
-				const { data: currentStats } = await supabase
-					.from("player_stats")
-					.select("*")
-					.eq("id", player.id)
-					.single();
-
-				const won = player.position === 1;
-
-				await updatePlayerStats({
-					id: player.id,
-					games_played: (currentStats?.games_played || 0) + 1,
-					games_won: (currentStats?.games_won || 0) + (won ? 1 : 0),
-					total_hands_played:
-						(currentStats?.total_hands_played || 0) + player.handsPlayed,
-					hands_won: (currentStats?.hands_won || 0) + player.handsWon,
-					total_winnings:
-						(currentStats?.total_winnings || 0) +
-						(player.cashOut - player.buyIn),
-					biggest_pot: Math.max(
-						currentStats?.biggest_pot || 0 /* biggest pot from this game */
-					),
-				});
+				if (!response.ok) {
+					console.error("Failed to record game stats", await response.text());
+				}
+			} catch (err) {
+				console.error("Error recording game stats", err);
 			}
-		}
+		};
 
-		saveGameStats();
-	}, []);
+		persistResults();
+	}, [gameId, gameType, players]);
 
 	// Render game end UI
 	// ...

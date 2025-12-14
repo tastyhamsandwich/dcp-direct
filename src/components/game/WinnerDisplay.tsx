@@ -4,8 +4,7 @@ import { Card as CardClass } from "@game/classes";
 import useClickOutside from "@hooks/useClickOutside";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { Hand, Winner, WinnerInfo } from "@game/types";
-import { Waiting_for_the_Sunrise } from 'next/font/google';
+import { Winner, WinnerInfo } from "@game/types";
 import { CardDescription } from '@comps/ui/Card';
 
 interface WinnerDisplayProps {
@@ -57,7 +56,7 @@ const WinnerDisplay = ({
 			scale: 1,
 			transition: {
 				duration: 0.4,
-				ease: "easeOut",
+				ease: [0.25, 0.1, 0.25, 1] as const,
 				when: "beforeChildren",
 				staggerChildren: 0.1,
 			},
@@ -274,7 +273,7 @@ const WinnerDisplay = ({
 											transition={{
 												duration: animDur,
 												delay: delay,
-												ease: "easeOut",
+												ease: [0.25, 0.1, 0.25, 1] as const,
 											}}
 										/>
 									);

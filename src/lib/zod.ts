@@ -1,4 +1,4 @@
-import * as z from "zod"
+import { z } from "zod"
 
 const passwordSchema = z
   .string()
@@ -17,19 +17,19 @@ const passwordSchema = z
 
 export const loginSchema = z
 .object({
-  email: z.string({ required_error: "Email is required" })
+  email: z.string()
     .min(1, "Email is required"),
-  password: z.string({ required_error: "Password is required" })
+  password: z.string()
     .min(1, "Password is required")
 		.trim()
 })
 
 export const registerSchema = z
   .object({
-    email: z.string({ required_error: "Email address is required" })
+    email: z.string()
       .min(1, "Email address is required")
       .email("Invalid email address"),
-    username: z.string({ required_error: "Username is required" })
+    username: z.string()
       .min(1, "Username is required")
       .min(3, "Username must be more than 3 characters")
       .max(16, "Username cannot exceed 16 characters"),
@@ -43,7 +43,7 @@ export const registerSchema = z
   })
 
 export const emailSchema = z.object({
-  email: z.string({ required_error: "Email is required" })
+  email: z.string()
     .min(1, "Email is required")
     .email("Invalid email address")
 });

@@ -1,10 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { type GameAction } from '@app/game/[gameId]/page';
+import { type GameAction } from '@app/game/poker/[gameId]/page';
 import { useAuth } from "@contexts/authContext";
 import { AnyMxRecord } from 'dns';
 import { USER_COLORS, getUsernameColor } from '@lib/utils';
 import { MessageSquareMore } from 'lucide-react';
-import './chat.modules.css'
+import './chat.module.css';
 
 /* COMPONENTS:
 
@@ -50,7 +50,7 @@ type ChatPayload = {
 
 interface ChatProps {
   socket: any;
-  scope: "game" | "lobby" | "private";
+  scope: "game" | "lobby" | "private" | "poker" | "pinochle";
   gameId?: string;
   buttonText?: boolean;
 }
@@ -188,7 +188,7 @@ export const ChatToggleButtonText = ({ isOpen, toggleChat }: { isOpen: boolean, 
   );
 }
 
-export const Chat = ({ socket, username, scope, gameId }: { socket: any; username: string; scope: "lobby" | "game" | "private"; gameId: string }) => {
+export const Chat = ({ socket, username, scope, gameId }: { socket: any; username: string; scope: "lobby" | "game" | "private" | "poker" | "pinochle"; gameId: string }) => {
   const [message, setMessage] = React.useState("");
   const [chatMessages, setChatMessages] = React.useState<ChatPayload[]>([]);
 

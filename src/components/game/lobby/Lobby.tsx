@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Player } from '@game/classes';
-import { ListEntry } from '@game/types';
+import { GameType, ListEntry } from '@game/types';
 import CreateGameModal from './CreateGameModal';
 import './lobby.modules.css';
 
@@ -8,7 +8,7 @@ interface LobbyProps {
   games: ListEntry[];
   profile: any;
   socket: any;
-  onJoinGame: (gameId: string) => void;
+  onJoinGame: (gameId: string, gameType?: GameType) => void;
   onCreateGame: (gameData: any) => void;
 }
 
@@ -86,6 +86,9 @@ const Lobby: React.FC<LobbyProps> = ({
                       <h3 className="font-medium text-lg text-gray-100">{game.name}</h3>
                       <div className="mt-1 flex items-center">
                         <span className="text-sm text-gray-400 mr-4">
+                          Type: {game.gameType || 'Poker'}
+                        </span>
+                        <span className="text-sm text-gray-400 mr-4">
                           Players: {game.playerCount}/{game.maxPlayers}
                         </span>
                         <span className={`text-xs px-2 py-1 rounded-full ${game.isStarted ? 'bg-green-900 text-green-200' : 'bg-blue-900 text-blue-200'}`}>
@@ -94,7 +97,7 @@ const Lobby: React.FC<LobbyProps> = ({
                       </div>
                     </div>
                     <button 
-                      onClick={() => onJoinGame(game.id)}
+                      onClick={() => onJoinGame(game.id, game.gameType)}
                       className={`px-4 py-2 rounded-md font-medium transition duration-150 ${
                         game.isStarted || game.playerCount >= game.maxPlayers
                           ? 'bg-gray-600 text-gray-400 cursor-not-allowed'

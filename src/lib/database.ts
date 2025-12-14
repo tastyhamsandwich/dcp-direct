@@ -1,7 +1,9 @@
+import 'mongodb';
+
 import { MongoClient, ServerApiVersion, ObjectId, Long, WithId, Db, BSON } from "mongodb";
 import bcrypt from "bcryptjs";
 import { Card, Hand } from "@game/classes";
-import { PlayerStatsComposite, GameSessionStats } from '@game/stats/types';
+import { PlayerStatsComposite, GameSessionStats, SidepotStats } from '@game/stats/types';
 import { statsBuffer } from "framer-motion";
 
 type UserProps = {
@@ -79,7 +81,7 @@ export type GameSessionStats_DB = {
       variant?: string;
       total_bets?: number;
       main_pot?: number;
-      side_pots?: number[];
+      side_pots?: SidepotStats[];
       playerStats?: { [key: string]: {
         bets?: number;
         calls?: number;
@@ -481,59 +483,33 @@ export const updateUser = async (userIdentifier, userData: User_DB, filter = `_i
   }
 }
 
-export const updateGameSessionStats = async (gameStatsObject: GameSessionStats) => {
+/** Function to record new game session statistics for a user.
+ * @param gameStatsObject Object which contains the values being recorded.
+ * @example
+ * gameStatsObject.startedAt: Date
+ * gameStatsObject.endedAt: Date
+ * gameStatsObject.gameVariants: [key: string]: number
+ * gameStatsObject.buyIn: number | null
+ * gameStatsObject.creator: string
+ * gameStatsObject.players: string[]
+ * gameStatsObject.gameId: string
+ * gameStatsObject.gameName: string
+ * gameStatsObject.bestHand: Hand | Card[] | null
+ * gameStatsObject.bestHandPlayer: string | null
+ * gameStatsObject.biggestPot: number
+ * gameStatsObject.biggestPotWinner: string | null
+ * gameStatsObject.totalPot: number
+ * gameStatsObject.hardcoreMode: boolean
+ * gameStatsObject.rankedGame: boolean
+ * gameStatsObject.totalHands: number
+ * gameStatsObject.rounds: RoundStats
+ */
+export const updateGameSessionStats = async (gameStatsObject: GameSessionStats_DB) => {
   const client = new MongoClient(uri!);
   const database = client.db("dcp");
   const gameStats = database.collection("game_stats");
 
   try {
-
-    const gameStatsDB: GameSessionStats_DB = {
-    id: new ObjectId(),
-    started_at: gameStatsObject.startedAt ? new Date(gameStatsObject.startedAt).toISOString() : undefined,
-    ended_at: gameStatsObject.endedAt ? new Date(gameStatsObject.endedAt).toISOString() : null,
-    game_variants: { },
-    buy_in: gameStatsObject.buyIn || null,
-    creator: gameStatsObject.creator || '',
-    players: gameStatsObject.players || [],
-    game_id: gameStatsObject.gameId || '',
-    game_name: gameStatsObject.gameName || '',
-    best_hand: gameStatsObject.bestHand,
-    best_hand_player: gameStatsObject.bestHandPlayer,
-    biggest_pot: gameStatsObject.biggestPot,
-    biggest_pot_winner: gameStatsObject.biggestPotWinner,
-    total_pot: gameStatsObject.totalPot,
-    hardcore_mode: gameStatsObject.hardcoreMode ?? false,
-    ranked_game: gameStatsObject.rankedGame ?? false,
-    total_hands: gameStatsObject.totalHands,
-    rounds: gameStatsObject.rounds ? Object.fromEntries(
-      Object.entries(gameStatsObject.rounds).map(([key, round]) => [
-        parseInt(key),
-        {
-          round_number: round.roundNumber,
-          variant: round.variant,
-          total_bets: round.totalBets,
-          main_pot: round.mainPot,
-          side_pots: round.sidePots || [],
-          playerStats: round.playerStats ? Object.fromEntries(
-            Object.entries(round.playerStats).map(([playerId, stats]) => [
-              playerId,
-              {
-                bets: stats.bets || 0,
-                calls: stats.calls || 0,
-                raises: stats.raises || 0,
-                folded: stats.folded || false,
-                checks: stats.checks || 0,
-                winnings: stats.winnings || 0,
-                hand: stats.hand || null,
-              }
-            ]
-          )
-        ) : undefined,
-      }
-    ])
-    ) : undefined,
-  };
 
     const game = await gameStats.insertOne(gameStatsObject);
 
