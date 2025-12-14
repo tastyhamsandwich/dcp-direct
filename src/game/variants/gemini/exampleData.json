@@ -1,0 +1,59 @@
+{
+  "variantId": "unique-variant-identifier-456",
+  "variantName": "Grid Runner Hold'em",
+  "description": "Standard Hold'em hole cards, but the community cards form a grid where players can use predefined rows OR any 5 orthogonally adjacent cards.",
+  "createdBy": "user-abc",
+  "creationDate": "2025-04-20T11:30:00Z",
+
+  "gameRules": {
+    "holeCardsDealt": 2,
+    "allowDiscards": false,
+    "wildCardRule": "none"
+  },
+
+  "communityCards": {
+    "useCommunityCards": true,
+    "grid": [
+      [ { "type": "flop", "sectionId": "F1a" }, { "type": "flop", "sectionId": "F1b" }, { "type": "flop", "sectionId": "F1c" }, null, null ],
+      [ { "type": "turn", "sectionId": "T1" },  { "type": "river", "sectionId": "R1" }, { "type": "turn", "sectionId": "T2" }, null, null ],
+      [ { "type": "flop", "sectionId": "F2a" }, { "type": "flop", "sectionId": "F2b" }, { "type": "flop", "sectionId": "F2c" }, null, null ],
+      [ null, null, null, null, null ],
+      [ null, null, null, null, null ]
+    ],
+    "sections": [
+      { "id": "F1a", "type": "flop", "cardCount": 1, "revealOrder": 1 },
+      { "id": "F1b", "type": "flop", "cardCount": 1, "revealOrder": 1 },
+      { "id": "F1c", "type": "flop", "cardCount": 1, "revealOrder": 1 },
+      { "id": "T1", "type": "turn", "cardCount": 1, "revealOrder": 2 },
+      { "id": "R1", "type": "river", "cardCount": 1, "revealOrder": 3 },
+      { "id": "T2", "type": "turn", "cardCount": 1, "revealOrder": 2 }, 
+      { "id": "F2a", "type": "flop", "cardCount": 1, "revealOrder": 1 },
+      { "id": "F2b", "type": "flop", "cardCount": 1, "revealOrder": 1 },
+      { "id": "F2c", "type": "flop", "cardCount": 1, "revealOrder": 1 }
+    ],
+    "playableGroupRules": [
+      {
+        "ruleType": "predefined_sections", 
+        "name": "Top Row Defined", 
+        "sectionIds": ["F1a", "F1b", "F1c", "T1", "R1"] 
+      },
+      {
+        "ruleType": "predefined_sections",
+        "name": "Bottom Row Defined",
+        "sectionIds": ["F2a", "F2b", "F2c", "T2", "R1"] 
+      },
+      {
+        "ruleType": "adjacent_cells",
+        "name": "Any 5 Adjacent",
+        "count": 5, 
+        "adjacencyType": "orthogonal", 
+        "appliesTo": "grid_wide" 
+      }
+    ]
+  },
+
+  "handFormationRule": {
+    "type": "holdem_best_5", 
+    "maxHoleCardsToUse": 2 
+  }
+}

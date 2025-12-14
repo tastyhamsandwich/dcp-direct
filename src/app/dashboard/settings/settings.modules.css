@@ -1,0 +1,124 @@
+.outer-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 2rem;
+  width: 100%;
+  max-width: 80%;
+  margin: 0 auto;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: 2fr 2fr;
+  gap: 1.5rem;
+  padding: 1rem;
+  background-color: var(--blue-1); /* theme background */
+  width: 100%;
+}
+
+.settings-section {
+  background-color: var(--blue-2); /* card background */
+  color: var(--blue-contrast);
+  border-radius: 1rem;
+  border: 0.25rem groove var(--blue-4); /* border color */
+  box-shadow: 0 25px 50px -12px var(--blue-12, #1f2937);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.settings-heading {
+  font-size: 1.25rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+  text-align: center;
+  color: #64ffda; /* accent color, can be made a variable if desired */
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--blue-surface, rgba(10, 25, 47, 0.5));
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.form-group label {
+  font-weight: 500;
+  color: var(--blue-contrast);
+}
+
+.success-message {
+  background-color: rgba(52, 211, 153, 0.15);
+  border: 1px solid #34d399;
+  color: #34d399;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  text-align: center;
+}
+
+.error-message {
+  background-color: rgba(239, 68, 68, 0.15);
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  text-align: center;
+}
+
+.payment-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.payment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  list-style-type: none;
+  padding: 0;
+}
+
+.payment-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--blue-a7, rgba(100, 255, 218, 0.08)); /* accent tint */
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+}
+
+.payment-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: var(--blue-contrast);
+}
+
+/* Override select styling to match inputs */
+select {
+  flex: 1 1 auto;
+  height: 2.5rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--blue-4);
+  background-color: var(--blue-2);
+  padding: 0 0.75rem;
+  font-size: 0.875rem;
+  color: var(--blue-contrast);
+}
+
+@media (max-width: 768px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+}

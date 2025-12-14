@@ -1,0 +1,764 @@
+u<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DCP Direct - Game Logic Documentation</title>
+    <style>
+        :root {
+            --primary-color: #60a5fa;
+            --secondary-color: #93c5fd;
+            --text-color: #e5e7eb;
+            --text-muted: #9ca3af;
+            --bg-color: #111827;
+            --bg-secondary: #1f2937;
+            --code-bg: #374151;
+            --border-color: #374151;
+            --shadow-color: rgba(0, 0, 0, 0.3);
+            
+            /* Syntax highlighting colors */
+            --function-name: #c084fc;      /* Purple */
+            --function-paren: #fbbf24;     /* Yellow */
+            --parameter-name: #34d399;     /* Green */
+            --type-annotation: #f472b6;    /* Pink */
+            --return-type: #f472b6;        /* Pink */
+            --keyword: #60a5fa;            /* Blue */
+            --string: #fb923c;             /* Orange */
+            --comment: #9ca3af;            /* Gray */
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background-color: var(--bg-color);
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        h1, h2, h3, h4 {
+            color: var(--primary-color);
+            margin: 1.5em 0 0.5em;
+            font-weight: 600;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        h2 {
+            font-size: 2rem;
+            margin-top: 3rem;
+        }
+
+        h3 {
+            font-size: 1.5rem;
+            color: var(--secondary-color);
+        }
+
+        h4 {
+            font-size: 1.25rem;
+        }
+
+        p {
+            margin: 1em 0;
+            color: var(--text-color);
+        }
+
+        pre {
+            background: var(--code-bg);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+
+        code {
+            font-family: 'Consolas', 'Monaco', monospace;
+            background: var(--code-bg);
+            padding: 0.2em 0.4em;
+            border-radius: 0.25rem;
+            color: var(--secondary-color);
+        }
+
+        ul, ol {
+            margin: 1em 0;
+            padding-left: 2em;
+            color: var(--text-color);
+        }
+
+        li {
+            margin: 0.5em 0;
+        }
+
+        .method-group {
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin: 1rem 0;
+            background: var(--bg-secondary);
+        }
+
+        .class-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 2rem;
+            margin: 2rem 0;
+            box-shadow: 0 4px 6px var(--shadow-color);
+        }
+
+        .class-link {
+          text-decoration: none;
+        }
+        .class-link:hover {
+          color: #fbbf24;
+          text-shadow: 1px 1px 5px black;
+        }
+
+        .properties-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .property-item {
+            padding: 0.5rem;
+            border-left: 3px solid var(--primary-color);
+            background: var(--code-bg);
+        }
+
+        .flow-diagram {
+            background: var(--bg-secondary);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+            margin: 1rem 0;
+        }
+
+        .implementation-files {
+            background: var(--code-bg);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-top: 2rem;
+        }
+
+        nav.toc {
+            position: sticky;
+            top: 2rem;
+            float: right;
+            width: 250px;
+            background: var(--bg-secondary);
+            padding: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            margin-left: 2rem;
+        }
+
+        nav.toc a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        nav.toc a:hover {
+            text-decoration: underline;
+            color:#93c5fd;
+            text-shadow: 1px 1px 5px black;
+        }
+
+        strong {
+            color: var(--secondary-color);
+        }
+
+        @media (max-width: 768px) {
+            nav.toc {
+                float: none;
+                width: auto;
+                margin: 1rem 0;
+            }
+        }
+
+        .function-name {
+            color: var(--function-name);
+            font-weight: 600;
+        }
+
+        .function-paren {
+            color: var(--function-paren);
+        }
+
+        .parameter-name {
+            color: var(--parameter-name);
+        }
+
+        .parameter-type {
+            color: var(--type-annotation);
+        }
+
+        .return-type {
+            color: var(--return-type);
+        }
+
+        .keyword {
+            color: var(--keyword);
+        }
+
+        .string {
+            color: var(--string);
+        }
+
+        .comment {
+            color: var(--comment);
+            font-style: italic;
+        }
+
+        .method-signature {
+            font-family: 'Consolas', 'Monaco', monospace;
+            padding: 0.5rem;
+            margin: 0.5rem 0;
+            background: var(--code-bg);
+            border-radius: 0.25rem;
+            border-left: 3px solid var(--function-name);
+        }
+
+        .class-header {
+            color: var(--keyword);
+            font-size: 1.2em;
+            margin-bottom: 1rem;
+        }
+
+        .property-declaration {
+            color: var(--parameter-name);
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .interface-declaration {
+            color: var(--keyword);
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+    </style>
+</head>
+<body>
+    <nav class="toc">
+        <h4>Table of Contents</h4>
+        <ul>
+            <li><a href="#concepts">Game Concepts</a></li>
+            <li><a href="#round-flow">Poker Round Flow</a></li>
+            <li><a href="#classes">Class Documentation</a>
+                <ul>
+                    <li><a href="#game-class">Game Class</a></li>
+                    <li><a href="#player-class">Player Class</a></li>
+                    <li><a href="#card-class">Card Class</a></li>
+                    <li><a href="#deck-class">Deck Class</a></li>
+                    <li><a href="#sidepot-class">Sidepot Class</a></li>
+                </ul>
+            </li>
+            <li><a href="#implementation">Implementation Files</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <span class="top"></span>
+        <h1>Game Logic</h1>
+        <p>The game logic in DCP Direct is implemented with a combination of client and server components, with the core game mechanics defined in TypeScript.</p>
+
+        <h2 id="concepts">Game Concepts</h2>
+        <div class="class-section">
+            <p>The core game is a poker game with the following concepts:</p>
+            <ul>
+                <li><strong>Cards:</strong> Standard playing cards with suit and value</li>
+                <li><strong>Players:</strong> Users participating in a game</li>
+                <li><strong>Game Rooms:</strong> Instances of games with unique IDs</li>
+                <li><strong>Rounds:</strong> Game play sessions within a game</li>
+                <li><strong>Actions:</strong> Player moves like bet, call, fold, etc.</li>
+                <li><strong>Variants:</strong> Different types of poker games (Texas Hold'em, Omaha, etc.)</li>
+            </ul>
+        </div>
+
+        <h2 id="round-flow">Poker Round Flow</h2>
+        <div class="class-section">
+            <p>A poker round follows a detailed sequence of method calls, function invocations, and events.</p>
+
+            <h3>1. Round Start</h3>
+            <div class="flow-diagram">
+                <code>startRound() → continueRoundSetup() → dealCards()</code>
+                <ul>
+                    <li>Game rotates dealer position (except first round)</li>
+                    <li>Sets blind positions (small blind = dealer + 1, big blind = dealer + 2)</li>
+                    <li>For Dealer's Choice games, initiates variant selection with <code>startDealerVariantSelection()</code></li>
+                    <li>Creates new deck and deals initial cards based on variant</li>
+                    <li>Posts blinds from small and big blind players</li>
+                    <li>Sets initial active player (after big blind)</li>
+                </ul>
+            </div>
+
+            <h3>2. Betting Rounds</h3>
+            <div class="flow-diagram">
+                <code>checkPhaseStatus() → findNextActivePlayer() → player actions → repeat</code>
+                <p>Active player receives 'your_turn' event with allowed actions:</p>
+                <ul>
+                    <li><strong>fold:</strong> Player's hand discarded</li>
+                    <li><strong>check:</strong> If no bets to call</li>
+                    <li><strong>call:</strong> Match current bet</li>
+                    <li><strong>bet:</strong> If no previous bets</li>
+                    <li><strong>raise:</strong> Increase current bet</li>
+                </ul>
+                <p>Each action triggers:</p>
+                <ul>
+                    <li>Pot updates</li>
+                    <li>Player chip counts update</li>
+                    <li>All-in situations create sidepots via <code>createSidepot()</code></li>
+                    <li>Game state broadcast to all players</li>
+                </ul>
+            </div>
+
+            <h3>3. Phase Progression</h3>
+            <div class="flow-diagram">
+                <code>PREFLOP → FLOP → TURN → RIVER → SHOWDOWN</code>
+                <p>After each betting round completes:</p>
+                <ul>
+                    <li><code>checkPhaseStatus()</code> advances the phase</li>
+                    <li>Community cards dealt via <code>dealCommunityCards()</code></li>
+                    <li>New betting round begins</li>
+                    <li>For Flop: 3 cards dealt</li>
+                    <li>For Turn/River: 1 card dealt each</li>
+                </ul>
+            </div>
+
+            <h3>4. Round End Conditions</h3>
+            <div class="flow-diagram">
+                <p>Two possible paths:</p>
+                <code>a) Everyone folds → immediate winner</code>
+                <code>b) Reach showdown → evaluateHands() → distributePots()</code>
+                <ul>
+                    <li>If all but one player folds:
+                        <ul>
+                            <li>Last remaining player wins pot immediately</li>
+                            <li>No hand evaluation needed</li>
+                        </ul>
+                    </li>
+                    <li>At showdown:
+                        <ul>
+                            <li>All remaining hands evaluated</li>
+                            <li>Pots distributed (main pot and any sidepots)</li>
+                            <li>Winners announced via 'round_winners' event</li>
+                            <li>Hand information displayed</li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+
+            <h3>5. Round Reset</h3>
+            <div class="flow-diagram">
+                <code>resetForNextRound() → wait for ready → new round</code>
+                <p>Reset all game state:</p>
+                <ul>
+                    <li>Clear cards, pots, bets</li>
+                    <li>Reset player actions and flags</li>
+                    <li>Rotate dealer position</li>
+                    <li>Players must ready up for next round</li>
+                    <li>New round begins when all players ready</li>
+                </ul>
+            </div>
+
+            <h3>WebSocket Events</h3>
+            <ul>
+                <li><code>'game_update'</code>: After any game state change</li>
+                <li><code>'your_turn'</code>: When it becomes a player's turn</li>
+                <li><code>'phase_changed'</code>: When moving to new betting round</li>
+                <li><code>'round_winners'</code>: When round ends</li>
+                <li><code>'round_ended'</code>: When round completes and ready for next round</li>
+            </ul>
+        </div>
+
+        <h2 id="classes">Class Documentation</h2>
+
+        <div id="game-class" class="class-section">
+            <h3><a href="#top" class="class-link">Game Class</a></h3>
+            <div class="class-header">
+                <span class="keyword">class</span> <span class="function-name">Game</span>
+            </div>
+            <p>The core class that manages game state and logic. It handles all aspects of a poker game including player management, dealing cards, managing bets, and game progression.</p>
+
+            <h4>Properties</h4>
+            <div class="properties-list">
+                <div class="property-item">
+                    <div class="property-declaration">
+                        <span class="parameter-name">id</span>: <span class="parameter-type">string</span>
+                    </div>
+                    <p>Unique identifier for the game instance</p>
+                </div>
+                <!-- Add more properties similarly -->
+            </div>
+
+            <h4>Methods</h4>
+            <div class="method-group">
+                <h5>Game Management</h5>
+                <div class="method-signature">
+                    <span class="keyword">constructor</span><span class="function-paren">(</span>
+                    <span class="parameter-name">id</span>: <span class="parameter-type">string</span>,
+                    <span class="parameter-name">name</span>: <span class="parameter-type">string</span>,
+                    <span class="parameter-name">creator</span>: <span class="parameter-type">Player</span>
+                    <span class="function-paren">)</span>
+                </div>
+                <ul>
+                    <li><code>sortPlayerList()</code> - Sorts players by seat number</li>
+                    <li><code>resetRound()</code> - Resets the game state for a new round</li>
+                    <li><code>returnGameState()</code> - Returns a safe version of the game state</li>
+                </ul>
+            </div>
+
+            <div class="method-group">
+                <h5>Dealer's Choice Methods</h5>
+                <div class="method-signature">
+                    <span class="function-name">updateCardsPerPlayer</span><span class="function-paren">(</span>
+                    <span class="parameter-name">variant</span>: <span class="parameter-type">GameVariant</span>,
+                    <span class="parameter-name">customRules</span>?: <span class="parameter-type">CustomGameRules</span>
+                    <span class="function-paren">)</span>: <span class="return-type">void</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">setDealerVariant</span><span class="function-paren">(</span>
+                    <span class="parameter-name">variant</span>: <span class="parameter-type">GameVariant</span>
+                    <span class="function-paren">)</span>: <span class="return-type">boolean</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">startDealerVariantSelection</span><span class="function-paren">(</span>
+                    <span class="parameter-name">timeoutMs</span>?: <span class="parameter-type">number</span>
+                    <span class="function-paren">)</span>: <span class="return-type">boolean</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">handleVariantSelection</span><span class="function-paren">(</span>
+                    <span class="parameter-name">playerId</span>: <span class="parameter-type">string</span>,
+                    <span class="parameter-name">variant</span>: <span class="parameter-type">GameVariant</span>
+                    <span class="function-paren">)</span>: <span class="return-type">boolean</span>
+                </div>
+            </div>
+
+            <div class="method-group">
+                <h5>Card Dealing Methods</h5>
+                <div class="method-signature">
+                    <span class="function-name">dealCards</span><span class="function-paren">(</span>
+                    <span class="parameter-name">currentRoundVariant</span>: <span class="parameter-type">GameVariant</span>
+                    <span class="function-paren">)</span>: <span class="return-type">boolean</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">dealStudCards</span><span class="function-paren">(</span>
+                    <span class="parameter-name">phase</span>: <span class="parameter-type">EGamePhaseStud</span>
+                    <span class="function-paren">)</span>: <span class="return-type">boolean</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">dealCommunityCards</span><span class="function-paren">(</span>
+                    <span class="parameter-name">flop</span>: <span class="parameter-type">boolean</span> = <span class="keyword">false</span>
+                    <span class="function-paren">)</span>: <span class="return-type">boolean</span>
+                </div>
+            </div>
+
+            <div class="method-group">
+                <h5>Game Flow Control Methods</h5>
+                <div class="method-signature">
+                    <span class="function-name">startRound</span><span class="function-paren">()</span>: <span class="return-type">boolean</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">continueRoundSetup</span><span class="function-paren">(</span>
+                    <span class="parameter-name">currentRoundVariant</span>: <span class="parameter-type">GameVariant</span>
+                    <span class="function-paren">)</span>: <span class="return-type">boolean</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">checkPhaseStatus</span><span class="function-paren">()</span>: <span class="return-type">boolean</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">findNextActivePlayer</span><span class="function-paren">()</span>: <span class="return-type">boolean</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">resetBets</span><span class="function-paren">()</span>: <span class="return-type">boolean</span>
+                </div>
+            </div>
+
+            <div class="method-group">
+                <h5>Pot Management Methods</h5>
+                <div class="method-signature">
+                    <span class="function-name">createSidepot</span><span class="function-paren">(</span>
+                    <span class="parameter-name">allInPlayer</span>: <span class="parameter-type">Player</span>,
+                    <span class="parameter-name">allInAmount</span>: <span class="parameter-type">number</span>
+                    <span class="function-paren">)</span>: <span class="return-type">void</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">distributePots</span><span class="function-paren">()</span>: <span class="return-type">{ playerId: string, playerName: string, amount: number, potType: string }[]</span>
+                </div>
+            </div>
+
+            <div class="method-group">
+                <h5>Player Position Management</h5>
+                <div class="method-signature">
+                    <span class="function-name">getNextPlayerId</span><span class="function-paren">(</span>
+                    <span class="parameter-name">currentPlayerId</span>: <span class="parameter-type">string</span>
+                    <span class="function-paren">)</span>: <span class="return-type">string</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">getRoleIds</span><span class="function-paren">(</span>
+                    <span class="parameter-name">isFirstRound</span>: <span class="parameter-type">boolean</span>
+                    <span class="function-paren">)</span>: <span class="return-type">RoleIds</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">getDealer</span><span class="function-paren">()</span>: <span class="return-type">string</span>
+                </div>
+            </div>
+
+            <div class="method-group">
+                <h5>Hand Evaluation Methods</h5>
+                <div class="method-signature">
+                    <span class="function-name">evaluateHands</span><span class="function-paren">(</span>
+                    <span class="parameter-name">players</span>: <span class="parameter-type">Player[]</span>,
+                    <span class="parameter-name">communityCards</span>: <span class="parameter-type">Card[]</span>
+                    <span class="function-paren">)</span>: <span class="return-type">Player[]</span>
+                </div>
+                <div class="method-signature">
+                    <span class="comment">// Private helper methods</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">private</span> <span class="function-name">getPhaseName</span><span class="function-paren">(</span>
+                    <span class="parameter-name">addNum</span>: <span class="parameter-type">number</span> = <span class="keyword">0</span>
+                    <span class="function-paren">)</span>: <span class="return-type">string</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="player-class" class="class-section">
+            <h3><a href="#top" class="class-link">Player Class</a></h3>
+            <div class="class-header">
+                <span class="keyword">class</span> <span class="function-name">Player</span> 
+                <span class="keyword">implements</span> <span class="parameter-type">User</span>
+            </div>
+            <p>Represents a player in the poker game.</p>
+
+            <h4>Properties</h4>
+            <div class="properties-list">
+                <div class="property-item">
+                    <div class="property-declaration">
+                        <span class="parameter-name">id</span>: <span class="parameter-type">string</span>
+                    </div>
+                </div>
+                <div class="property-item">
+                    <div class="property-declaration">
+                        <span class="parameter-name">username</span>: <span class="parameter-type">string</span>
+                    </div>
+                </div>
+                <div class="property-item">
+                    <div class="property-declaration">
+                        <span class="parameter-name">chips</span>: <span class="parameter-type">number</span>
+                    </div>
+                </div>
+            </div>
+
+            <h4>Methods</h4>
+            <div class="method-group">
+                <h5>Constructor</h5>
+                <div class="method-signature">
+                    <span class="keyword">constructor</span><span class="function-paren">(</span>
+                    <span class="parameter-name">id</span>: <span class="parameter-type">string</span>,
+                    <span class="parameter-name">username</span>: <span class="parameter-type">string</span>,
+                    <span class="parameter-name">seatNumber</span>: <span class="parameter-type">number</span>,
+                    <span class="parameter-name">chips</span>: <span class="parameter-type">number</span>,
+                    <span class="parameter-name">avatar</span>: <span class="parameter-type">string</span>
+                    <span class="function-paren">)</span>
+                </div>
+            </div>
+
+            <div class="method-group">
+                <h5>Getters</h5>
+                <div class="method-signature">
+                    <span class="function-name">getId</span><span class="function-paren">()</span>: <span class="return-type">string</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">getChips</span><span class="function-paren">()</span>: <span class="return-type">number</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">getCards</span><span class="function-paren">()</span>: <span class="return-type">Card[]</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="card-class" class="class-section">
+            <h3><a href="#top" class="class-link">Card Class</a></h3>
+            <div class="class-header">
+                <span class="keyword">class</span> <span class="function-name">Card</span> 
+                <span class="keyword">implements</span> <span class="parameter-type">Stringable</span>
+            </div>
+            <p>Represents a playing card in the deck.</p>
+
+            <h4>Properties</h4>
+            <div class="properties-list">
+                <div class="property-item">
+                    <div class="property-declaration">
+                        <span class="parameter-name">suit</span>: <span class="parameter-type">Suit</span>
+                    </div>
+                </div>
+                <div class="property-item">
+                    <div class="property-declaration">
+                        <span class="parameter-name">rank</span>: <span class="parameter-type">Rank</span>
+                    </div>
+                </div>
+                <div class="property-item">
+                    <div class="property-declaration">
+                        <span class="parameter-name">name</span>: <span class="parameter-type">CardName</span>
+                    </div>
+                </div>
+            </div>
+
+            <h4>Methods</h4>
+            <div class="method-group">
+                <h5>Constructor</h5>
+                <div class="method-signature">
+                    <span class="keyword">constructor</span><span class="function-paren">(</span>
+                    <span class="parameter-name">rank</span>?: <span class="parameter-type">RankValue | Rank | CardName</span>,
+                    <span class="parameter-name">suit</span>?: <span class="parameter-type">Suit</span>,
+                    <span class="parameter-name">faceUp</span> = <span class="parameter-type">false</span>
+                    <span class="function-paren">)</span>
+                </div>
+            </div>
+
+            <div class="method-group">
+                <h5>Public Methods</h5>
+                <div class="method-signature">
+                    <span class="function-name">getValue</span><span class="function-paren">()</span>: <span class="return-type">RankValue</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">suitValue</span><span class="function-paren">()</span>: <span class="return-type">number</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">printFullName</span><span class="function-paren">()</span>: <span class="return-type">string</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="deck-class" class="class-section">
+            <h3><a href="#top" class="class-link">Deck Class</a></h3>
+            <div class="class-header">
+                <span class="keyword">class</span> <span class="function-name">Deck</span>
+            </div>
+            <p>Represents a standard deck of 52 playing cards.</p>
+
+            <h4>Properties</h4>
+            <div class="properties-list">
+                <div class="property-item">
+                    <div class="property-declaration">
+                        <span class="parameter-name">cards</span>: <span class="parameter-type">Card[]</span>
+                    </div>
+                </div>
+            </div>
+
+            <h4>Methods</h4>
+            <div class="method-group">
+                <h5>Constructor</h5>
+                <div class="method-signature">
+                    <span class="keyword">constructor</span><span class="function-paren">(</span>
+                    <span class="parameter-name">autoShuffle</span>: <span class="parameter-type">boolean</span> = <span class="keyword">false</span>
+                    <span class="function-paren">)</span>
+                </div>
+            </div>
+
+            <div class="method-group">
+                <h5>Public Methods</h5>
+                <div class="method-signature">
+                    <span class="function-name">shuffle</span><span class="function-paren">()</span>: <span class="return-type">void</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">draw</span><span class="function-paren">()</span>: <span class="return-type">Card</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">regenerateDeck</span><span class="function-paren">()</span>: <span class="return-type">void</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="sidepot-class" class="class-section">
+            <h3><a href="#top" class="class-link">Sidepot Class</a></h3>
+            <div class="class-header">
+                <span class="keyword">class</span> <span class="function-name">Sidepot</span>
+            </div>
+            <p>Represents a side pot created when a player goes all-in.</p>
+
+            <h4>Properties</h4>
+            <div class="properties-list">
+                <div class="property-item">
+                    <div class="property-declaration">
+                        <span class="parameter-name">amount</span>: <span class="parameter-type">number</span>
+                    </div>
+                </div>
+                <div class="property-item">
+                    <div class="property-declaration">
+                        <span class="parameter-name">eligiblePlayers</span>: <span class="parameter-type">Player[]</span>
+                    </div>
+                </div>
+            </div>
+
+            <h4>Methods</h4>
+            <div class="method-group">
+                <h5>Constructor</h5>
+                <div class="method-signature">
+                    <span class="keyword">constructor</span><span class="function-paren">(</span>
+                    <span class="parameter-name">amount</span>: <span class="parameter-type">number</span>,
+                    <span class="parameter-name">eligiblePlayers</span>: <span class="parameter-type">Player[]</span>
+                    <span class="function-paren">)</span>
+                </div>
+            </div>
+
+            <div class="method-group">
+                <h5>Public Methods</h5>
+                <div class="method-signature">
+                    <span class="function-name">addAmount</span><span class="function-paren">(</span>
+                    <span class="parameter-name">value</span>: <span class="parameter-type">number</span>
+                    <span class="function-paren">)</span>: <span class="return-type">void</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">getAmount</span><span class="function-paren">()</span>: <span class="return-type">number</span>
+                </div>
+                <div class="method-signature">
+                    <span class="function-name">getEligiblePlayers</span><span class="function-paren">()</span>: <span class="return-type">Player[]</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="implementation" class="implementation-files">
+            <h2>Implementation Files</h2>
+            <p>Key files in the implementation:</p>
+            <ul>
+                <li><strong>Game Classes:</strong> <code>src/game/classes.ts</code> - Core game classes implementation</li>
+                <li><strong>Game Types:</strong> <code>src/game/types.ts</code> - Type definitions</li>
+                <li><strong>WebSocket Handler:</strong> <code>socket.ts</code> - Server-side WebSocket implementation</li>
+                <li><strong>Game Components:</strong> <code>src/components/game/*</code> - React components for game UI</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Add syntax highlighting to code blocks
+        document.querySelectorAll('code').forEach(block => {
+            if (block.className === 'language-typescript') {
+                block.innerHTML = block.innerHTML
+                    .replace(/(\w+)(?=\()/g, '<span class="function-name">$1</span>')
+                    .replace(/(\(|\))/g, '<span class="function-paren">$1</span>')
+                    .replace(/(\w+)(?=:)/g, '<span class="parameter-name">$1</span>')
+                    .replace(/(?<=: )(\w+)/g, '<span class="parameter-type">$1</span>')
+                    .replace(/(\/\/.+)/g, '<span class="comment">$1</span>');
+            }
+        });
+    </script>
+</body>
+</html>

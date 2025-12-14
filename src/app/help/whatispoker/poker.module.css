@@ -1,0 +1,29 @@
+.what-block {
+  background: #314158;
+  color: #aac;
+  font-weight: 500;
+  width: 64rem;
+  font-size: 20px;
+  border-radius: 0.5rem;
+}
+
+.what-h1 {
+  color: white;
+  font-weight: 800;
+  text-decoration: underline;
+  text-shadow: 1px 1px 1px 1px #111;
+  font-size: 48px;
+}
+
+.what-h2 {
+  color: red;
+  font-weight: 800;
+  text-decoration: underline;
+  text-shadow: 1px 1px 1px 3px #111;
+  font-size: 36px;
+}
+
+.what-span {
+  padding-right: 2rem;
+}
+
