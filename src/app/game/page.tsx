@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@contexts/authContext";
 import Lobby from "@comps/game/lobby/Lobby";
-import { User, ListEntry } from "@game/types";
+import { User, ListEntry, GameType } from "@game/types";
 import { io, type Socket } from "socket.io-client";
 import { SeatSelector } from "@comps/game/SeatSelector";
 import DraggableChat from "@comps/game/Chat";
@@ -14,6 +14,7 @@ export default function GameLobby() {
 	const [gamesList, setGamesList] = useState<ListEntry[]>([]);
 	const [isConnected, setIsConnected] = useState(false);
 	const socketRef = useRef<Socket | null>(null);
+	const lastCreatedGameTypeRef = useRef<GameType>("Poker");
 	const router = useRouter();
 
 	// Redirect to login if not authenticated
@@ -65,12 +66,23 @@ export default function GameLobby() {
 
 		socketInstance.on("games_list", (games) => {
 			console.log("Games list received:", games);
-			setGamesList(games || []);
+			const normalizedGames: ListEntry[] = (games || []).map((game, index) => ({
+				...game,
+				index: game.index ?? index,
+				gameType: game.gameType || "Poker",
+			}));
+
+			setGamesList(normalizedGames);
 		});
 
-		socketInstance.on("game_created", ({ gameId }) => {
+		socketInstance.on("game_created", ({ gameId, gameType }) => {
 			console.log("Game created, redirecting to:", gameId);
-			router.push(`/game/${gameId}`);
+			const typeSegment =
+				(gameType || lastCreatedGameTypeRef.current || "Poker").toLowerCase() ===
+				"pinochle"
+					? "pinochle"
+					: "poker";
+			router.push(`/game/${typeSegment}/${gameId}`);
 		});
 
 		socketInstance.on("error", (error) => {
@@ -86,8 +98,15 @@ export default function GameLobby() {
 	const handleCreateGame = (gameData) => {
 		if (!socketRef || !isConnected || !user) return;
 
+		const selectedGameType: GameType =
+			(gameData?.gameType || "").toLowerCase() === "pinochle"
+				? "Pinochle"
+				: "Poker";
+		lastCreatedGameTypeRef.current = selectedGameType;
+
 		console.log("Creating game with settings:", gameData);
 		socketRef.current?.emit("create_game", {
+      gameType: selectedGameType,
 			tableName: gameData.name,
 			creator: gameData.player,
 			maxPlayers: gameData.maxPlayers,
@@ -99,8 +118,15 @@ export default function GameLobby() {
 		});
 	};
 
-	const handleJoinGame = (gameId) => {
+	const handleJoinGame = (gameId: string, gameType?: GameType) => {
 		if (!gameId || !user || !socketRef.current) return;
+
+		const listGameType = gamesList.find((game) => game.id === gameId)?.gameType;
+		const resolvedGameType: GameType =
+			(gameType || listGameType || "Poker").toLowerCase() === "pinochle"
+				? "Pinochle"
+				: "Poker";
+		const typeSegment = resolvedGameType.toLowerCase();
 
 		/*socket.emit('get_seat_info', { gameId });
 
@@ -116,7 +142,7 @@ export default function GameLobby() {
       setSeatSelectorOpen(true);
       setOccupiedSeats(occupiedSeats);
     })*/
-		router.push(`/game/${gameId}`);
+		router.push(`/game/${typeSegment}/${gameId}`);
 	};
 
 	// Show loading state
@@ -161,7 +187,7 @@ export default function GameLobby() {
         </div>
 
         <h1 className="text-3xl font-bold mb-6 text-gray-100">
-          Poker Game Lobby
+          Game Lobby
         </h1>
         <div className="flex w-full">
           <Lobby

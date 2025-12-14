@@ -1,6 +1,5 @@
 'use server'
 
-import { createClient } from '@supabaseS'
 import { redirect } from 'next/navigation'
 import { loginSchema } from '@lib/zod';
 import { validateUser } from '@lib/database';

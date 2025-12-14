@@ -26,10 +26,10 @@ export async function PUT(req: NextRequest) {
     const verificationToken = generateVerificationToken();
 
     await EmailVerification.create({
-      userId,
-      newEmail,
+      user_id: userId,
+      new_email: newEmail,
       token: verificationToken,
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
     });
 
     await sendVerificationEmail(newEmail, verificationToken);
