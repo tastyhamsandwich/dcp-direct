@@ -4,9 +4,9 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@contexts/authContext";
 import { io, Socket } from "socket.io-client";
-import { Rank, Suit } from "@game/types";
 import Card from "@components/game/Card";
 import DraggableChat from "@comps/game/Chat";
+import { ResolveSocketUrl } from "@lib/socketUrl";
 
 type AnyCard = {
 	suit?: Suit;
@@ -219,7 +219,7 @@ export default function PinochleGamePage({
 	useEffect(() => {
 		if (!gameId || !user) return;
 
-		const socket = io(`http://${process.env.HOST}:${process.env.SOCKET_PORT}`, {
+		const socket = io(ResolveSocketUrl(), {
 			transports: ["websocket"],
 			withCredentials: true,
 		});

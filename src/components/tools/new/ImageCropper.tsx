@@ -71,7 +71,7 @@ const ImageCropper = ({closeModal, updateAvatar}) => {
 					type="file"
 					ref={fileSelectRef}
 					accept="image/*"
-					className="absolute right-[9999px]"
+					className="absolute right-2499.75px"
 					onChange={onSelectFile}
 				/>
 				<button
@@ -99,7 +99,7 @@ const ImageCropper = ({closeModal, updateAvatar}) => {
 						aspect={ASPECT_RATIO}
 						minWidth={MIN_DIMENSION}
 					>
-						<NextImage
+						<img
 							ref={imgRef}
 							src={imgSrc}
 							alt="Upload"

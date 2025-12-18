@@ -3,7 +3,7 @@ import 'mongodb';
 import { MongoClient, ServerApiVersion, ObjectId, Long, WithId, Db, BSON } from "mongodb";
 import bcrypt from "bcryptjs";
 import { Card, Hand } from "@game/classes";
-import { PlayerStatsComposite, GameSessionStats, SidepotStats } from '@game/stats/types';
+import { PlayerStatsComposite, GameSessionStats, SidepotStats } from '@/types/stats';
 import { statsBuffer } from "framer-motion";
 
 type UserProps = {
@@ -437,29 +437,51 @@ export const createUser = async (userData: UserProps): Promise<OpResult> => {
  * @param filter - The filter to locate the user document, defaults to '_id' - other options include 'username' or 'email', and others.
  * @param upsert - If true, will insert a new document if no document matches the filter. Defaults to false.
 */
-export const updateUser = async (userIdentifier, userData: User_DB, filter = `_id`, upsert: boolean = false): Promise<OpResult> => {
+export const updateUser = async (
+  userIdentifier: string | ObjectId,
+  userData: User_DB,
+  filter = `_id`,
+  upsert: boolean = false
+): Promise<OpResult> => {
   const client = new MongoClient(uri!);
   const database = client.db("dcp");
   const users = database.collection("users");
 
   try {
-    //const id = new ObjectId(userId);
+    const filterValue =
+      filter === "_id" && typeof userIdentifier === "string" && ObjectId.isValid(userIdentifier)
+        ? new ObjectId(userIdentifier)
+        : userIdentifier;
 
-    const filterObj = { [filter]: userIdentifier };
+    const filterObj = { [filter]: filterValue };
     const updatedData = { 
       $set: {
         ...userData,
-        lastUpdated: Long.fromNumber(Date.now()),
+        last_updated: Long.fromNumber(Date.now()),
       },
     };
 
     const user = await users.updateOne(filterObj, updatedData, { upsert });
 
+    if (!user.acknowledged || (user.matchedCount === 0 && user.upsertedCount === 0)) {
+      const result: OpFailure = {
+        success: false,
+        message: "User update failed",
+        error: "User not found or update not applied"
+      };
+      return result;
+    }
+
+    const updatedId =
+      filter === "_id"
+        ? (filterValue instanceof ObjectId ? filterValue.toString() : filterValue?.toString())
+        : undefined;
+
     const result: OpSuccess = {
       success: true,
-      message: "User updated successfully",
+      message: user.upsertedCount > 0 ? "User created successfully" : "User updated successfully",
       user: {
-        id: updatedData.$set._id?.toString(),
+        id: updatedId,
         username: updatedData.$set.username,
         email: updatedData.$set.email,
         first_name: updatedData.$set.first_name || "",
@@ -588,4 +610,3 @@ export const updatePlayerStats = async (playerStatsObject: PlayerStatsComposite)
     await client.close();
   }
 }
-

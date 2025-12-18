@@ -4,7 +4,7 @@ import { Card as CardClass } from "@game/classes";
 import useClickOutside from "@hooks/useClickOutside";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { Winner, WinnerInfo } from "@game/types";
+import { Winner, WinnerInfo } from "@/types/game";
 import { CardDescription } from '@comps/ui/Card';
 
 interface WinnerDisplayProps {
@@ -13,8 +13,6 @@ interface WinnerDisplayProps {
 	isOpen: boolean;
 	onClose: () => void;
 }
-
-
 
 const WinnerDisplay = ({
 	winners,

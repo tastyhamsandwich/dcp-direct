@@ -1,61 +1,14 @@
 import { Player, Deck, Card } from './classes';
 import { Server } from 'socket.io'; 
-import { Suit, Rank, User } from './types';
 
-type PinochleGamePhase = "waiting" | "bid" | "meld" | "game" | "postgame";
-type PinochleSeat = [1 | 2 | 3 | 4];
-type PinochleCards = 'AS' | 'AC' | 'AH' | 'AD' | 'TS' | 'TC' | 'TH' | 'TD' | 'KS' | 'KC' | 'KH' | 'KD' | 'QS' | 'QC' | 'QH' | 'QD' | 'JS' | 'JC' | 'JH' | 'JD';
-type PinochleTeam = 'teamOne' | 'teamTwo';
-type RoomStatus = 'waitingForPlayers' | 'gameInProgress' | 'gameEnding';
-type MeldCount = {
-  acesAround: number,
-  kingsAround: number,
-  queensAround: number,
-  jacksAround: number,
-  pinochles: number,
-  trumpRuns: number,
-  marriages: {
-    spades: number,
-    clubs: number,
-    hearts: number,
-    diamonds: number
+
+class PinochlePlayer implements User {
+    id: string;
+    username: string;
+    chips: number;
+    active: boolean;
+    bidTaker: boolean;
   }
-}
-
-interface PinochleTableSeats {
-  seatOne:    Player | null;
-  seatTwo:    Player | null;
-  seatThree:  Player | null;
-  seatFour:   Player | null;
-}
-
-type teamOne = 'seatOne' | 'seatThree';
-type teamTwo = 'seatTwo' | 'seatFour';
-
-interface PinochleGameState {
-  id: string;
-  players: Player[];
-  teamOnePlayers: Player[];
-  teamTwoPlayers: Player[];
-  teamOneScore: number;
-  teamTwoScore: number;
-  roundBid?: number;
-  roundBidTaker?: Player;
-  biddingTeam?: PinochleTeam;
-  trumpSuit?: Suit;
-  roundNumber?: number;
-  phase?: PinochleGamePhase;
-  activePlayerId?: string;
-  activePlayerIndex?: number;
-}
-
-export class PinochlePlayer implements User {
-  id: string;
-  username: string;
-  chips: number;
-  active: boolean;
-  bidTaker: boolean;
-}
 
 /**  Represents a deck of cards.
  * @class
@@ -138,7 +91,7 @@ export class Pinochle {
   wagerPerRound: number;
   hasStarted: boolean;
   players: Player[];
-  roomStatus: RoomStatus;
+  roomStatus: PinochleRoomStatus;
   seatAssignments: PinochleTableSeats;
   teamOnePlayers: Player[];
   teamTwoPlayers: Player[];

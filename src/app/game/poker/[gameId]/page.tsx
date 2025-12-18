@@ -4,15 +4,13 @@ import React, { useEffect, useReducer, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@contexts/authContext";
 import { io, Socket } from "socket.io-client";
-import { GameState, GameVariant, WinnerInfo } from "@game/types";
 import Card from "@components/game/Card";
 import DraggableChat from '@comps/game/Chat';
 import Table from "@components/game/Table";
 import Actions from "@components/game/Actions";
 import WinnerDisplay from "@components/game/WinnerDisplay";
 import DealerVariantSelector from "@components/game/DealerVariantSelector";
-import { SeatSelector } from "@components/game/SeatSelector";
-import { Playwrite_ES } from "next/font/google";
+import { ResolveSocketUrl } from "@lib/socketUrl";
 
 // Define action types
 export type GameAction =
@@ -105,10 +103,11 @@ function gameReducer(state: GamePageState, action: GameAction): GamePageState {
 export default function GamePage({
 	params,
 }: {
-	params: Promise<{ gameId: string }>;
+	params: { gameId: string };
 }) {
 	const { user, loading } = useAuth();
 	const router = useRouter();
+	const { gameId } = params;
 	const [isMyTurn, setIsMyTurn] = useState<boolean>(false);
 	const [isWinnerOpen, setIsWinnerOpen] = useState<boolean>(false);
 	const [allowedActions, setAllowedActions] = useState<string[]>([]);
@@ -137,15 +136,13 @@ export default function GamePage({
 
 	// Function to handle variant selection
 	const handleSelectVariant = (variant: GameVariant) => {
-		if (!socketRef || !isConnected || !unwrappedParams.gameId) return;
+		if (!socketRef || !isConnected || !gameId) return;
 
 		socketRef.current?.emit("select_variant", {
-			gameId: unwrappedParams.gameId,
+			gameId,
 			variant,
 		});
 	};
-
-	const unwrappedParams = React.use(params);
 
   useEffect(() => {
     if (!gameState || !socketRef.current) return;
@@ -163,7 +160,7 @@ export default function GamePage({
 
 	// Setup Socket.io connection
 	useEffect(() => {
-		if (!unwrappedParams.gameId || !user) return;
+		if (!gameId || !user) return;
 
 		// Initialize WebSocket connection to the socket.io server
 		//const socketRef.current = io("http://randomencounter.ddns.net:${process.env.SOCKET_PORT}", {
@@ -172,7 +169,7 @@ export default function GamePage({
 			withCredentials: true,
 		});*/
 
-		socketRef.current = io(`http://${process.env.HOST}:${process.env.SOCKET_PORT}`, {
+		socketRef.current = io(ResolveSocketUrl(), {
       transports: ["websocket"],
       withCredentials: true,
     });
@@ -196,7 +193,7 @@ export default function GamePage({
 
 			// Join the game
 			socketRef.current?.emit("join_game", {
-				gameId: unwrappedParams.gameId,
+				gameId,
 				user,
 			});
 		});
@@ -372,14 +369,14 @@ export default function GamePage({
       socketRef.current?.off("round_starting");
       socketRef.current?.off("round_winners");
 		};
-	}, [unwrappedParams.gameId, user, router]);
+	}, [gameId, user, router]);
 
 	/*const handleSeatSelect = (seatNumber: number) => {
-    if (!socket || !isConnected || !unwrappedParams.gameId) return;
+    if (!socket || !isConnected || !gameId) return;
     
     // Join the game with selected seat
     socketRef.current?.emit('join_game', { 
-      gameId: unwrappedParams.gameId,
+      gameId,
       profile,
       seatNumber
     });
@@ -388,15 +385,15 @@ export default function GamePage({
   };*/
 
 	const handlePlayerAction = (actionType: string, amount: number = 0) => {
-		if (!socketRef.current || !isConnected || !unwrappedParams.gameId) return;
+		if (!socketRef.current || !isConnected || !gameId) return;
 
 		if (actionType === "player_ready") {
 			socketRef.current?.emit("player_ready", {
-        gameId: unwrappedParams.gameId,
+        gameId,
       });
 		} else {
 			socketRef.current?.emit("player_action", {
-        gameId: unwrappedParams.gameId,
+        gameId,
         action: { type: actionType, amount },
       });
 		}
@@ -405,11 +402,11 @@ export default function GamePage({
 	const handleSendMessage = (e: React.FormEvent) => {
 		e.preventDefault();
 
-		if (!socketRef.current || !isConnected || !unwrappedParams.gameId || !message.trim())
+		if (!socketRef.current || !isConnected || !gameId || !message.trim())
 			return;
 
 		socketRef.current?.emit("chat_message", {
-      gameId: unwrappedParams.gameId,
+      gameId,
       message: message.trim(),
     });
 
@@ -471,7 +468,7 @@ export default function GamePage({
         }
         dealerId={gameState?.dealerId}
         currentPlayerId={socketRef.current?.id}
-        gameId={unwrappedParams.gameId}
+        gameId={gameId}
         onVariantSelected={handleVariantSelected}
         timeoutMs={variantSelectionTimeout}
       />
@@ -495,7 +492,7 @@ export default function GamePage({
       </div>
 
       <h1 className="text-2xl font-bold mb-4 text-gray-100">
-        Game Room: {gameState?.name || unwrappedParams.gameId}
+        Game Room: {gameState?.name || gameId}
       </h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -655,7 +652,7 @@ export default function GamePage({
               {gameState.status === "waiting" && (
                 <div className="mt-6">
                   <Actions
-                    gameId={unwrappedParams.gameId}
+                    gameId={gameId}
                     socket={socketRef.current}
                     roundStatus="waiting"
                     canCheck={false}
@@ -685,7 +682,7 @@ export default function GamePage({
                 gameState.activePlayerId === socketRef.current?.id && (
                   <div className="mt-6">
                     <Actions
-                      gameId={unwrappedParams.gameId}
+                      gameId={gameId}
                       socket={socketRef.current}
                       roundStatus="playing"
                       canCheck={

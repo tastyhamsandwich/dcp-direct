@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
 import ReactCrop, { type Crop } from 'react-image-crop';
-import './reactcrop.module.css';
 import { imageConfig } from '@lib/image';
 
 interface ImageCropperProps {
@@ -111,12 +110,14 @@ export default function ImageCropper({ file, onCropComplete, onCancel }: ImageCr
                         onChange={(c) => setCrop(c)}
                         aspect={1}
                         circularCrop
+                        onImageLoaded={onImageLoaded}
+                        className="relative inline-block"
                     >
                         <img
                             ref={imgRef}
                             src={imgSrc}
                             alt="Crop me"
-                            className="max-h-[60vh] w-auto"
+                            className="block max-h-[60vh] w-auto"
                         />
                     </ReactCrop>
                 </div>

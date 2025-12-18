@@ -1,10 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { type GameAction } from '@app/game/poker/[gameId]/page';
 import { useAuth } from "@contexts/authContext";
-import { AnyMxRecord } from 'dns';
-import { USER_COLORS, getUsernameColor } from '@lib/utils';
+import { getUsernameColor } from '@lib/utils';
 import { MessageSquareMore } from 'lucide-react';
-import './chat.module.css';
+import type { Socket } from "socket.io-client";
+import styles from './chat.module.css';
 
 /* COMPONENTS:
 
@@ -32,6 +31,13 @@ type GameMessage = {
   message: string;
 }
 
+type PinochleMessage = {
+  sender: string;
+  scope: "pinochle";
+  gameId: string;
+  message: string;
+}
+
 type PrivateMessage = {
   sender: string;
   scope: "private";
@@ -39,18 +45,21 @@ type PrivateMessage = {
   message: string;
 }
 
-type ChatMessage = LobbyMessage | GameMessage | PrivateMessage;
+type ChatMessage = LobbyMessage | GameMessage | PinochleMessage | PrivateMessage;
 
 type ChatPayload = {
   privateMsg?: boolean;
   sender: string;
   message: string;
-  timestamp: Date;
+  timestamp: string;
 }
 
+type ChatScope = "game" | "lobby" | "private" | "pinochle" | "poker";
+type ChatSocket = Socket | null;
+
 interface ChatProps {
-  socket: any;
-  scope: "game" | "lobby" | "private" | "poker" | "pinochle";
+  socket: ChatSocket;
+  scope: ChatScope;
   gameId?: string;
   buttonText?: boolean;
 }
@@ -65,7 +74,7 @@ const DraggableChat = ({
   const [dragging, setDragging] = useState(false);
   const offset = useRef({ x: 0, y: 0 });
 
-  const onMouseDown = (e) => {
+  const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     setDragging(true);
     offset.current = {
       x: e.clientX - position.x,
@@ -75,7 +84,7 @@ const DraggableChat = ({
     document.addEventListener("mouseup", onMouseUp);
   };
 
-  const onMouseMove = (e) => {
+  const onMouseMove = (e: MouseEvent) => {
     if (!dragging) return;
     setPosition({
       x: e.clientX - offset.current.x,
@@ -124,7 +133,7 @@ export const ChatWrapper = ({ socket, scope, gameId, buttonText = false }: ChatP
   const username = user?.username || "Unknown User";
 
   return (
-    <div className={`w-18 h-28 chat-box fixed top-45 right-15 bg-gray-800 p-4 rounded-lg shadow-lg transition-transform duration-300 ${isOpen ? 'w-120 h-110 top-75 right-45 translate-y-0' : 'translate-y-full'}`}>
+    <div className={`w-18 h-28 ${styles.chatBox} fixed top-45 right-15 bg-gray-800 p-4 rounded-lg shadow-lg transition-transform duration-300 ${isOpen ? 'w-120 h-110 top-75 right-45 translate-y-0' : 'translate-y-full'}`}>
       { !buttonText ?
         <ChatToggleButton isOpen={isOpen} toggleChat={toggleChat} /> :
         <ChatToggleButtonText isOpen={isOpen} toggleChat={toggleChat} /> 
@@ -134,7 +143,7 @@ export const ChatWrapper = ({ socket, scope, gameId, buttonText = false }: ChatP
   );
 }
 
-export const ChatWrapperText = ({ socket, scope, gameId }) => {
+export const ChatWrapperText = ({ socket, scope, gameId }: Pick<ChatProps, "socket" | "scope" | "gameId">) => {
 
   const [isOpen, setIsOpen] = React.useState(false);
   const { user, loading } = useAuth();
@@ -188,7 +197,7 @@ export const ChatToggleButtonText = ({ isOpen, toggleChat }: { isOpen: boolean, 
   );
 }
 
-export const Chat = ({ socket, username, scope, gameId }: { socket: any; username: string; scope: "lobby" | "game" | "private" | "poker" | "pinochle"; gameId: string }) => {
+export const Chat = ({ socket, username, scope, gameId }: { socket: ChatSocket; username: string; scope: ChatScope; gameId?: string }) => {
   const [message, setMessage] = React.useState("");
   const [chatMessages, setChatMessages] = React.useState<ChatPayload[]>([]);
 
@@ -208,9 +217,9 @@ export const Chat = ({ socket, username, scope, gameId }: { socket: any; usernam
 
   const pmRegex = /^\/pm\s+(\S+)\s+(.+)/i;
 
-  const handleSendMessage = (e) => {
+  const handleSendMessage = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (message.trim() === "") return;
+    if (message.trim() === "" || !socket) return;
 
     const pmMatch = message.match(pmRegex);
     if (pmMatch) {
@@ -230,11 +239,18 @@ export const Chat = ({ socket, username, scope, gameId }: { socket: any; usernam
     } else {
       // Regular chat message
       let newMessage: ChatMessage;
-      if (scope === "game") {
+      if (scope === "game" && gameId) {
         newMessage = {
           sender: username,
           scope: "game",
-          gameId: gameId!,
+          gameId,
+          message
+        };
+      } else if (scope === "pinochle" && gameId) {
+        newMessage = {
+          sender: username,
+          scope: "pinochle",
+          gameId,
           message
         };
       } else if (scope === "lobby") {
@@ -244,7 +260,7 @@ export const Chat = ({ socket, username, scope, gameId }: { socket: any; usernam
           message
         };
       } else {
-        // fallback for private, though this should not happen here
+        // fallback for private or missing gameId, though this should not happen here
         newMessage = {
           sender: username,
           scope: "private",

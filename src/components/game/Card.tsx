@@ -3,7 +3,6 @@ import Image from 'next/image';
 import { capitalize } from '@lib/utils';
 import { rankToNumStr, suitNameToInitial } from '@game/utils';
 import { motion } from 'framer-motion';
-import { type Suit } from "@game/types";
 
 interface CardProps {
   scaleFactor: number;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useWebSocket } from '@hooks/useWebSocket';
-import { GameVariant } from '@game/types';
+import { GameVariant } from '@/types/game';
 import { Button } from '@components/ui/Button';
 
 interface DealerVariantSelectorProps {
@@ -16,9 +16,6 @@ const variantNames: Record<GameVariant, string> = {
   TexasHoldEm: "Texas Hold'em",
   Omaha: "Omaha",
   OmahaHiLo: "Omaha Hi/Lo",
-  FiveCardDraw: "Five Card Draw",
-  SevenCardStud: "Seven Card Stud",
-  Chicago: "Chicago",
   DealersChoice: "Dealer's Choice",
   Custom: "Custom Game"
 };

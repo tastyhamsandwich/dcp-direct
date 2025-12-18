@@ -1,4 +1,4 @@
-import { Stringable, Suit, Rank, RankValue, CardName, RoomStatus, TGamePhase, TGamePhaseCommon, GamePhases, TGamePhaseStud, GameVariant, GameState, TableSeat, RoleIds, User, CustomGameRules, Action, Winner, RoomPhase, WinnerInfo} from './types';
+import { Stringable, Suit, Rank, RankValue, CardName, RoomStatus, TGamePhase, TGamePhaseCommon, GamePhases, TGamePhaseStud, GameVariant, GameState, TableSeat, RoleIds, User, CustomGameRules, Action, Winner, RoomPhase, WinnerInfo} from '../types/game';
 import { capitalize, valueToRank } from '@lib/utils';
 import { evaluateHand, evaluateHands, isHandOneBetter } from '@game/utils';
 import { Socket, Server } from 'socket.io';
@@ -11,7 +11,7 @@ import {
   PlayerGameStats,
   GameSessionStats,
   SidepotStats
-} from "@game/stats/types";
+} from "@/types/stats";
 
 export class RoundStats {
   roundNumber: number;

@@ -4,10 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@contexts/authContext";
 import Lobby from "@comps/game/lobby/Lobby";
-import { User, ListEntry, GameType } from "@game/types";
 import { io, type Socket } from "socket.io-client";
-import { SeatSelector } from "@comps/game/SeatSelector";
 import DraggableChat from "@comps/game/Chat";
+import { ResolveSocketUrl } from "@lib/socketUrl";
 
 export default function GameLobby() {
 	const { user, loading } = useAuth();
@@ -25,24 +24,24 @@ export default function GameLobby() {
 	}, [user, loading, router]);
 
 	useEffect(() => {
-		if (!user) return;
+		if (!user) {
+			if (socketRef.current) {
+				socketRef.current.disconnect();
+				socketRef.current = null;
+			}
+			setIsConnected(false);
+			return;
+		}
 
-		// Initialize WebSocket connection to the socket.io server running on port 3001
-		//const socketInstance = io("http://randomencounter.ddns.net:3001", {
-		if (socketRef.current === null) {
-      socketRef.current = io(`http://${process.env.HOST}:${process.env.SOCKET_PORT}`, {
-        transports: ["websocket"],
-        withCredentials: true,
-      });
-    }
-    
-    const socketInstance = io(`http://${process.env.HOST}:${process.env.SOCKET_PORT}`, {
-      transports: ["websocket"],
-      withCredentials: true,
-    });
+		if (socketRef.current) {
+			return;
+		}
+
+		const socketInstance = io(ResolveSocketUrl(), {
+			transports: ["websocket"],
+			withCredentials: true,
+		});
 		socketRef.current = socketInstance;
-
-    const socket = socketRef.current;
 
 		socketInstance.on("connect", () => {
 			setIsConnected(true);
@@ -91,12 +90,14 @@ export default function GameLobby() {
 		});
 
 		return () => {
+			setIsConnected(false);
+			socketRef.current = null;
 			socketInstance.disconnect();
 		};
 	}, [user, router]);
 
 	const handleCreateGame = (gameData) => {
-		if (!socketRef || !isConnected || !user) return;
+		if (!socketRef.current || !isConnected || !user) return;
 
 		const selectedGameType: GameType =
 			(gameData?.gameType || "").toLowerCase() === "pinochle"

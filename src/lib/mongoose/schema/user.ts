@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { User } from '../../../game/types';
+import { User } from '../../../types/game';
 
 const userSchema = new mongoose.Schema({
   username: {

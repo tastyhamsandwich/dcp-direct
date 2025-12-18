@@ -3,6 +3,7 @@ import NavBar from '@comps/nav/NavBar';
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
+import "react-image-crop/dist/ReactCrop.css";
 import { AuthProvider } from '@contexts/authContext';
 
 const geistSans = Geist({

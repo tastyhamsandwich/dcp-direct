@@ -1,5 +1,5 @@
 import { Card } from './classes';
-import { FlopArray, TurnRiverArray } from './types';
+import { FlopArray, TurnRiverArray } from '../types/game';
 
 type Id = SectionId | FlopId | TurnRiverId | SoloCardId | GroupId | GenericId;
 type GenericId = `id${number}`;

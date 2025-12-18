@@ -1,6 +1,6 @@
 import { useReducer, useEffect } from 'react';
 import { Sidepot, Deck, Card, Player } from '@game/classes';
-import type { TGamePhase, TableSeat, Action as PlayerAction } from '@game/types';
+import type { TGamePhase, TableSeat, Action as PlayerAction } from '@/types/game';
 import { Socket } from 'socket.io-client';
 
 type GameState = {

@@ -1,7 +1,5 @@
 import React, { useState, useRef } from "react";
-import Image from 'next/image';
 import ReactCrop, { type Crop } from "react-image-crop";
-import "./reactcrop.module.css";
 import { imageConfig } from "@lib/image";
 
 interface ImageCropperProps {
@@ -10,6 +8,15 @@ interface ImageCropperProps {
 	onCancel: () => void;
 }
 
+/**
+ * Image cropping modal for avatar uploads.
+ * @param file - The image file selected by the user.
+ * @param onCropComplete - Callback fired when the cropped image blob is ready.
+ * @param onCancel - Callback fired when the user cancels the crop flow.
+ *
+ * @example
+ * <ImageCropper file={file} onCropComplete={handleSave} onCancel={handleClose} />
+ */
 export default function ImageCropper({
 	file,
 	onCropComplete,
@@ -24,6 +31,10 @@ export default function ImageCropper({
     x: 0,
     y: 0,
   });
+  const [viewportBounds, setViewportBounds] = useState<{ maxWidth: number; maxHeight: number }>({
+    maxWidth: 0,
+    maxHeight: 0,
+  });
 
   // Load the image when file is provided
   React.useEffect(() => {
@@ -35,6 +46,21 @@ export default function ImageCropper({
     });
     reader.readAsDataURL(file);
   }, [file]);
+
+  // Keep the crop area within the visible viewport.
+  React.useEffect(() => {
+    const updateBounds = () => {
+      setViewportBounds({
+        maxWidth: Math.floor(window.innerWidth * 0.9),
+        maxHeight: Math.floor(window.innerHeight * 0.7),
+      });
+    };
+
+    updateBounds();
+    window.addEventListener("resize", updateBounds);
+
+    return () => window.removeEventListener("resize", updateBounds);
+  }, []);
 
   // Set initial crop in pixels when image loads
   const onImageLoaded = (img: HTMLImageElement) => {
@@ -158,22 +184,29 @@ export default function ImageCropper({
     return <div>Loading...</div>;
   }
 
+  const maxWidth = viewportBounds.maxWidth ? `${viewportBounds.maxWidth}px` : "90vw";
+  const maxHeight = viewportBounds.maxHeight ? `${viewportBounds.maxHeight}px` : "70vh";
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-slate-700 rounded-lg p-6 max-w-2xl w-full">
+      <div className="bg-slate-700 rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-auto">
         <h3 className="text-lg font-semibold mb-4">Crop Your Avatar</h3>
-        <div className="mb-4">
+        <div className="mb-4 flex justify-center">
           <ReactCrop
             crop={crop}
             onChange={(c) => setCrop(c)}
             aspect={1}
             circularCrop
+            onImageLoaded={onImageLoaded}
+            className="relative inline-block"
+            style={{ maxWidth, maxHeight }}
           >
-            <Image
+            <img
               ref={imgRef}
               src={imgSrc}
               alt="Crop me"
-              className="max-h-[60vh] w-auto"
+              className="block h-auto max-w-full object-contain"
+              style={{ maxHeight: maxHeight, maxWidth: maxWidth }}
             />
           </ReactCrop>
         </div>

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Player from "./Player";
 import Card from "./Card";
 import Deck from "./Deck";
-import { WinnerInfo } from "@game/types";
+import { WinnerInfo } from "@/types/game";
 
 interface TableProps {
 	players: any[];

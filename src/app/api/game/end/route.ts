@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { updateGameSessionStats, updatePlayerStats } from "@lib/database";
-import type { PlayerStats, PlayerGameStats } from "@game/stats/types";
+import type { PlayerStats, PlayerGameStats } from "@/types/stats";
 
 type PlayerPayload = {
   id: string;

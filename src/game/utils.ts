@@ -1,4 +1,4 @@
-import type { Player, SuitSymbol, Suit, RankValue, SuitCapitalized, SuitInitial, Winner, HandRank } from './types';
+import type { Player, SuitSymbol, Suit, RankValue, SuitCapitalized, SuitInitial, Winner, HandRank } from '../types/game';
 import { Card, Hand } from '@game/classes';
 import { capitalize, valueToRank } from '@lib/utils';
 

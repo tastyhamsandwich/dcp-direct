@@ -1,17 +1,5 @@
 import { Server } from "socket.io";
-import {
-	User,
-	TGamePhase,
-	ListEntry,
-	Action,
-	TGamePhaseCommon,
-	TGamePhaseHoldEm,
-	TableSeat,
-  HandRank,
-  GameType,
-  Suit,
-  Rank,
-} from "@game/types";
+//import {	User,	TGamePhase,	ListEntry,	Action,	TGamePhaseCommon,	TGamePhaseHoldEm,	TableSeat,  HandRank,  GameType,  Suit,  Rank } from "@types/game";
 import { Player, Game, Sidepot, Card } from "@game/classes";
 import { evaluateHand } from "@game/utils";
 import { v4 as uuidv4 } from "uuid";
@@ -20,70 +8,9 @@ import { createDropdownMenuScope } from "@radix-ui/react-dropdown-menu";
 import { updatePlayerStats } from "@lib/database"
 import { PinochleDeck } from "@game/pinochle";
 
-type TeamId = "A" | "B";
-type PinochleTrickCard = { playerId: string; card: Card };
-type PinochleTrickState = { leadSuit: Suit | null; cards: PinochleTrickCard[] };
-type MeldCount = {
-  acesAround: number;
-  kingsAround: number;
-  queensAround: number;
-  jacksAround: number;
-  pinochles: number;
-  trumpRuns: number;
-  marriages: {
-    spades: number;
-    clubs: number;
-    hearts: number;
-    diamonds: number;
-  };
-};
-
-type PinochlePlayerState = {
-  id: string;
-  username: string;
-  seatNumber: number;
-  team: TeamId;
-  ready: boolean;
-  cards: Card[];
-  tricksWon: number;
-  meldScore: number;
-  meldCards: Card[];
-  totalScore: number;
-  passedBid: boolean;
-  roundPoints: number;
-};
-
-type PinochleGame = {
-  id: string;
-  name: string;
-  players: PinochlePlayerState[];
-  phase: "waiting" | "dealing" | "bid" | "playing" | "scoring" | "postgame";
-  status?: string;
-  dealerIndex: number;
-  dealerId?: string;
-  activePlayerId?: string;
-  activePlayerIndex?: number;
-  roundBid: number;
-  bidLeaderId?: string;
-  biddingTeam?: TeamId;
-  trumpSuit?: Suit | null;
-  deck: PinochleDeck;
-  trick: PinochleTrickState;
-  scoreTeamA: number;
-  scoreTeamB: number;
-  meldTeamA: number;
-  meldTeamB: number;
-  trickPointsTeamA: number;
-  trickPointsTeamB: number;
-  setsTeamA: number;
-  setsTeamB: number;
-  roundNumber: number;
-  roundActive: boolean;
-};
-
 export function initializeSocket(io: Server) {
 	// Store active games
-	const games: { [key: string]: Game } = {};
+	const pokerGames: { [key: string]: Game } = {};
 	const pinochleGames: { [key: string]: PinochleGame } = {};
 	const gamesArray: ListEntry[] = [];
 
@@ -232,7 +159,7 @@ export function initializeSocket(io: Server) {
 				creator.chips = 1000;
 			}
 
-			games[gameId] = new Game(
+			pokerGames[gameId] = new Game(
 				gameId,
 				tableName,
 				creator,
@@ -245,10 +172,10 @@ export function initializeSocket(io: Server) {
 			const listEntry: ListEntry = {
 				index: gamesArray.length,
 				id: gameId,
-				name: games[gameId].name,
-				playerCount: games[gameId].players.length,
-				maxPlayers: games[gameId].maxPlayers,
-				isStarted: games[gameId].hasStarted,
+				name: pokerGames[gameId].name,
+				playerCount: pokerGames[gameId].players.length,
+				maxPlayers: pokerGames[gameId].maxPlayers,
+				isStarted: pokerGames[gameId].hasStarted,
 				gameType: requestedGameType,
 			};
 
@@ -268,7 +195,7 @@ export function initializeSocket(io: Server) {
 
 		socket.on("get_seat_info", (data) => {
 			const gameId = data.gameId;
-			const game = games[gameId];
+			const game = pokerGames[gameId];
 			const seatInfo: Array<number> = [];
 			game.tablePositions.forEach((pos, index) => {
 				if (pos.occupied) {
@@ -324,7 +251,7 @@ export function initializeSocket(io: Server) {
 			}
 
 			const userId = socket.id;
-			const game = games[gameId];
+			const game = pokerGames[gameId];
 
 			if (!game) {
 				console.log(`Socket Error: Game not found.`);
@@ -420,18 +347,18 @@ export function initializeSocket(io: Server) {
 			socket.join(gameId);
 
 			// Update the game state for the player who just joined
-			socket.emit("game_state", { game: games[gameId].returnGameState() });
+			socket.emit("game_state", { game: pokerGames[gameId].returnGameState() });
 
 			// Let everyone know someone joined
-			console.log(`Player '${users[userId].username} joining game room '${games[gameId].name}'...`);
+			console.log(`Player '${users[userId].username} joining game room '${pokerGames[gameId].name}'...`);
 			io.to(gameId).emit("player_joined", {
 				player: users[userId],
-				game: games[gameId].returnGameState(),
+				game: pokerGames[gameId].returnGameState(),
 			});
 
 			// Let everyone know about the updated game state
 			io.to(gameId).emit("game_state", {
-				game: games[gameId].returnGameState(),
+				game: pokerGames[gameId].returnGameState(),
 			});
 
 			// Check if we have at least 2 players and all are ready
@@ -480,7 +407,7 @@ export function initializeSocket(io: Server) {
 				handlePinochleReady(pinochleGame, socket, io, gamesArray);
 				return;
 			}
-			const game = games[gameId];
+			const game = pokerGames[gameId];
 			const userId = socket.id;
 
 			if (!game) {
@@ -620,7 +547,7 @@ export function initializeSocket(io: Server) {
 			}
 
 			const { gameId, action } = data;
-			const game = games[gameId];
+			const game = pokerGames[gameId];
 			const userId = socket.id;
 			const actionType = action.type;
 
@@ -1004,8 +931,8 @@ export function initializeSocket(io: Server) {
 			const username = users[userId].username;
 
 			// Handle player leaving games
-			Object.keys(games).forEach((gameId) => {
-				const game = games[gameId];
+			Object.keys(pokerGames).forEach((gameId) => {
+				const game = pokerGames[gameId];
 				const playerIndex = game.players.findIndex((p) => p.id === userId);
 
 				if (playerIndex >= 0) {
@@ -1133,12 +1060,14 @@ export function initializeSocket(io: Server) {
 								game.phase = "waiting";
 								game.status = "waiting";
 								game.communityCards = [];
-                game.players[0].chips += game.pot;
+								if (game.players.length > 0 && game.pot > 0) {
+									game.players[0].chips += game.pot;
+								}
 								game.pot = 0;
 							}
 
 							if (game.players.length === 0) {
-								delete games[gameId];
+								delete pokerGames[gameId];
 
 								// Remove from games array
 								const gameIndex = gamesArray.findIndex((g) => g.id === gameId);
@@ -1164,7 +1093,7 @@ export function initializeSocket(io: Server) {
 							);
 							io.to(gameId).emit("player_left", {
 								playerId: userId,
-								game: games[gameId]?.returnGameState(),
+								game: pokerGames[gameId]?.returnGameState(),
 							});
 
 							// Update the games list for all clients

@@ -1,4 +1,5 @@
 import React, { useRef } from "react";
+import { createPortal } from "react-dom";
 import { imageConfig } from "@lib/image";
 import ImageCropper from "./ImageCropper";
 import { useAuth } from "@contexts/authContext";
@@ -8,8 +9,17 @@ export default function AvatarUpload() {
 	const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
 	const [error, setError] = React.useState<string | null>(null);
 	const [isUploading, setIsUploading] = React.useState(false);
+	const [isPortalReady, setIsPortalReady] = React.useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const { user } = useAuth();
+
+	React.useEffect(() => {
+		setIsPortalReady(true);
+
+		return () => {
+			setIsPortalReady(false);
+		};
+	}, []);
 
 	const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
 		const file = event.target.files?.[0];
@@ -111,13 +121,15 @@ export default function AvatarUpload() {
         </div>
       )}
 
-      {selectedFile && (
-        <ImageCropper
-          file={selectedFile}
-          onCropComplete={handleCropComplete}
-          onCancel={handleCancelCrop}
-        />
-      )}
+      {isPortalReady && selectedFile &&
+        createPortal(
+          <ImageCropper
+            file={selectedFile}
+            onCropComplete={handleCropComplete}
+            onCancel={handleCancelCrop}
+          />,
+          document.body
+        )}
     </>
   );
 }

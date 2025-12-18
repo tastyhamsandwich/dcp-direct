@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Player } from '@game/classes';
-import { GameType, ListEntry } from '@game/types';
+import { GameType, ListEntry } from '@/types/game';
 import CreateGameModal from './CreateGameModal';
 import './lobby.modules.css';
 
