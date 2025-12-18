@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { use, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@contexts/authContext";
 import { io, Socket } from "socket.io-client";
@@ -61,6 +61,7 @@ type PinochleGameState = {
 	scoreTeamB?: number;
 	meldTeamA?: number;
 	meldTeamB?: number;
+	wagerPerGame?: number;
 	//kittyCount?: number;
 	//deckCount?: number;
 };
@@ -146,8 +147,9 @@ function normalizeCard(
 export default function PinochleGamePage({
 	params,
 }: {
-	params: { gameId: string };
+	params: Promise<{ gameId: string }>;
 }) {
+	const { gameId } = use(params);
 	const { user, loading } = useAuth();
 	const router = useRouter();
 	const [gameState, setGameState] = useState<PinochleGameState | null>(null);
@@ -157,8 +159,6 @@ export default function PinochleGamePage({
 		null
 	);
 	const socketRef = useRef<Socket | null>(null);
-
-	const { gameId } = params;
 
 	const currentPlayerId = socketRef.current?.id;
 	const myPlayer = useMemo(
@@ -219,7 +219,7 @@ export default function PinochleGamePage({
 	useEffect(() => {
 		if (!gameId || !user) return;
 
-		const socket = io(ResolveSocketUrl(), {
+		const socket = io(`${ResolveSocketUrl()}/pinochle`, {
 			transports: ["websocket"],
 			withCredentials: true,
 		});

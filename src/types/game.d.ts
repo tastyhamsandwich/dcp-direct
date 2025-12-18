@@ -173,6 +173,7 @@ declare global {
    * @property {number} maxPlayers - The maximum number of players allowed.
    * @property {boolean} isStarted - Indicates whether the game has started.
    * @property {GameType} [gameType] - Indicates the type of game (Poker or Pinochle)
+   * @property {number} [wagerPerGame] - Table entry cost for Pinochle games.
    */
   interface ListEntry {
     index: number;
@@ -182,6 +183,7 @@ declare global {
     maxPlayers: number;
     isStarted: boolean;
     gameType?: GameType;
+    wagerPerGame?: number;
   }
 
   /** Represents the role IDs of the players.

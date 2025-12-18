@@ -58,6 +58,7 @@ declare global {
     setsTeamB: number;
     roundNumber: number;
     roundActive: boolean;
+    wagerPerGame?: number;
   };
 
 

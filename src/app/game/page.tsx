@@ -106,17 +106,28 @@ export default function GameLobby() {
 		lastCreatedGameTypeRef.current = selectedGameType;
 
 		console.log("Creating game with settings:", gameData);
-		socketRef.current?.emit("create_game", {
-      gameType: selectedGameType,
-			tableName: gameData.name,
-			creator: gameData.player,
-			maxPlayers: gameData.maxPlayers,
-			blinds: {
-				small: gameData.smallBlind,
-				big: gameData.smallBlind * 2,
-			},
-			gameVariant: gameData.gameVariant || "TexasHoldEm", // Include the selected game variant
-		});
+
+		const payload =
+			selectedGameType === "Pinochle"
+				? {
+						gameType: selectedGameType,
+						tableName: gameData.name,
+						creator: gameData.player,
+						wagerPerGame: Math.max(1, Number(gameData.wagerPerGame) || 0),
+				  }
+				: {
+						gameType: selectedGameType,
+						tableName: gameData.name,
+						creator: gameData.player,
+						maxPlayers: gameData.maxPlayers,
+						blinds: {
+							small: gameData.smallBlind,
+							big: gameData.smallBlind * 2,
+						},
+						gameVariant: gameData.gameVariant || "TexasHoldEm",
+				  };
+
+		socketRef.current?.emit("create_game", payload);
 	};
 
 	const handleJoinGame = (gameId: string, gameType?: GameType) => {

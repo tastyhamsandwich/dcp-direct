@@ -169,7 +169,7 @@ export default function GamePage({
 			withCredentials: true,
 		});*/
 
-		socketRef.current = io(ResolveSocketUrl(), {
+		socketRef.current = io(`${ResolveSocketUrl()}/poker`, {
       transports: ["websocket"],
       withCredentials: true,
     });
