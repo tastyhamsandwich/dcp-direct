@@ -23,10 +23,10 @@ declare global {
     seatNumber: number;
     team: TeamId;
     ready: boolean;
-    cards: Card[];
+    cards: PinochleCard[];
     tricksWon: number;
     meldScore: number;
-    meldCards: Card[];
+    meldCards: PinochleCard[];
     totalScore: number;
     passedBid: boolean;
     roundPoints: number;
@@ -83,10 +83,10 @@ declare global {
   }
   
   interface PinochleTableSeats {
-    seatOne:    Player | null;
-    seatTwo:    Player | null;
-    seatThree:  Player | null;
-    seatFour:   Player | null;
+    seatOne: PinochlePlayer | null;
+    seatTwo: PinochlePlayer | null;
+    seatThree: PinochlePlayer | null;
+    seatFour: PinochlePlayer | null;
   }
   
   type teamOne = 'seatOne' | 'seatThree';
@@ -94,13 +94,13 @@ declare global {
   
   interface PinochleGameState {
     id: string;
-    players: Player[];
-    teamOnePlayers: Player[];
-    teamTwoPlayers: Player[];
+    players: PinochlePlayer[];
+    teamOnePlayers: PinochlePlayer[];
+    teamTwoPlayers: PinochlePlayer[];
     teamOneScore: number;
     teamTwoScore: number;
     roundBid?: number;
-    roundBidTaker?: Player;
+    roundBidTaker?: PinochlePlayer;
     biddingTeam?: PinochleTeam;
     trumpSuit?: Suit;
     roundNumber?: number;
