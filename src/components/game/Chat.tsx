@@ -208,10 +208,10 @@ export const Chat = ({ socket, username, scope, gameId }: { socket: ChatSocket; 
       setChatMessages((prev) => [...prev, payload]);
     };
 
-    socket.on("chat_message", handleIncomingMessage);
+    socket.on("COM-chat_message", handleIncomingMessage);
 
     return () => {
-      socket.off("chat_message", handleIncomingMessage);
+      socket.off("COM-chat_message", handleIncomingMessage);
     };
   }, [socket]);
 
@@ -235,7 +235,7 @@ export const Chat = ({ socket, username, scope, gameId }: { socket: ChatSocket; 
       };
 
       //setChatMessages((prev) => [...prev, newMessage]);
-      socket.emit("private_message", newMessage);
+      socket.emit("COM-private_message", newMessage);
     } else {
       // Regular chat message
       let newMessage: ChatMessage;
@@ -270,7 +270,7 @@ export const Chat = ({ socket, username, scope, gameId }: { socket: ChatSocket; 
       }
 
       //setChatMessages((prev) => [...prev, newMessage]);
-      socket.emit("chat_message", newMessage);
+      socket.emit("COM-chat_message", newMessage);
     }
     setMessage("");
   };

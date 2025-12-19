@@ -78,7 +78,7 @@ const Actions: React.FC<ActionsProps> = ({
 	}, [isActive, allowedActions, gamePhase, gameCurrentBet, playerCurrentBet, minRaise, playerChips, canCheck]);
 
 	const toggleReady = () => {
-    socket.emit("player_ready", { gameId });
+    socket.emit("COM-player_ready", { gameId });
     setIsReady(!isReady);
   };
   

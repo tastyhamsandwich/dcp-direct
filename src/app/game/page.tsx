@@ -11,10 +11,28 @@ import { ResolveSocketUrl } from "@lib/socketUrl";
 export default function GameLobby() {
 	const { user, loading } = useAuth();
 	const [gamesList, setGamesList] = useState<ListEntry[]>([]);
+	const [filteredGames, setFilteredGames] = useState<ListEntry[]>([]);
+	const [gameFilter, setGameFilter] = useState<GameListFilter>("Both");
 	const [isConnected, setIsConnected] = useState(false);
 	const socketRef = useRef<Socket | null>(null);
 	const lastCreatedGameTypeRef = useRef<GameType>("Poker");
+	const gameFilterRef = useRef<GameListFilter>("Both");
 	const router = useRouter();
+
+	const filterGamesByType = (games: ListEntry[], filter: GameListFilter) => {
+		if (!games || games.length === 0) {
+			return [];
+		}
+
+		if (filter === "Both") {
+			return games;
+		}
+
+		const normalizedFilter = filter.toLowerCase();
+		return games.filter(
+			(game) => (game.gameType || "Poker").toLowerCase() === normalizedFilter
+		);
+	};
 
 	// Redirect to login if not authenticated
 	useEffect(() => {
@@ -48,14 +66,14 @@ export default function GameLobby() {
 			console.log("Connected to server");
 
 			// Register with server upon connection
-			socketInstance.emit("register", { profile: user });
+			socketInstance.emit("COM-register", { profile: user });
 		});
 
-		socketInstance.on("registration_success", (data) => {
+		socketInstance.on("COM-registration_success", (data) => {
 			console.log("Registration successful:", data);
 
 			// Request games list upon successful registration
-			socketInstance.emit("get_games_list");
+			socketInstance.emit("COM-get_games_list", { gameType: gameFilterRef.current });
 		});
 
 		socketInstance.on("disconnect", () => {
@@ -63,7 +81,7 @@ export default function GameLobby() {
 			console.log("Disconnected from server");
 		});
 
-		socketInstance.on("games_list", (games) => {
+		socketInstance.on("COM-games_list", (games) => {
 			console.log("Games list received:", games);
 			const normalizedGames: ListEntry[] = (games || []).map((game, index) => ({
 				...game,
@@ -72,9 +90,10 @@ export default function GameLobby() {
 			}));
 
 			setGamesList(normalizedGames);
+			setFilteredGames(filterGamesByType(normalizedGames, gameFilterRef.current));
 		});
 
-		socketInstance.on("game_created", ({ gameId, gameType }) => {
+		socketInstance.on("COM-game_created", ({ gameId, gameType }) => {
 			console.log("Game created, redirecting to:", gameId);
 			const typeSegment =
 				(gameType || lastCreatedGameTypeRef.current || "Poker").toLowerCase() ===
@@ -84,7 +103,7 @@ export default function GameLobby() {
 			router.push(`/game/${typeSegment}/${gameId}`);
 		});
 
-		socketInstance.on("error", (error) => {
+		socketInstance.on("COM-error", (error) => {
 			console.error("Socket error:", error.message);
 			alert(`Error: ${error.message}`);
 		});
@@ -95,6 +114,17 @@ export default function GameLobby() {
 			socketInstance.disconnect();
 		};
 	}, [user, router]);
+
+	useEffect(() => {
+		gameFilterRef.current = gameFilter;
+		setFilteredGames(filterGamesByType(gamesList, gameFilter));
+	}, [gameFilter, gamesList]);
+
+	useEffect(() => {
+		if (socketRef.current && isConnected) {
+			socketRef.current.emit("COM-get_games_list", { gameType: gameFilter });
+		}
+	}, [gameFilter, isConnected]);
 
 	const handleCreateGame = (gameData) => {
 		if (!socketRef.current || !isConnected || !user) return;
@@ -127,7 +157,9 @@ export default function GameLobby() {
 						gameVariant: gameData.gameVariant || "TexasHoldEm",
 				  };
 
-		socketRef.current?.emit("create_game", payload);
+		const eventName =
+			selectedGameType === "Pinochle" ? "PIN-create_pinochle_game" : "POK-create_poker_game";
+		socketRef.current?.emit(eventName, payload);
 	};
 
 	const handleJoinGame = (gameId: string, gameType?: GameType) => {
@@ -140,9 +172,9 @@ export default function GameLobby() {
 				: "Poker";
 		const typeSegment = resolvedGameType.toLowerCase();
 
-		/*socket.emit('get_seat_info', { gameId });
+		/*socket.emit('POK-get_seat_info', { gameId });
 
-    socketInstance.on('seat_info', (seatInfo) => {
+    socketInstance.on('POK-seat_info', (seatInfo) => {
       console.log('Seat info received:', seatInfo);
       const occupiedSeats = seatInfo.seats.map((seat, index) => ({
         seatNumber: index,
@@ -203,11 +235,13 @@ export default function GameLobby() {
         </h1>
         <div className="flex w-full">
           <Lobby
-            games={gamesList}
+            games={filteredGames}
             profile={user}
             socket={socketRef.current}
             onJoinGame={handleJoinGame}
             onCreateGame={handleCreateGame}
+            gameFilter={gameFilter}
+            onGameFilterChange={setGameFilter}
           />
           <div>
             <DraggableChat socket={socketRef.current} scope="lobby" />

@@ -8,11 +8,12 @@ import Card from "@components/game/Card";
 import DraggableChat from "@comps/game/Chat";
 import { ResolveSocketUrl } from "@lib/socketUrl";
 
+
 type AnyCard = {
-	suit?: Suit;
-	rank?: Rank | string;
-	name?: string;
-	faceUp?: boolean;
+  suit?: Suit;
+  rank?: PinochleRank | string;
+  name?: string;
+  faceUp?: boolean;
 };
 
 type TrickCard = {
@@ -21,15 +22,15 @@ type TrickCard = {
 };
 
 type PinochlePlayer = {
-	id: string;
-	username: string;
-	seatNumber?: number;
-	team?: "A" | "B";
-	ready?: boolean;
-	cards: AnyCard[];
-	tricksWon?: number;
-	meldScore?: number;
-	totalScore?: number;
+  id: string;
+  username: string;
+  seatNumber?: number;
+  team?: "A" | "B";
+  ready?: boolean;
+  cards: AnyCard[];
+  tricksWon?: number;
+  meldScore?: number;
+  totalScore?: number;
 };
 
 type PinochlePhase =
@@ -97,52 +98,139 @@ const nextBidAfter = (currentBid: number): number => {
 };
 
 function normalizeCard(
-	card: AnyCard | null | undefined
-): { suit: Suit; rank: Rank; faceUp?: boolean } | null {
-	if (!card) return null;
+  card: AnyCard | null | undefined
+): { suit: Suit; rank: PinochleRank; faceUp?: boolean } | null {
+  if (!card) return null;
 
-	if (card.suit && card.rank) {
-		return {
-			suit: card.suit,
-			rank: card.rank as Rank,
-			faceUp: card.faceUp,
-		};
-	}
+  if (card.suit && card.rank) {
+    return {
+      suit: card.suit,
+      rank: card.rank as PinochleRank,
+      faceUp: card.faceUp,
+    };
+  }
 
-	if (card.name && card.name.length >= 2) {
-		const rankCode = card.name[0];
-		const suitCode = card.name[1];
+  if (card.name && card.name.length >= 2) {
+    const rankCode = card.name[0];
+    const suitCode = card.name[1];
 
-		const suitMap: Record<string, Suit> = {
-			S: "spades",
-			H: "hearts",
-			D: "diamonds",
-			C: "clubs",
-		};
+    const suitMap: Record<string, Suit> = {
+      S: "spades",
+      H: "hearts",
+      D: "diamonds",
+      C: "clubs",
+    };
 
-		const rankMap: Record<string, Rank> = {
-			A: "ace",
-			K: "king",
-			Q: "queen",
-			J: "jack",
-			T: "ten",
-			9: "nine",
-		};
+    const rankMap: Record<string, PinochleRank> = {
+      A: "ace",
+      K: "king",
+      Q: "queen",
+      J: "jack",
+      T: "ten",
+    };
 
-		const mappedSuit = suitMap[suitCode.toUpperCase()];
-		const mappedRank = rankMap[rankCode.toUpperCase()];
+    const mappedSuit = suitMap[suitCode.toUpperCase()];
+    const mappedRank = rankMap[rankCode.toUpperCase()];
 
-		if (mappedSuit && mappedRank) {
-			return {
-				suit: mappedSuit,
-				rank: mappedRank as Rank,
-				faceUp: card.faceUp,
-			};
-		}
-	}
+    if (mappedSuit && mappedRank) {
+      return {
+        suit: mappedSuit,
+        rank: mappedRank as PinochleRank,
+        faceUp: card.faceUp,
+      };
+    }
+  }
 
-	return null;
+  return null;
 }
+
+const getPinochleRankValue = (rank?: PinochleRank | string): number => {
+  const rankMap: Record<string, number> = {
+    jack: 1,
+    queen: 2,
+    king: 3,
+    ten: 4,
+    ace: 5,
+  };
+  return rank ? rankMap[rank.toString().toLowerCase()] ?? -Infinity : -Infinity;
+};
+
+const getAllowedPlayableCards = (
+	hand: AnyCard[],
+	trick?: PinochleGameState["trick"],
+	trumpSuit?: Suit | null
+): AnyCard[] => {
+	if (!hand?.length) return [];
+	if (!trumpSuit || !trick?.cards?.length || !trick.leadSuit) return hand;
+
+	const normalizedHand = hand
+    .map((card) => ({ card, normalized: normalizeCard(card) }))
+    .filter((entry) => !!entry.normalized) as {
+    card: AnyCard;
+    normalized: { suit: Suit; rank: PinochleRank };
+  }[];
+
+	if (!normalizedHand.length) return hand;
+
+	const leadingSuit = trick.leadSuit;
+
+	const leadSuitCardsOnTable = (trick.cards || [])
+    .map((entry) => normalizeCard(entry.card))
+    .filter((card): card is { suit: Suit; rank: PinochleRank } => !!card)
+    .filter((card) => card.suit === leadingSuit);
+	const highestLeadValue =
+		leadSuitCardsOnTable.reduce(
+			(max, card) => Math.max(max, getPinochleRankValue(card.rank)),
+			-Infinity
+		) ?? -Infinity;
+
+	const trumpCardsOnTable = (trick.cards || [])
+    .map((entry) => normalizeCard(entry.card))
+    .filter((card): card is { suit: Suit; rank: PinochleRank } => !!card)
+    .filter((card) => card.suit === trumpSuit);
+	const trumpPlayed = trumpCardsOnTable.length > 0;
+	const highestTrumpValue =
+		trumpCardsOnTable.reduce(
+			(max, card) => Math.max(max, getPinochleRankValue(card.rank)),
+			-Infinity
+		) ?? -Infinity;
+
+	const playerLeadSuitCards = normalizedHand.filter(
+		(entry) => entry.normalized.suit === leadingSuit
+	);
+	const playerTrumpCards = normalizedHand.filter(
+		(entry) => entry.normalized.suit === trumpSuit
+	);
+
+	if (!trumpPlayed || leadingSuit === trumpSuit) {
+		if (playerLeadSuitCards.length > 0) {
+			const higherLeadCards = playerLeadSuitCards.filter(
+				(entry) =>
+					getPinochleRankValue(entry.normalized.rank) > highestLeadValue
+			);
+			return higherLeadCards.length > 0
+				? higherLeadCards.map((entry) => entry.card)
+				: playerLeadSuitCards.map((entry) => entry.card);
+		}
+		return hand;
+	}
+
+	if (playerLeadSuitCards.length > 0) {
+		return playerLeadSuitCards.map((entry) => entry.card);
+	}
+
+	if (playerLeadSuitCards.length === 0 && playerTrumpCards.length > 0) {
+		const winningTrumps = playerTrumpCards.filter(
+			(entry) =>
+				getPinochleRankValue(entry.normalized.rank) > highestTrumpValue
+		);
+		return winningTrumps.length > 0
+			? winningTrumps.map((entry) => entry.card)
+			: playerTrumpCards.map((entry) => entry.card);
+	}
+
+	return hand;
+};
 
 export default function PinochleGamePage({
 	params,
@@ -181,10 +269,37 @@ export default function PinochleGamePage({
 		(p) => p.id === gameState?.activePlayerId
 	)?.username;
 
-	const showTrumpSelector =
+	const awaitingTrump =
 		gameState?.phase === "bid" &&
-		!gameState.trumpSuit &&
+		gameState?.status === "awaiting_trump" &&
+		gameState?.activePlayerId === gameState?.bidLeaderId;
+
+	const showTrumpSelector =
+		awaitingTrump &&
+		!gameState?.trumpSuit &&
 		gameState?.bidLeaderId === currentPlayerId;
+
+	const availableTrumpSuits = useMemo(() => {
+		if (!myPlayer?.cards?.length) return [];
+
+		const counts: Record<Suit, { kings: number; queens: number }> = {
+			spades: { kings: 0, queens: 0 },
+			hearts: { kings: 0, queens: 0 },
+			diamonds: { kings: 0, queens: 0 },
+			clubs: { kings: 0, queens: 0 },
+		};
+
+		myPlayer.cards.forEach((card) => {
+			const normalized = normalizeCard(card);
+			if (!normalized) return;
+			if (normalized.rank === "king") counts[normalized.suit].kings += 1;
+			if (normalized.rank === "queen") counts[normalized.suit].queens += 1;
+		});
+
+		return SUITS.filter(
+			(suit) => Math.min(counts[suit].kings, counts[suit].queens) > 0
+		);
+	}, [myPlayer?.cards]);
 
 	const minNextBid = useMemo(() => {
 		const current = gameState?.roundBid ?? 49;
@@ -229,13 +344,13 @@ export default function PinochleGamePage({
 		socket.on("connect", () => {
 			setIsConnected(true);
 
-			socket.emit("register", { profile: user });
-			socket.emit("join_game", {
+			socket.emit("COM-register", { profile: user });
+			socket.emit("COM-join_game", {
 				gameId,
 				user,
 				gameType: "Pinochle",
 			});
-			socket.emit("pinochle_join", {
+			socket.emit("PIN-pinochle_join", {
 				gameId,
 				user,
 			});
@@ -246,18 +361,18 @@ export default function PinochleGamePage({
 		});
 
 		// Core state updates
-		socket.on("pinochle_state", handleStateUpdate);
-		socket.on("pinochle_update", handleStateUpdate);
-		socket.on("pinochle_hand_dealt", handleStateUpdate);
-		socket.on("pinochle_round_end", handleStateUpdate);
-		socket.on("pinochle_game_end", handleStateUpdate);
+		socket.on("PIN-pinochle_state", handleStateUpdate);
+		socket.on("PIN-pinochle_update", handleStateUpdate);
+		socket.on("PIN-pinochle_hand_dealt", handleStateUpdate);
+		socket.on("PIN-pinochle_round_end", handleStateUpdate);
+		socket.on("PIN-pinochle_game_end", handleStateUpdate);
 
 		// Fallback to generic game events in case the server reuses them
-		socket.on("game_state", handleStateUpdate);
-		socket.on("game_update", handleStateUpdate);
+		socket.on("POK-game_state", handleStateUpdate);
+		socket.on("POK-game_update", handleStateUpdate);
 
 		// Bidding / trick detail updates
-		socket.on("pinochle_bid_update", (data) => {
+		socket.on("PIN-pinochle_bid_update", (data) => {
 			setGameState((prev) =>
 				prev
 					? {
@@ -271,7 +386,7 @@ export default function PinochleGamePage({
 			);
 		});
 
-		socket.on("pinochle_trick_update", (data) => {
+		socket.on("PIN-pinochle_trick_update", (data) => {
 			setGameState((prev) =>
 				prev
 					? {
@@ -283,11 +398,11 @@ export default function PinochleGamePage({
 			);
 		});
 
-		socket.on("player_left", handleStateUpdate);
-		socket.on("player_joined", handleStateUpdate);
-		socket.on("player_ready_changed", handleStateUpdate);
+		socket.on("POK-player_left", handleStateUpdate);
+		socket.on("POK-player_joined", handleStateUpdate);
+		socket.on("POK-player_ready_changed", handleStateUpdate);
 
-		socket.on("error", (error) => {
+		socket.on("COM-error", (error) => {
 			console.error("Socket error:", error.message);
 		});
 
@@ -307,7 +422,7 @@ export default function PinochleGamePage({
 
 	const handleDeal = () => {
 		if (!isDealer) return;
-		emitWithGameId("pinochle_deal");
+		emitWithGameId("PIN-pinochle_deal");
 	};
 
 	const handleBid = () => {
@@ -315,28 +430,38 @@ export default function PinochleGamePage({
 		const normalizedBid = normalizeBidValue(bidAmount);
 		const finalBid = Math.max(normalizedBid, minNextBid);
 		setBidAmount(finalBid);
-		emitWithGameId("pinochle_bid", { amount: finalBid });
+		emitWithGameId("PIN-pinochle_bid", { amount: finalBid });
 	};
 
 	const handlePassBid = () => {
 		if (!canBid) return;
-		emitWithGameId("pinochle_bid_pass");
+		emitWithGameId("PIN-pinochle_bid_pass");
 	};
 
 	const handleSetTrump = (suit: Suit) => {
 		if (!showTrumpSelector) return;
-		emitWithGameId("pinochle_set_trump", { trump: suit });
+		emitWithGameId("PIN-pinochle_set_trump", { trump: suit });
 	};
 
 	const handlePlayCard = () => {
 		if (!canPlayCard || selectedCardIndex === null || !myPlayer) return;
 		const card = myPlayer.cards[selectedCardIndex];
-		emitWithGameId("pinochle_play_card", { card });
+		const allowed = getAllowedPlayableCards(
+			myPlayer.cards,
+			gameState?.trick,
+			gameState?.trumpSuit
+		);
+		const allowedSet = new Set(allowed);
+		if (!allowedSet.has(card)) {
+			return;
+		}
+
+		emitWithGameId("PIN-pinochle_play_card", { card });
 		setSelectedCardIndex(null);
 	};
 
 	const handleToggleReady = () => {
-		emitWithGameId("player_ready");
+		emitWithGameId("COM-player_ready");
 	};
 
 	const handleBidInputChange = (value: number) => {
@@ -344,6 +469,20 @@ export default function PinochleGamePage({
 		const safeValue = Math.max(normalized, minNextBid);
 		setBidAmount(safeValue);
 	};
+
+	const allowedPlayableCards = useMemo(
+		() =>
+			getAllowedPlayableCards(
+				myPlayer?.cards || [],
+				gameState?.trick,
+				gameState?.trumpSuit
+			),
+		[myPlayer?.cards, gameState?.trick, gameState?.trumpSuit]
+	);
+	const allowedCardSet = useMemo(
+		() => new Set(allowedPlayableCards),
+		[allowedPlayableCards]
+	);
 
 	if (loading) {
 		return <div className="text-center p-10 text-gray-200">Loading...</div>;
@@ -450,15 +589,21 @@ export default function PinochleGamePage({
 							{showTrumpSelector && (
 								<div className="flex items-center gap-2">
 									<span className="text-sm text-gray-300">Set Trump:</span>
-									{SUITS.map((suit) => (
-										<button
-											key={suit}
-											onClick={() => handleSetTrump(suit)}
-											className="px-3 py-1 bg-purple-700 hover:bg-purple-800 text-white rounded text-sm"
-										>
-											{suit}
-										</button>
-									))}
+									{availableTrumpSuits.length ? (
+										availableTrumpSuits.map((suit) => (
+											<button
+												key={suit}
+												onClick={() => handleSetTrump(suit)}
+												className="px-3 py-1 bg-purple-700 hover:bg-purple-800 text-white rounded text-sm"
+											>
+												{suit}
+											</button>
+										))
+									) : (
+										<span className="text-xs text-red-300">
+											No valid trump suits (need a king and queen).
+										</span>
+									)}
 								</div>
 							)}
 
@@ -590,25 +735,34 @@ export default function PinochleGamePage({
 						<h2 className="text-lg font-semibold text-gray-100 mb-3">
 							Your Hand
 						</h2>
-						{myPlayer?.cards?.length ? (
-							<div className="flex flex-wrap gap-3">
-								{myPlayer.cards.map((card, idx) => {
-									const normalized = normalizeCard(card);
-									return (
-										<button
-											key={`${card.name || `${card.suit}-${idx}`}`}
-											onClick={() => setSelectedCardIndex(idx)}
-											className={`p-1 rounded border ${
-												selectedCardIndex === idx
-													? "border-blue-500 bg-gray-700"
-													: "border-transparent"
-											}`}
-											disabled={!canPlayCard && gameState?.phase !== "playing"}
-										>
-											{normalized ? (
-												<Card
-													scaleFactor={1}
-													rank={normalized.rank}
+								{myPlayer?.cards?.length ? (
+									<div className="flex flex-wrap gap-3">
+										{myPlayer.cards.map((card, idx) => {
+											const normalized = normalizeCard(card);
+											const isAllowed =
+												!canPlayCard || allowedCardSet.has(card);
+											return (
+												<button
+													key={`${card.name || `${card.suit}-${idx}`}`}
+													onClick={() => setSelectedCardIndex(idx)}
+													className={`p-1 rounded border ${
+														selectedCardIndex === idx
+															? "border-blue-500 bg-gray-700"
+															: "border-transparent"
+													} ${
+														canPlayCard && !isAllowed
+															? "opacity-50 cursor-not-allowed"
+															: ""
+													}`}
+													disabled={
+														(!canPlayCard && gameState?.phase !== "playing") ||
+														(canPlayCard && !isAllowed)
+													}
+												>
+													{normalized ? (
+														<Card
+															scaleFactor={1}
+															rank={normalized.rank}
 													suit={normalized.suit}
 													faceDown={false}
 												/>
