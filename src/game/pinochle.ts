@@ -2,28 +2,308 @@ import { Player, Deck, Card } from './classes';
 import { Server } from 'socket.io'; 
 
 
-class PinochlePlayer implements User {
-    id: string;
-    username: string;
-    chips: number;
-    active: boolean;
-    bidTaker: boolean;
+export class PinochlePlayer implements User {
+  id: string;
+  username: string;
+  chips: number;
+  active: boolean;
+  bidTaker: boolean;
+  cards: PinochleCard[];
+}
+
+export class PinochleCard implements Stringable {
+  suit: Suit;
+  rank: PinochleRank;
+  rankValue: PinochleRankValue;
+  idNum: number;
+  name: PinochleCardName;
+  faceUp: boolean;
+
+  /**
+   * Creates a new Card instance.
+   * @param rank - The first argument, can be a Rank or RankValue type
+   * @param suit - The second argument, must be Suit type
+   * @param faceUp - The third argument, defaults to 'false' if omitted, determines if card is shown or not.
+   * @throws {Error} If the arguments are invalid.
+   */
+  constructor(rank: PinochleRank, suit: Suit, idNum: number, faceUp = false) {
+    this.suit = suit;
+    this.idNum = idNum;
+    this.rank = rank;
+    this.rankValue = this.getValue();
+    this.name = this.getNameFromRankAndSuit(rank as PinochleRank, suit, idNum!);
+    this.faceUp = faceUp;
   }
 
-/**  Represents a deck of cards.
+  getRankAndSuitFromName(name: PinochleCardName): [PinochleRank, Suit] {
+    const rankChar = name.charAt(0);
+    const suitChar = name.charAt(1);
+    let rank: PinochleRank;
+    let suit: Suit;
+
+    switch (rankChar) {
+      case "A":
+        rank = "ace";
+        break;
+      case "T":
+        rank = "ten";
+        break;
+      case "J":
+        rank = "jack";
+        break;
+      case "Q":
+        rank = "queen";
+        break;
+      case "K":
+        rank = "king";
+        break;
+      default:
+        throw new Error(`Invalid rank name: ${rankChar}`);
+    }
+
+    switch (suitChar) {
+      case "H":
+        suit = "hearts";
+        break;
+      case "D":
+        suit = "diamonds";
+        break;
+      case "C":
+        suit = "clubs";
+        break;
+      case "S":
+        suit = "spades";
+        break;
+      default:
+        throw new Error(`Invalid suit name: ${suitChar}`);
+    }
+
+    return [rank as PinochleRank, suit as Suit];
+  }
+  /**
+   * Gets the CardName from the rank and suit.
+   * @param rank - The rank of the card.
+   * @param suit - The suit of the card.
+   * @returns The CardName.
+   */
+  private getNameFromRankAndSuit(
+    rank: PinochleRank,
+    suit: Suit,
+    id: number
+  ): PinochleCardName {
+    const rankInitial = this.rankToInitial(rank);
+    const suitInitial = this.suitToInitial(suit);
+    return `${rankInitial}${suitInitial}${id}` as PinochleCardName;
+  }
+
+  /**
+   * Converts a rank to its initial.
+   * @param rank - The rank to convert.
+   * @returns The initial of the rank.
+   */
+  private rankToInitial(rank: PinochleRank): string {
+    const rankMap: { [key in PinochleRank]: string } = {
+      ace: "A",
+      ten: "T",
+      jack: "J",
+      queen: "Q",
+      king: "K",
+    };
+    if (rank in rankMap) {
+      return rankMap[rank];
+    }
+    throw new Error(`Invalid rank: ${rank}`);
+  }
+
+  /**
+   * Converts a suit to its initial.
+   * @param suit - The suit to convert.
+   * @returns The initial of the suit.
+   */
+  private suitToInitial(suit: Suit): string {
+    switch (suit) {
+      case "hearts":
+        return "H";
+      case "diamonds":
+        return "D";
+      case "clubs":
+        return "C";
+      case "spades":
+        return "S";
+      default:
+        throw new Error(`Invalid suit: ${suit}`);
+    }
+  }
+
+  /**
+   * Gets the suit from its name.
+   * @param name - The name of the suit.
+   * @returns The suit.
+   */
+  suitFromName(name: string): Suit {
+    switch (name) {
+      case "H":
+        return "hearts";
+      case "D":
+        return "diamonds";
+      case "C":
+        return "clubs";
+      case "S":
+        return "spades";
+      default:
+        throw new Error(`Invalid suit name: ${name}`);
+    }
+  }
+
+  /**
+   * Gets the rank from its name.
+   * @param name - The name of the rank.
+   * @returns The rank.
+   */
+  rankFromName(name: string): PinochleRank {
+    switch (name) {
+      case "A":
+        return "ace";
+      case "T":
+        return "ten";
+      case "J":
+        return "jack";
+      case "Q":
+        return "queen";
+      case "K":
+        return "king";
+      default:
+        throw new Error(`Invalid rank name: ${name}`);
+    }
+  }
+
+  /**
+   * Gets the value of the card.
+   * @returns The value of the card.
+   */
+  getValue(): PinochleRankValue {
+    return this.rankToValue(this.rank);
+  }
+
+  /**
+   * Converts a rank to its value.
+   * @param rank - The rank to convert.
+   * @returns The value of the rank.
+   */
+  rankToValue(rank: PinochleRank): PinochleRankValue {
+    switch (rank) {
+      case "jack":
+        return 1;
+      case "queen":
+        return 2;
+      case "king":
+        return 3;
+      case "ten":
+        return 4;
+      case "ace":
+        return 5;
+      default:
+        throw new Error(`Invalid rank value: ${rank}`);
+    }
+  }
+
+  suitValue(): number {
+    switch (this.suit) {
+      case "hearts":
+        return 1;
+      case "diamonds":
+        return 2;
+      case "clubs":
+        return 3;
+      case "spades":
+        return 4;
+      default:
+        throw new Error(`Invalid suit value: ${this.suit}`);
+    }
+  }
+
+  /**
+   * Converts a value to its rank.
+   * @param value - The value to convert.
+   * @returns The rank corresponding to the value.
+   */
+  rankFromValue(value: PinochleRankValue): PinochleRank {
+    switch (value) {
+      case 1:
+        return "jack";
+      case 2:
+        return "queen";
+      case 3:
+        return "king";
+      case 4:
+        return "ten";
+      case 5:
+        return "ace";
+      default:
+        throw new Error(`Invalid rank value: ${value}`);
+    }
+  }
+
+  /**
+   * Prints the full name of the card.
+   * @returns The full name of the card.
+   */
+  printFullName(): string {
+    const capRank = this.rank.charAt(0).toUpperCase() + this.rank.slice(1);
+    const capSuit = this.suit.charAt(0).toUpperCase() + this.suit.slice(1);
+    return `${capRank} of ${capSuit}`;
+  }
+
+  private getRandomSuit() {
+    const rand = Math.floor(Math.random() * 4);
+
+    switch (rand) {
+      case 0:
+        return "hearts";
+      case 1:
+        return "diamonds";
+      case 2:
+        return "clubs";
+      case 3:
+        return "spades";
+      default:
+        throw new Error(`Invalid random suit value: ${rand}`);
+    }
+  }
+
+  private getRandomRank() {
+    const rand = Math.floor(Math.random() * 13);
+
+    switch (rand) {
+      case 1:
+        return "jack";
+      case 2:
+        return "queen";
+      case 3:
+        return "king";
+      case 4:
+        return "ten";
+      case 5:
+        return "ace";
+      default:
+        throw new Error(`Invalid random rank alue: ${rand}`);
+    }
+  }
+}
+
+/**  Represents a deck of Pinohcle cards.
  * @class
  * @param autoShuffle - Whether to shuffle the deck automatically.
  */
 export class PinochleDeck {
-
-  cards: Card[];
+  cards: PinochleCard[];
 
   constructor(autoShuffle: boolean = false) {
     // Construct new deck, and shuffle if shuffle flag is set true
     if (autoShuffle === true) {
       this.cards = this.generateDeck();
       this.shuffle();
-    // If no shuffle flag is set, just generate new deck in order
+      // If no shuffle flag is set, just generate new deck in order
     } else {
       this.cards = this.generateDeck();
     }
@@ -33,30 +313,33 @@ export class PinochleDeck {
   [Symbol.iterator]() {
     let index = 0;
     let cards = this.cards;
-    
+
     return {
-      next: function() {
+      next: function () {
         return {
           value: cards[index++],
-          done: index > cards.length
+          done: index > cards.length,
         };
-      }
+      },
     };
   }
 
+  private generateDeck(): PinochleCard[] {
+    const suits: Suit[] = ["hearts", "diamonds", "clubs", "spades"];
+    const ranks: PinochleRank[] = ["ace", "ten", "king", "queen", "jack"];
+    const idNum: number[] = [1, 2, 3, 4];
 
-  private generateDeck(): Card[] {
-    const suits: Suit[] = ['hearts', 'diamonds', 'clubs', 'spades'];
-    const ranks: Rank[] = ['ace', 'ten', 'king', 'queen', 'jack'];
-
-    let cardArray: Card[] = [];
+    let cardArray: PinochleCard[] = [];
 
     // Generate deck contents in order, so that the deck is always the same
-    for (const suit of suits) {               // for every suit
-      for (const rank of ranks) {             // and for every rank
-        for (let i = 0; i < 4; i++) {         // four times each
-          const card = new Card(rank, suit);  // create that card
-          cardArray.push(card);               // and add it to the array
+    for (const suit of suits) {
+      // for every suit
+      for (const rank of ranks) {
+        // and for every rank
+        for (const id of idNum) {
+          // four times each
+          const card = new PinochleCard(rank, suit, id); // create that card
+          cardArray.push(card); // and add it to the array
         }
       }
     }
@@ -77,9 +360,8 @@ export class PinochleDeck {
     return;
   }
 
-  draw(): Card {
-    if (this.cards.length < 1)
-    throw new Error('Not enough cards to draw.');
+  draw(): PinochleCard {
+    if (this.cards.length < 1) throw new Error("Not enough cards to draw.");
     else return this.cards.pop()!;
   }
 }
@@ -87,21 +369,21 @@ export class PinochleDeck {
 export class Pinochle {
   id: string;
   name: string;
-  creator: Player;
+  creator: PinochlePlayer;
   wagerPerRound: number;
   hasStarted: boolean;
-  players: Player[];
+  players: PinochlePlayer[];
   roomStatus: PinochleRoomStatus;
   seatAssignments: PinochleTableSeats;
-  teamOnePlayers: Player[];
-  teamTwoPlayers: Player[];
+  teamOnePlayers: PinochlePlayer[];
+  teamTwoPlayers: PinochlePlayer[];
   trumpSuit: Suit;
   teamOneMeld: number;
   teamTwoMeld: number;
   teamOneScore: number;
   teamTwoScore: number;
   bidAmount: number;
-  bidTaker: Player;
+  bidTaker: PinochlePlayer;
   biddingTeam: PinochleTeam;
   phase: PinochleGamePhase;
   socket: Server;
@@ -115,7 +397,12 @@ export class Pinochle {
   roundCount: number;
   //stats: CompositeStatsObject;
 
-  constructor(id: string, name: string, creator: Player, wagerPerRound: number) {
+  constructor(
+    id: string,
+    name: string,
+    creator: PinochlePlayer,
+    wagerPerRound: number
+  ) {
     this.id = id;
     this.name = name;
     this.creator = creator;
@@ -132,14 +419,12 @@ export class Pinochle {
       seatOne: creator,
       seatTwo: null,
       seatThree: null,
-      seatFour: null
-    }
+      seatFour: null,
+    };
   }
 
   private dealCards(): void {
-
-    if (this.deck.cards.length !== 80)
-      this.deck = new PinochleDeck();
+    if (this.deck.cards.length !== 80) this.deck = new PinochleDeck();
 
     this.deck.shuffle();
 
@@ -148,22 +433,62 @@ export class Pinochle {
         let currentPosition = (this.dealerIndex + 1) % this.players.length;
         const playerIndex = (currentPosition + p) % this.players.length;
         const player = this.players[playerIndex];
-        let dealFiveArray: Card[] = [];
-        for (let i = 0; i < 5; i++) { // Pinochle hands are dealt in groups of 5, four passes around, for 20 cards each
+        let dealFiveArray: PinochleCard[] = [];
+        for (let i = 0; i < 5; i++) {
+          // Pinochle hands are dealt in groups of 5, four passes around, for 20 cards each
           const card = this.deck.draw();
           card.faceUp = false; // Ensure default is face down
           dealFiveArray.push(card);
         }
-        dealFiveArray.forEach(card => player.cards.push(card));
+        dealFiveArray.forEach((card) => player.cards.push(card));
       }
+    }
+
+    for (const player of this.players) {
+      player.cards = this.sortHand(player.cards);
     }
     //console.log(`Dealt ${card.faceUp ? 'face up ' : ''}${card.name} to player '${player.username}'`);
   }
 
-  private countMeld(hand: Card[], trumpSuit: Suit): MeldCount {
+  private sortHand(hand: PinochleCard[]): PinochleCard[] {
+    const spadeCards = hand.filter((card) => card.suit === "spades");
+    const clubCards = hand.filter((card) => card.suit === "clubs");
+    const heartCards = hand.filter((card) => card.suit === "hearts");
+    const diamondCards = hand.filter((card) => card.suit === "diamonds");
+
+    spadeCards.sort((a, b) => b.rankValue - a.rankValue);
+    clubCards.sort((a, b) => b.rankValue - a.rankValue);
+    heartCards.sort((a, b) => b.rankValue - a.rankValue);
+    diamondCards.sort((a, b) => b.rankValue - a.rankValue);
+
+    if (spadeCards.length === 0) {
+      const twoSuits = heartCards.concat(clubCards);
+      const threeSuits = twoSuits.concat(diamondCards);
+      return threeSuits;
+    } else if (clubCards.length === 0) {
+      const twoSuits = heartCards.concat(spadeCards);
+      const threeSuits = twoSuits.concat(diamondCards);
+      return threeSuits;
+    } else if (heartCards.length === 0) {
+      const twoSuits = spadeCards.concat(diamondCards);
+      const threeSuits = twoSuits.concat(clubCards);
+      return threeSuits;
+    } else if (diamondCards.length === 0) {
+      const twoSuits = spadeCards.concat(heartCards);
+      const threeSuits = twoSuits.concat(clubCards);
+      return threeSuits;
+    }
+
+    const twoSuits = spadeCards.concat(heartCards);
+    const threeSuits = twoSuits.concat(clubCards);
+    const allSuits = threeSuits.concat(diamondCards);
+    return allSuits;
+  }
+
+  private countMeld(hand: PinochleCard[], trumpSuit: Suit): MeldCount {
     let totalMeld = 0;
 
-    const acesAround = (hand: Card[]): number => {
+    const acesAround = (hand: PinochleCard[]): number => {
       const spadesCards = hand.filter((card) => card.suit === "spades");
       const clubsCards = hand.filter((card) => card.suit === "clubs");
       const heartsCards = hand.filter((card) => card.suit === "hearts");
@@ -213,7 +538,7 @@ export class Pinochle {
       return 0;
     };
 
-    const kingsAround = (hand: Card[]): number => {
+    const kingsAround = (hand: PinochleCard[]): number => {
       const spadesCards = hand.filter((card) => card.suit === "spades");
       const clubsCards = hand.filter((card) => card.suit === "clubs");
       const heartsCards = hand.filter((card) => card.suit === "hearts");
@@ -263,7 +588,7 @@ export class Pinochle {
       return 0;
     };
 
-    const queensAround = (hand: Card[]): number => {
+    const queensAround = (hand: PinochleCard[]): number => {
       const spadesCards = hand.filter((card) => card.suit === "spades");
       const clubsCards = hand.filter((card) => card.suit === "clubs");
       const heartsCards = hand.filter((card) => card.suit === "hearts");
@@ -313,7 +638,7 @@ export class Pinochle {
       return 0;
     };
 
-    const jacksAround = (hand: Card[]): number => {
+    const jacksAround = (hand: PinochleCard[]): number => {
       const spadesCards = hand.filter((card) => card.suit === "spades");
       const clubsCards = hand.filter((card) => card.suit === "clubs");
       const heartsCards = hand.filter((card) => card.suit === "hearts");
@@ -363,7 +688,7 @@ export class Pinochle {
       return 0;
     };
 
-    const pinochles = (hand: Card[]): number => {
+    const pinochles = (hand: PinochleCard[]): number => {
       const queenSpades = hand.filter(
         (card) => card.suit === "spades" && card.rank === "queen"
       ).length;
@@ -378,7 +703,7 @@ export class Pinochle {
       return 0;
     };
 
-    const trumpRun = (hand: Card[], trumpSuit: Suit): number => {
+    const trumpRun = (hand: PinochleCard[], trumpSuit: Suit): number => {
       const numAces = hand.filter(
         (card) => card.suit === trumpSuit && card.rank === "ace"
       ).length;
@@ -430,7 +755,7 @@ export class Pinochle {
       return 0;
     };
 
-    const marriages = (hand: Card[]): { [Suit: string]: number } => {
+    const marriages = (hand: PinochleCard[]): { [Suit: string]: number } => {
       const spadesCards = hand.filter((card) => card.suit === "spades");
       const clubsCards = hand.filter((card) => card.suit === "clubs");
       const heartsCards = hand.filter((card) => card.suit === "hearts");
@@ -632,27 +957,30 @@ export class Pinochle {
   }
 
   // Returns the unique set of cards that contribute to any meld scored in the hand.
-  private determineMeldCards(hand: Card[], trumpSuit: Suit): Card[] {
+  private determineMeldCards(
+    hand: PinochleCard[],
+    trumpSuit: Suit
+  ): PinochleCard[] {
     const suits: Suit[] = ["spades", "clubs", "hearts", "diamonds"];
-    const highlight = new Set<Card>();
+    const highlight = new Set<PinochleCard>();
 
-    const cardsBySuit: Record<Suit, Card[]> = {
+    const cardsBySuit: Record<Suit, PinochleCard[]> = {
       spades: hand.filter((card) => card.suit === "spades"),
       clubs: hand.filter((card) => card.suit === "clubs"),
       hearts: hand.filter((card) => card.suit === "hearts"),
       diamonds: hand.filter((card) => card.suit === "diamonds"),
     };
 
-    const bySuitAndRank = (suit: Suit, rank: Rank): Card[] =>
+    const bySuitAndRank = (suit: Suit, rank: PinochleRank): PinochleCard[] =>
       cardsBySuit[suit].filter((card) => card.rank === rank);
 
-    const addFirstN = (cards: Card[], n: number) => {
+    const addFirstN = (cards: PinochleCard[], n: number) => {
       for (let i = 0; i < Math.min(n, cards.length); i++) {
         highlight.add(cards[i]);
       }
     };
 
-    const addAround = (rank: Rank) => {
+    const addAround = (rank: PinochleRank) => {
       const perSuit = suits.map((suit) => bySuitAndRank(suit, rank));
       const sets = Math.min(...perSuit.map((arr) => arr.length));
       for (let i = 0; i < sets; i++) {
@@ -676,7 +1004,7 @@ export class Pinochle {
     }
 
     // Trump run(s): A,10,K,Q,J of trump
-    const runRanks: Rank[] = ["ace", "ten", "king", "queen", "jack"];
+    const runRanks: PinochleRank[] = ["ace", "ten", "king", "queen", "jack"];
     const trumpRankCards = runRanks.map((rank) =>
       bySuitAndRank(trumpSuit, rank)
     );
@@ -700,19 +1028,16 @@ export class Pinochle {
   }
 
   private determinePlayableCards(
-    playerHand: Card[],
-    leadingCards: Card[]
-  ): Card[] {
+    playerHand: PinochleCard[],
+    leadingCards: PinochleCard[]
+  ): PinochleCard[] {
     if (leadingCards.length === 0) return playerHand;
 
     const leadingSuit = leadingCards[0].suit;
     const trumpSuit = this.trumpSuit;
 
-    const getHighestValue = (cards: Card[]): number =>
-      cards.reduce(
-        (max, card) => Math.max(max, card.getPinochleValue()),
-        -Infinity
-      );
+    const getHighestValue = (cards: PinochleCard[]): number =>
+      cards.reduce((max, card) => Math.max(max, card.getValue()), -Infinity);
 
     const leadSuitCardsOnTable = leadingCards.filter(
       (card) => card.suit === leadingSuit
@@ -736,11 +1061,14 @@ export class Pinochle {
     if (!trumpPlayed || leadingSuit === trumpSuit) {
       if (playerLeadSuitCards.length > 0) {
         const higherLeadCards = playerLeadSuitCards.filter(
-          (card) => card.getPinochleValue() > highestLeadValue
+          (card) => card.getValue() > highestLeadValue
         );
         return higherLeadCards.length > 0
           ? higherLeadCards
           : playerLeadSuitCards;
+      }
+      if (playerTrumpCards.length > 0) {
+        return playerTrumpCards;
       }
       return playerHand;
     }
@@ -753,7 +1081,7 @@ export class Pinochle {
     // No lead suit; must beat the trump if possible, otherwise any trump, otherwise anything.
     if (playerTrumpCards.length > 0) {
       const winningTrumps = playerTrumpCards.filter(
-        (card) => card.getPinochleValue() > highestTrumpValue
+        (card) => card.getValue() > highestTrumpValue
       );
       return winningTrumps.length > 0 ? winningTrumps : playerTrumpCards;
     }
@@ -772,7 +1100,7 @@ export class Pinochle {
       this.players[this.dealerIndex + (3 % this.players.length)];
     const fourthBidder =
       this.players[this.dealerIndex + (4 % this.players.length)];
-    const biddingPlayers: Player[] = [
+    const biddingPlayers: PinochlePlayer[] = [
       firstBidder,
       secondBidder,
       thirdBidder,
