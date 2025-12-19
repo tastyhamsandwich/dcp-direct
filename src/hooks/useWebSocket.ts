@@ -17,7 +17,7 @@ export function useWebSocket(url: string) {
     });
     
     // Listen for errors
-    socket.on('error', (error) => {
+    socket.on('COM-error', (error) => {
       console.error('Socket.io Error: ', error);
     });
     

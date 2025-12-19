@@ -1,4 +1,4 @@
-export interface GridCell {
+/* export interface GridCell {
   type: 'card' | 'empty';
   cardCount: number;
   phase: string | null;
@@ -38,19 +38,16 @@ export interface PlayableGroup {
 export interface GameVariant {
   name: string;
   description?: string;
-  
   pocketCards: {
     count: number;
     mustUse: number;
   };
-  
   allowDiscards: boolean;
   wildCards: string[];
-  
   communityCards: {
     enabled: boolean;
     grid: GridCell[][];
     dealPhases: DealPhase[];
     handFormation: HandFormationRules;
   };
-}
+} */

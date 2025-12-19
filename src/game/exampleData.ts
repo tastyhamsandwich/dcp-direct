@@ -1,4 +1,4 @@
-interface GameVariant {
+interface GameVariantSettings {
   // Basic game parameters
   name: string;
   description?: string;

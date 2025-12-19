@@ -33,24 +33,24 @@ interface ExtendedWebSocket {
   close: (code?: number, reason?: string) => void;
 }
 
-type WSMessageType = 'error' | 'join_game' | 'player_action' | 'start_round' | 'chat_message' | 'get_games_list' | 'create_game' | 'games_list' | 'game_created' | 'game_update' | 'set_round_variant';
+type WSMessageType = 'COM-error' | 'COM-join_game' | 'POK-player_action' | 'start_round' | 'COM-chat_message' | 'COM-get_games_list' | 'COM-create_game' | 'COM-games_list' | 'COM-game_created' | 'POK-game_update' | 'set_round_variant';
 
 type WSMessage = WSError | WSJoinGame | WSPlayerAction | WSStartRound | WSChatMessage | WSGetGamesList | WSGamesList | WSCreateGame | WSGameCreated | WSGameUpdate | WSSetRoundVariant;
 
 interface WSError {
-  type: 'error';
+  type: 'COM-error';
   message: string;
 }
 
 interface WSJoinGame {
-  type: 'join_game'
+  type: 'COM-join_game'
   userId: string;
   username: string;
   gameId: string;
 }
 
 interface WSPlayerAction {
-  type: 'player_action';
+  type: 'POK-player_action';
   gameId: string;
   userId: string;
   action: {
@@ -64,7 +64,7 @@ interface WSStartRound {
 }
 
 interface WSChatMessage {
-  type: 'chat_message'
+  type: 'COM-chat_message'
   userId: string;
   username: string;
   gameId: string;
@@ -72,28 +72,28 @@ interface WSChatMessage {
 }
 
 interface WSGetGamesList {
-  type: 'get_games_list';
+  type: 'COM-get_games_list';
   userId: string;
 }
 
 interface WSGamesList {
-  type: 'games_list';
+  type: 'COM-games_list';
   games: GameList;
 }
 
 interface WSCreateGame {
-  type: 'create_game';
+  type: 'COM-create_game';
   userId: string;
   settings: Record<string, any>;
 }
 
 interface WSGameCreated {
-  type: 'game_created';
+  type: 'COM-game_created';
   gameId: string;
 }
 
 interface WSGameUpdate {
-  type: 'game_update';
+  type: 'POK-game_update';
   gameId: string;
   state: GameState;
 }
