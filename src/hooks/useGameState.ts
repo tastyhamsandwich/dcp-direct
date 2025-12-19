@@ -1,6 +1,5 @@
 import { useReducer, useEffect } from 'react';
 import { Sidepot, Deck, Card, Player } from '@game/classes';
-import type { TGamePhase, TableSeat, Action as PlayerAction } from '@/types/game';
 import { Socket } from 'socket.io-client';
 
 type GameState = {
@@ -36,7 +35,7 @@ type GameAction =
   | { type: 'JOIN_GAME'; payload: Player }
   | { type: 'LEAVE_GAME'; payload: string }
   | { type: 'START_GAME' }
-  | { type: 'PLAYER_ACTION'; payload: PlayerAction }
+  | { type: 'PLAYER_ACTION'; payload: Action }
   | { type: 'UPDATE_GAME_STATE'; payload: Partial<GameState> };
 
 const gameReducer = (state: GameState, action: GameAction): GameState => {
