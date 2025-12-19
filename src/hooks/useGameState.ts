@@ -1,6 +1,5 @@
 import { useReducer, useEffect } from 'react';
 import { Sidepot, Deck, Card, Player } from '@game/classes';
-import type { TGamePhase, TableSeat, Action as PlayerAction } from '@/types/game';
 import { Socket } from 'socket.io-client';
 
 type GameState = {
@@ -36,7 +35,7 @@ type GameAction =
   | { type: 'JOIN_GAME'; payload: Player }
   | { type: 'LEAVE_GAME'; payload: string }
   | { type: 'START_GAME' }
-  | { type: 'PLAYER_ACTION'; payload: PlayerAction }
+  | { type: 'PLAYER_ACTION'; payload: Action }
   | { type: 'UPDATE_GAME_STATE'; payload: Partial<GameState> };
 
 const gameReducer = (state: GameState, action: GameAction): GameState => {
@@ -77,11 +76,11 @@ export const useGameState = (socket: Socket | null, initialState: GameState) => 
       dispatch({ type: 'UPDATE_GAME_STATE', payload: newState });
     });
 
-    socket.on('player_joined', (player: Player) => {
+    socket.on('POK-player_joined', (player: Player) => {
       dispatch({ type: 'JOIN_GAME', payload: player });
     });
 
-    socket.on('player_left', (playerId: string) => {
+    socket.on('POK-player_left', (playerId: string) => {
       dispatch({ type: 'LEAVE_GAME', payload: playerId });
     });
 
@@ -91,8 +90,8 @@ export const useGameState = (socket: Socket | null, initialState: GameState) => 
 
     return () => {
       socket.off('game_state_update');
-      socket.off('player_joined');
-      socket.off('player_left');
+      socket.off('POK-player_joined');
+      socket.off('POK-player_left');
       socket.off('game_started');
     };
   }, [socket]);

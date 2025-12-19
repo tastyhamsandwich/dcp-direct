@@ -1,0 +1,85 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"workbench.colorCustomizations": {
+			"activityBar.activeBackground": "#b300b3",
+			"activityBar.background": "#b300b3",
+			"activityBar.foreground": "#e7e7e7",
+			"activityBar.inactiveForeground": "#e7e7e799",
+			"activityBarBadge.background": "#9f9f00",
+			"activityBarBadge.foreground": "#15202b",
+			"commandCenter.border": "#e7e7e799",
+			"editorGroup.border": "#b300b3",
+			"panel.border": "#b300b3",
+			"sash.hoverBorder": "#b300b3",
+			"sideBar.border": "#b300b3",
+			"statusBar.background": "#800080",
+			"statusBar.border": "#800080",
+			"statusBar.debuggingBackground": "#008000",
+			"statusBar.debuggingBorder": "#008000",
+			"statusBar.debuggingForeground": "#e7e7e7",
+			"statusBar.foreground": "#e7e7e7",
+			"statusBarItem.hoverBackground": "#b300b3",
+			"statusBarItem.remoteBackground": "#800080",
+			"statusBarItem.remoteForeground": "#e7e7e7",
+			"tab.activeBorder": "#b300b3",
+			"titleBar.activeBackground": "#800080",
+			"titleBar.activeForeground": "#e7e7e7",
+			"titleBar.border": "#800080",
+			"titleBar.inactiveBackground": "#80008099",
+			"titleBar.inactiveForeground": "#e7e7e799"
+		},
+		"peacock.remoteColor": "#215732",
+		"typescript.tsdk": "node_modules/typescript/lib",
+		"prettier-eslint-typescript.eslintConfig": {
+			"rules": {
+				"curly": "error",
+				"dot-notation": "error",
+				"no-undef-init": "error",
+				"no-useless-rename": "error",
+				"no-useless-return": "error",
+				"no-var": "error",
+				"object-shorthand": "error",
+				"one-var": [
+					"error",
+					{
+						"initialized": "never",
+						"uninitialized": "always"
+					}
+				],
+				"prefer-const": "error",
+				"prefer-template": "error",
+				"array-bracket-spacing": [
+					"error",
+					"always"
+				],
+				"generator-star-spacing": [
+					"error",
+					"both"
+				],
+				"space-before-function-paren": [
+					"off",
+					"always"
+				],
+				"yield-star-spacing": [
+					"error",
+					"both"
+				]
+			}
+		},
+		"prettier-eslint-typescript.prettierOptions": {
+			"arrowParens": "avoid",
+			"bracketSpacing": true,
+			"printWidth": 120,
+			"quoteProps": "as-needed",
+			"singleQuote": true,
+			"tabWidth": 2,
+			"trailingComma": "none",
+			"useTabs": false
+		}
+	}
+}

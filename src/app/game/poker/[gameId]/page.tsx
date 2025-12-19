@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useReducer, useState, useRef } from "react";
+import React, { use, useEffect, useReducer, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@contexts/authContext";
 import { io, Socket } from "socket.io-client";
@@ -103,11 +103,11 @@ function gameReducer(state: GamePageState, action: GameAction): GamePageState {
 export default function GamePage({
 	params,
 }: {
-	params: { gameId: string };
+	params: Promise<{ gameId: string }>;
 }) {
 	const { user, loading } = useAuth();
 	const router = useRouter();
-	const { gameId } = params;
+	const { gameId } = use(params);
 	const [isMyTurn, setIsMyTurn] = useState<boolean>(false);
 	const [isWinnerOpen, setIsWinnerOpen] = useState<boolean>(false);
 	const [allowedActions, setAllowedActions] = useState<string[]>([]);
@@ -169,13 +169,13 @@ export default function GamePage({
 			withCredentials: true,
 		});*/
 
-		socketRef.current = io(ResolveSocketUrl(), {
+		socketRef.current = io(`${ResolveSocketUrl()}/poker`, {
       transports: ["websocket"],
       withCredentials: true,
     });
 
     socketRef.current.on(
-      "player_ready_status",
+      "POK-player_ready_status",
       (data: { playerId: string; isReady: boolean }) => {
         if (data.playerId === socketRef.current?.id) {
           setIsPlayerReady(data.isReady);
@@ -189,10 +189,10 @@ export default function GamePage({
 			console.log("Connected to game server");
 
 			// Register with server upon connection
-			socketRef.current?.emit("register", { profile: user });
+			socketRef.current?.emit("COM-register", { profile: user });
 
 			// Join the game
-			socketRef.current?.emit("join_game", {
+			socketRef.current?.emit("COM-join_game", {
 				gameId,
 				user,
 			});
@@ -205,30 +205,30 @@ export default function GamePage({
       setShowSeatSelector(true);
     });*/
 
-		socketRef.current.on("game_state", (data) => {
+		socketRef.current.on("POK-game_state", (data) => {
 			console.log("Game state received:", data);
 			dispatch({ type: "SET_GAME_STATE", payload: data.game });
 			setIsMyTurn(data.game.activePlayerId === socketRef.current?.id);
 		});
 
-		socketRef.current.on("player_joined", (data) => {
+		socketRef.current.on("POK-player_joined", (data) => {
 			console.log("Player joined:", data);
 			dispatch({ type: "SET_GAME_STATE", payload: data.game });
 		});
 
-		socketRef.current.on("player_left", (data) => {
+		socketRef.current.on("POK-player_left", (data) => {
 			console.log("Player left:", data);
 			if (data.game) {
 				dispatch({ type: "SET_GAME_STATE", payload: data.game });
 			}
 		});
 
-		socketRef.current.on("player_ready_changed", (data) => {
+		socketRef.current.on("POK-player_ready_changed", (data) => {
 			console.log("Player ready status changed:", data);
 			dispatch({ type: "SET_GAME_STATE", payload: data.game });
 		});
 
-		socketRef.current.on("game_starting", (data) => {
+		socketRef.current.on("POK-game_starting", (data) => {
 			console.log("Game starting:", data);
 			dispatch({ type: "SET_GAME_STATE", payload: data.game });
 			if (data.message) {
@@ -236,7 +236,7 @@ export default function GamePage({
 			}
 		});
 
-		socketRef.current.on("round_starting", (data) => {
+		socketRef.current.on("POK-round_starting", (data) => {
 			console.log("Round starting:", data);
 			dispatch({ type: "SET_GAME_STATE", payload: data.game });
 			if (data.message) {
@@ -244,7 +244,7 @@ export default function GamePage({
 			}
 		});
 
-		socketRef.current.on("game_update", (data) => {
+		socketRef.current.on("POK-game_update", (data) => {
 			console.log("Game update received:", data);
 			dispatch({ type: "SET_GAME_STATE", payload: data.game });
 			setIsMyTurn(data.game.activePlayerId === socketRef.current?.id);
@@ -258,7 +258,7 @@ export default function GamePage({
 			}
 		});
 
-		socketRef.current.on("round_ended", (data) => {
+		socketRef.current.on("POK-round_ended", (data) => {
 			console.log("Round ended:", data);
 			dispatch({ type: "SET_GAME_STATE", payload: data.game });
 			setIsMyTurn(false);
@@ -275,13 +275,13 @@ export default function GamePage({
 			}
 		});
 
-    socketRef.current.on("round_reset", (data) => {
+    socketRef.current.on("POK-round_reset", (data) => {
       console.log("Resetting round:", data);
       dispatch({ type: "SET_GAME_STATE", payload: data.game });
       setIsMyTurn(false);
     });
 
-		socketRef.current.on("round_winners", (data) => {
+		socketRef.current.on("POK-round_winners", (data) => {
 			console.log("Round winners received:", data);
 			dispatch({
 				type: "SET_WINNERS",
@@ -293,12 +293,12 @@ export default function GamePage({
 			setIsWinnerOpen(true);
 		});
 
-		socketRef.current.on("chat_message", (data) => {
+		socketRef.current.on("COM-chat_message", (data) => {
 			console.log("Chat message received:", data);
 			dispatch({ type: "ADD_CHAT_MESSAGE", payload: data });
 		});
 
-		socketRef.current.on("error", (error) => {
+		socketRef.current.on("COM-error", (error) => {
 			console.error("Socket error:", error.message);
 			alert(`Error: ${error.message}`);
 		});
@@ -308,7 +308,7 @@ export default function GamePage({
 			console.log("Disconnected from game server");
 		});
 
-		socketRef.current.on("your_turn", (data) => {
+		socketRef.current.on("POK-your_turn", (data) => {
 			console.log("Your turn!", data);
 			setIsMyTurn(true);
 			setAllowedActions(data.allowedActions || []);
@@ -353,21 +353,21 @@ export default function GamePage({
 
 		return () => {
 			socketRef.current?.disconnect();
-      socketRef.current?.off("player_ready_status");
-      socketRef.current?.off("game_state");
-      socketRef.current?.off("your_turn");
+      socketRef.current?.off("POK-player_ready_status");
+      socketRef.current?.off("POK-game_state");
+      socketRef.current?.off("POK-your_turn");
       socketRef.current?.off("disconnect");
       socketRef.current?.off("variant_selected");
-      socketRef.current?.off("round_ended");
+      socketRef.current?.off("POK-round_ended");
       socketRef.current?.off("variant_Selection_started");
-      socketRef.current?.off("error");
-      socketRef.current?.off("chat_message");
-      socketRef.current?.off("game_update");
-      socketRef.current?.off("game_starting");
-      socketRef.current?.off("player_left");
-      socketRef.current?.off("player_joined");
-      socketRef.current?.off("round_starting");
-      socketRef.current?.off("round_winners");
+      socketRef.current?.off("COM-error");
+      socketRef.current?.off("COM-chat_message");
+      socketRef.current?.off("POK-game_update");
+      socketRef.current?.off("POK-game_starting");
+      socketRef.current?.off("POK-player_left");
+      socketRef.current?.off("POK-player_joined");
+      socketRef.current?.off("POK-round_starting");
+      socketRef.current?.off("POK-round_winners");
 		};
 	}, [gameId, user, router]);
 
@@ -375,7 +375,7 @@ export default function GamePage({
     if (!socket || !isConnected || !gameId) return;
     
     // Join the game with selected seat
-    socketRef.current?.emit('join_game', { 
+    socketRef.current?.emit('COM-join_game', { 
       gameId,
       profile,
       seatNumber
@@ -387,12 +387,12 @@ export default function GamePage({
 	const handlePlayerAction = (actionType: string, amount: number = 0) => {
 		if (!socketRef.current || !isConnected || !gameId) return;
 
-		if (actionType === "player_ready") {
-			socketRef.current?.emit("player_ready", {
+		if (actionType === "COM-player_ready" || actionType === "player_ready") {
+			socketRef.current?.emit("COM-player_ready", {
         gameId,
       });
 		} else {
-			socketRef.current?.emit("player_action", {
+			socketRef.current?.emit("POK-player_action", {
         gameId,
         action: { type: actionType, amount },
       });
@@ -405,7 +405,7 @@ export default function GamePage({
 		if (!socketRef.current || !isConnected || !gameId || !message.trim())
 			return;
 
-		socketRef.current?.emit("chat_message", {
+		socketRef.current?.emit("COM-chat_message", {
       gameId,
       message: message.trim(),
     });

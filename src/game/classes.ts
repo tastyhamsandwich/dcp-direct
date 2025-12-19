@@ -1,4 +1,4 @@
-import { Stringable, Suit, Rank, RankValue, CardName, RoomStatus, TGamePhase, TGamePhaseCommon, GamePhases, TGamePhaseStud, GameVariant, GameState, TableSeat, RoleIds, User, CustomGameRules, Action, Winner, RoomPhase, WinnerInfo} from '../types/game';
+
 import { capitalize, valueToRank } from '@lib/utils';
 import { evaluateHand, evaluateHands, isHandOneBetter } from '@game/utils';
 import { Socket, Server } from 'socket.io';
@@ -15,7 +15,7 @@ import {
 
 export class RoundStats {
   roundNumber: number;
-  variant: string;
+  variant: GameVariant;
   mainPot: number;
   winner: string;
   winningHand: Card[] | Hand | null;
@@ -401,26 +401,6 @@ export class Card implements Stringable {
     return this.rankToValue(this.rank);
   }
 
-  getPinochleValue(): RankValue {
-    return this.rankToPinochleValue(this.rank);
-  }
-
-  rankToPinochleValue(rank: Rank): RankValue {
-    switch (rank) {
-      case "jack":
-        return 7;
-      case "queen":
-        return 8;
-      case "king":
-        return 9;
-      case "ten":
-        return 10;
-      case "ace":
-        return 11;
-      default:
-        throw new Error(`Invalid rank value: ${rank}`);
-    }
-  }
   /**
    * Converts a rank to its value.
    * @param rank - The rank to convert.
@@ -816,7 +796,7 @@ export class Game {
     this.currentBet = 0;
     this.dealerIndex = 0;
     this.roundCount = 0;
-    this.gameVariant = gameVariant || 'TexasHoldEm';
+    this.gameVariant = gameVariant || 'TexasHoldEm' as GameVariant;
     this.dealerSelectedVariant = null;
     this.nextRoundVariant = this.gameVariant;
     this.variantSelectionActive = false;
@@ -1349,7 +1329,7 @@ export class Game {
 			);
 
       if (this.socket) {
-        this.socket.to(this.id).emit('game_update', { game: this.returnGameState() });
+        this.socket.to(this.id).emit('POK-game_update', { game: this.returnGameState() });
       }
       return true;
       

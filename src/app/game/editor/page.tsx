@@ -21,25 +21,25 @@ const CustomGameEditor = () => {
   const AddBoardRowDialog = () => (   
     <Dialog.Root>
       <Dialog.Trigger asChild>
-        <button className="inline-flex h-[35px] items-center justify-center rounded bg-violet4 px-[15px] font-medium leading-none text-violet11 outline-none outline-offset-1 hover:bg-mauve3 focus-visible:outline-2 focus-visible:outline-violet6 select-none">
+        <button className="inline-flex h-8.75 items-center justify-center rounded bg-violet4 px-3.75 font-medium leading-none text-violet11 outline-none outline-offset-1 hover:bg-mauve3 focus-visible:outline-2 focus-visible:outline-violet6 select-none">
           Add Row to Board
         </button>
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-blackA6 data-[state=open]:animate-overlayShow" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 max-h-[85vh] w-[90vw] max-w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-md bg-gray1 p-[25px] shadow-[var(--shadow-6)] focus:outline-none data-[state=open]:animate-contentShow">
+          <Dialog.Content className="fixed left-1/2 top-1/2 max-h-[85vh] w-[90vw] max-w-125 -translate-x-1/2 -translate-y-1/2 rounded-md bg-gray1 p-6.25 shadow-(--shadow-6) focus:outline-none data-[state=open]:animate-contentShow">
             <Dialog.Title className="m-0 text-[17px] font-medium text-mauve12">
               Add Row to Board
             </Dialog.Title>
             <Dialog.Description className="mb-5 mt-2.5 text-[15px] leading-normal text-mauve11">
               Add a row of card slots to the community board.
             </Dialog.Description>
-            <fieldset className="mb-[15px] flex items-center gap-5">
-              <label className="w-[90px] text-right text-[15px] text-violet11" htmlFor="row">
+            <fieldset className="mb-3.75 flex items-center gap-5">
+              <label className="w-22.5 text-right text-[15px] text-violet11" htmlFor="row">
                 Add Flop
               </label>
               <button 
-                className="inline-flex h-[35px] items-center justify-center rounded bg-green4 px-[15px] font-medium leading-none text-green11 outline-none outline-offset-1 hover:bg-green5 focus-visible:outline-2 focus-visible:outline-green6 select-none"
+                className="inline-flex h-8.75 items-center justify-center rounded bg-green4 px-3.75 font-medium leading-none text-green11 outline-none outline-offset-1 hover:bg-green5 focus-visible:outline-2 focus-visible:outline-green6 select-none"
                 onClick={handleAddFlop}
               >
                 Add Flop

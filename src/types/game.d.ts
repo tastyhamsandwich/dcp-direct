@@ -7,17 +7,23 @@ declare global {
 
   type Rank = 'ace' | 'two' | 'three' | 'four' | 'five' | 'six' | 'seven' | 'eight' | 'nine' | 'ten' | 'jack' | 'queen' | 'king' | 'wild';
   type RankCapitalized = 'Ace' | 'Two' | 'Three' | 'Four' | 'Five' | 'Six' | 'Seven' | 'Eight' | 'Nine' | 'Ten' | 'Jack' | 'Queen' | 'King' | 'Wild';
+  type PinochleRank = 'jack' | 'queen' | 'king' | 'ten' | 'ace';
+  type PinochleRankCapitalized = 'Jack' | 'Queen' | 'King' | 'Ten' | 'Ace';
 
   type RankValue = 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 100;
+  type PinochleRankValue = 1 | 2 | 3 | 4 | 5;
 
   type CardName = 'AH' | '2H' | '3H' | '4H' | '5H' | '6H' | '7H' | '8H' | '9H' | 'TH' | 'JH' | 'QH' | 'KH' | 'AD' | '2D' | '3D' | '4D' | '5D' | '6D' | '7D' | '8D' | '9D' | 'TD' | 'JD' | 'QD' | 'KD' | 'AC' | '2C' | '3C' | '4C' | '5C' | '6C' | '7C' | '8C' | '9C' | 'TC' | 'JC' | 'QC' | 'KC' | 'AS' | '2S' | '3S' | '4S' | '5S' | '6S' | '7S' | '8S' | '9S' | 'TS' | 'JS' | 'QS' | 'KS';
-
+  type PinochleCardName = 'AS1' | 'TS1' | 'KS1' | 'QS1' | 'JS1' | 'AC1' | 'TC1' | 'KC1' | 'QC1' | 'JC1' | 'AH1' | 'TH1' | 'KH1' | 'QH1' | 'JH1' | 'AD1' | 'TD1' | 'KD1' | 'QD1' | 'JD1' | 'AS2' | 'TS2' | 'KS2' | 'QS2' | 'JS2' | 'AC2' | 'TC2' | 'KC2' | 'QC2' | 'JC2' | 'AH2' | 'TH2' | 'KH2' | 'QH2' | 'JH2' | 'AD2' | 'TD2' | 'KD2' | 'QD2' | 'JD2' | 'AS3' | 'TS3' | 'KS3' | 'QS3' | 'JS3' | 'AC3' | 'TC3' | 'KC3' | 'QC3' | 'JC3' | 'AH3' | 'TH3' | 'KH3' | 'QH3' | 'JH3' | 'AD3' | 'TD3' | 'KD3' | 'QD3' | 'JD3' | 'AS4' | 'TS4' | 'KS4' | 'QS4' | 'JS4' | 'AC4' | 'TC4' | 'KC4' | 'QC4' | 'JC4' | 'AH4' | 'TH4' | 'KH4' | 'QH4' | 'JH4' | 'AD4' | 'TD4' | 'KD4' | 'QD4' | 'JD4';
   type HandType = Array<CardName | Card | Array<Rank | Suit>>;
 
   type TableRole = 'Dealer' | 'SmallBlind' | 'BigBlind' | 'None';
   type BlindType = 'small' | 'big';
 
+  type PinochleCardIDNum = '1' | '2' | '3' | '4';
+
   type GameType = 'Poker' | 'Pinochle';
+  type GameListFilter = GameType | 'Both';
 
   type GameVariant =
     | 'TexasHoldEm'
@@ -173,6 +179,7 @@ declare global {
    * @property {number} maxPlayers - The maximum number of players allowed.
    * @property {boolean} isStarted - Indicates whether the game has started.
    * @property {GameType} [gameType] - Indicates the type of game (Poker or Pinochle)
+   * @property {number} [wagerPerGame] - Table entry cost for Pinochle games.
    */
   interface ListEntry {
     index: number;
@@ -182,6 +189,7 @@ declare global {
     maxPlayers: number;
     isStarted: boolean;
     gameType?: GameType;
+    wagerPerGame?: number;
   }
 
   /** Represents the role IDs of the players.

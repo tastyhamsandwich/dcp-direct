@@ -1,4 +1,4 @@
-import { Server } from "socket.io";
+import { Server, Namespace } from "socket.io";
 //import {	User,	TGamePhase,	ListEntry,	Action,	TGamePhaseCommon,	TGamePhaseHoldEm,	TableSeat,  HandRank,  GameType,  Suit,  Rank } from "@types/game";
 import { Player, Game, Sidepot, Card } from "@game/classes";
 import { evaluateHand } from "@game/utils";
@@ -6,13 +6,53 @@ import { v4 as uuidv4 } from "uuid";
 import { Playwrite_TZ } from "next/font/google";
 import { createDropdownMenuScope } from "@radix-ui/react-dropdown-menu";
 import { updatePlayerStats } from "@lib/database"
-import { PinochleDeck } from "@game/pinochle";
+import { PinochleDeck, PinochleCard, PinochlePlayer } from "@game/pinochle";
 
 export function initializeSocket(io: Server) {
 	// Store active games
 	const pokerGames: { [key: string]: Game } = {};
 	const pinochleGames: { [key: string]: PinochleGame } = {};
 	const gamesArray: ListEntry[] = [];
+	const gameNamespaces: Record<string, string> = {};
+
+	const defaultNamespace = io.of("/");
+	const lobbyNamespace = io.of("/lobby");
+	const pokerNamespace = io.of("/poker");
+	const pinochleNamespace = io.of("/pinochle");
+
+	const resolveNamespaceForGameType = (gameType: GameType): string =>
+		gameType === "Pinochle" ? "/pinochle" : "/poker";
+
+	const broadcastGamesList = () => {
+		[
+			defaultNamespace,
+			lobbyNamespace,
+			pokerNamespace,
+			pinochleNamespace,
+		].forEach((namespace) => {
+			namespace.emit("COM-games_list", gamesArray);
+		});
+	};
+
+	const normalizeGameListFilter = (
+		rawValue?: GameListFilter | string | null
+	): GameListFilter => {
+		const normalized = (rawValue || "").toString().toLowerCase();
+		if (normalized === "pinochle") return "Pinochle";
+		if (normalized === "poker") return "Poker";
+		return "Both";
+	};
+
+	const filterGamesList = (filter: GameListFilter): ListEntry[] => {
+		if (filter === "Both") {
+			return gamesArray;
+		}
+
+		const normalizedFilter = filter.toLowerCase();
+		return gamesArray.filter(
+			(game) => (game.gameType || "Poker").toLowerCase() === normalizedFilter
+		);
+	};
 
 	// Track recently disconnected users to allow for page navigation
 	const pendingReconnects = new Map<
@@ -39,65 +79,47 @@ export function initializeSocket(io: Server) {
 		);
 	});
 
-	// Handle socket connections
-	io.on("connection", (socket) => {
-		console.log("User connected:", socket.id);
-
-		// Handle user registration
-		socket.on("register", (data) => {
-			// Check if data contains profile information
-			if (!data || !data.profile) {
-				console.error("Invalid register data:", data);
-				socket.emit("error", { message: "Invalid registration data" });
-				return;
-			}
-
-			console.log(
-				`Received registration request from '${data.profile.username}'`
-			);
-
-			const profile = data.profile;
-
-			users[socket.id] = {
-				id: socket.id,
-				username: profile.username || "Anonymous",
-				chips: profile.balance || 1000, // Starting chips
-			};
-
-			console.log(`Registered user:`, users[socket.id]);
-			socket.emit("registration_success", { user: users[socket.id] });
-		});
-
-		socket.on("get_games_list", () => {
-			console.log(`Received request for games list, sending...`, gamesArray);
-
-      socket.join("lobby");
-			socket.emit("games_list", gamesArray);
-		});
-
-		// Create a new game
-		socket.on("create_game", (data) => {
-			console.log(`Received request to create game lobby...`);
-
-			const { tableName, creator, maxPlayers, blinds, gameVariant } = data;
-			const requestedGameType: GameType =
-				(data?.gameType || "").toLowerCase() === "pinochle"
+	// Handle socket connections per namespace
+	const registerNamespaceHandlers = (namespace: Namespace) => {
+		namespace.on("connection", (socket) => {
+			const io = namespace;
+			const defaultGameType: GameType | null =
+				namespace.name === "/pinochle"
 					? "Pinochle"
-					: "Poker";
-			const gameId = uuidv4();
-			const userId = socket.id;
+					: namespace.name === "/poker"
+						? "Poker"
+						: null;
+			console.log("User connected:", socket.id);
 
-			if (!users[userId]) {
-				console.error(`User ${userId} not registered`);
-				socket.emit("error", { message: "You must register first" });
-				return;
-			}
+			const createPinochleGame = (data: any) => {
+				if (defaultGameType && defaultGameType !== "Pinochle") {
+					socket.emit("COM-error", {
+						message:
+							"Pinochle games are available on the /pinochle namespace. Please reconnect there to create one.",
+					});
+					return;
+				}
 
-			console.log(
-				`Creating new game: ${tableName} by ${creator.username}, variant: ${gameVariant}, max players: ${maxPlayers}`
-			);
+				const { tableName, creator, wagerPerGame } = data || {};
+				const userId = socket.id;
 
-			if (requestedGameType === "Pinochle") {
+				if (!users[userId]) {
+					console.error(`User ${userId} not registered`);
+					socket.emit("COM-error", { message: "You must register first" });
+					return;
+				}
+
+				const gameId = uuidv4();
+				const normalizedWager =
+					typeof wagerPerGame === "number" && !isNaN(wagerPerGame)
+						? Math.max(0, Math.floor(wagerPerGame))
+						: 0;
+				console.log(
+					`Creating new pinochle game: ${tableName} by ${
+						creator?.username || "Unknown"
+					}, wager: ${normalizedWager}`
+				);
+
 				const creatorPlayer = buildPinochlePlayerState(
 					userId,
 					creator.username,
@@ -131,7 +153,9 @@ export function initializeSocket(io: Server) {
 					setsTeamB: 0,
 					roundNumber: 0,
 					roundActive: false,
+					wagerPerGame: normalizedWager,
 				};
+				gameNamespaces[gameId] = resolveNamespaceForGameType("Pinochle");
 
 				const listEntry: ListEntry = {
 					index: gamesArray.length,
@@ -140,98 +164,224 @@ export function initializeSocket(io: Server) {
 					playerCount: 1,
 					maxPlayers: 4,
 					isStarted: false,
-					gameType: requestedGameType,
+					gameType: "Pinochle",
+					wagerPerGame: normalizedWager,
 				};
 
 				gamesArray.push(listEntry);
 				socket.join(gameId);
-				socket.emit("game_created", { gameId, gameType: requestedGameType });
-				io.emit("games_list", gamesArray);
-				io.to(gameId).emit("pinochle_state", buildPinochleState(pinochleGames[gameId]));
-				return;
-			}
-
-			// Ensure creator has valid chips value
-			if (typeof creator.chips !== "number" || isNaN(creator.chips)) {
-				console.warn(
-					`Invalid chips value for creator ${creator.username}: ${creator.chips}, setting default 1000`
-				);
-				creator.chips = 1000;
-			}
-
-			pokerGames[gameId] = new Game(
-				gameId,
-				tableName,
-				creator,
-				maxPlayers,
-				blinds?.small || 5,
-				blinds?.big || 10,
-				gameVariant
-			);
-
-			const listEntry: ListEntry = {
-				index: gamesArray.length,
-				id: gameId,
-				name: pokerGames[gameId].name,
-				playerCount: pokerGames[gameId].players.length,
-				maxPlayers: pokerGames[gameId].maxPlayers,
-				isStarted: pokerGames[gameId].hasStarted,
-				gameType: requestedGameType,
+				socket.emit("COM-game_created", { gameId, gameType: "Pinochle" });
+				broadcastGamesList();
+				io.to(gameId).emit("PIN-pinochle_state", buildPinochleState(pinochleGames[gameId]));
 			};
 
-			gamesArray.push(listEntry);
-			console.log(`Added game to list:`, listEntry);
-
-			// Join the game room
-			console.log(`Socket.join(${gameId}) executing...`);
-			socket.join(gameId);
-
-			console.log(`Emitting socket event 'game_created'...`);
-			socket.emit("game_created", { gameId, gameType: requestedGameType });
-
-			// Update all clients with the new games list
-			io.emit("games_list", gamesArray);
-		});
-
-		socket.on("get_seat_info", (data) => {
-			const gameId = data.gameId;
-			const game = pokerGames[gameId];
-			const seatInfo: Array<number> = [];
-			game.tablePositions.forEach((pos, index) => {
-				if (pos.occupied) {
-					seatInfo.push(pos.seatNumber);
+			const createPokerGame = (data: any, requestedGameType: GameType = "Poker") => {
+				if (defaultGameType && defaultGameType !== "Poker") {
+					socket.emit("COM-error", {
+						message:
+							"Poker games are available on the /poker namespace. Please reconnect there to create one.",
+					});
+					return;
 				}
-			});
 
-			socket.emit("seat_info", { seatInfo });
-			console.log(`Emitting socket event 'seat_info'...`, seatInfo);
-		});
+				const { tableName, creator, maxPlayers, blinds, gameVariant } = data || {};
+				const userId = socket.id;
 
-		// Join an existing game
-		socket.on("join_game", (data) => {
-			console.log(`Received request to join game lobby...`);
+				if (!users[userId]) {
+					console.error(`User ${userId} not registered`);
+					socket.emit("COM-error", { message: "You must register first" });
+					return;
+				}
 
-			if (!data || !data.gameId || !data.user) {
-				socket.emit("error", { message: `Invalid join_game data | DATA: ${data}}` });
+				const gameId = uuidv4();
+				const resolvedVariant = gameVariant || "TexasHoldEm";
+				console.log(
+					`Creating new poker game: ${tableName} by ${
+						creator?.username || "Unknown"
+					}, variant: ${resolvedVariant}, max players: ${maxPlayers}`
+				);
+
+				// Ensure creator has valid chips value
+				if (typeof creator.chips !== "number" || isNaN(creator.chips)) {
+					console.warn(
+						`Invalid chips value for creator ${creator.username}: ${creator.chips}, setting default 1000`
+					);
+					creator.chips = 1000;
+				}
+
+				pokerGames[gameId] = new Game(
+					gameId,
+					tableName,
+					creator,
+					maxPlayers,
+					blinds?.small || 5,
+					blinds?.big || 10,
+					resolvedVariant
+				);
+				gameNamespaces[gameId] = resolveNamespaceForGameType(requestedGameType);
+
+				const listEntry: ListEntry = {
+					index: gamesArray.length,
+					id: gameId,
+					name: pokerGames[gameId].name,
+					playerCount: pokerGames[gameId].players.length,
+					maxPlayers: pokerGames[gameId].maxPlayers,
+					isStarted: pokerGames[gameId].hasStarted,
+					gameType: requestedGameType,
+				};
+
+				gamesArray.push(listEntry);
+				console.log(`Added game to list:`, listEntry);
+
+				// Join the game room
+				console.log(`Socket.join(${gameId}) executing...`);
+				socket.join(gameId);
+
+				console.log(`Emitting socket event 'COM-game_created'...`);
+				socket.emit("COM-game_created", { gameId, gameType: requestedGameType });
+
+				// Update all clients with the new games list
+				broadcastGamesList();
+			};
+
+		// Handle user registration
+		socket.on("COM-register", (data) => {
+			// Check if data contains profile information
+			if (!data || !data.profile) {
+				console.error("Invalid register data:", data);
+				socket.emit("COM-error", { message: "Invalid registration data" });
 				return;
 			}
 
-			const { gameId, user } = data;
-			const resolvedGameType: GameType =
-				(data?.gameType || gamesArray.find((g) => g.id === gameId)?.gameType || "Poker")
+			console.log(
+				`Received registration request from '${data.profile.username}'`
+			);
+
+			const profile = data.profile;
+
+			users[socket.id] = {
+				id: socket.id,
+				username: profile.username || "Anonymous",
+				chips: profile.balance || 1000, // Starting chips
+			};
+
+			console.log(`Registered user:`, users[socket.id]);
+			socket.emit("COM-registration_success", { user: users[socket.id] });
+		});
+
+		socket.on("COM-get_games_list", (data) => {
+			const requestedFilter = normalizeGameListFilter(
+				(data as { gameType?: GameListFilter; filter?: GameListFilter })?.gameType ||
+					(data as { filter?: GameListFilter })?.filter
+			);
+			console.log(
+				`Received request for games list (filter: ${requestedFilter}), sending...`,
+				gamesArray
+			);
+
+      socket.join("lobby");
+			socket.emit("COM-games_list", filterGamesList(requestedFilter));
+		});
+
+		// Create a new game
+		socket.on("COM-create_game", (data) => {
+			console.log(`Received request to create game lobby...`);
+
+			const requestedGameType: GameType =
+				(data?.gameType || defaultGameType || "")
 					.toString()
 					.toLowerCase() === "pinochle"
 					? "Pinochle"
 					: "Poker";
 
-			if (resolvedGameType === "Pinochle" || pinochleGames[gameId]) {
-				handlePinochleJoin({
-					socket,
-					io,
-					gameId,
+      switch (requestedGameType) {
+        case "Pinochle":
+          createPinochleGame({ ...data, gameType: "Pinochle" });
+          return;
+        case "Poker":
+          createPokerGame({ ...data, gameType: "Poker" }, "Poker");
+          return;
+        default:
+          throw new Error(`Invalid game type in payload. requestedGameType: ${requestedGameType}`);
+      }
+		});
+
+		// Explicit game creation events by type
+		socket.on("PIN-create_pinochle_game", (data) => {
+			console.log(`Received request to create pinochle game lobby...`);
+			createPinochleGame({ ...data, gameType: "Pinochle" });
+		});
+
+		socket.on("POK-create_poker_game", (data) => {
+			console.log(`Received request to create poker game lobby...`);
+			createPokerGame({ ...data, gameType: "Poker" }, "Poker");
+		});
+
+		socket.on("POK-get_seat_info", (data) => {
+			const gameId = data.gameId;
+			const pokerGame = pokerGames[gameId];
+			const seatInfo: Array<number> = [];
+			pokerGame.tablePositions.forEach((pos, index) => {
+				if (pos.occupied) {
+					seatInfo.push(pos.seatNumber);
+				}
+			});
+
+			socket.emit("POK-seat_info", { seatInfo });
+			console.log(`Emitting socket event 'POK-seat_info'...`, seatInfo);
+		});
+
+		// Join an existing game
+		socket.on("COM-join_game", (data) => {
+			console.log(`Received request to join game lobby...`);
+
+			if (!data || !data.gameId || !data.user) {
+				socket.emit("COM-error", { message: `Invalid join_game data | DATA: ${data}}` });
+				return;
+				}
+
+				const { gameId, user } = data;
+				const resolvedGameType: GameType =
+					(data?.gameType ||
+						defaultGameType ||
+						gamesArray.find((g) => g.id === gameId)?.gameType ||
+						"Poker"
+          ).toString().toLowerCase() === "pinochle"	? "Pinochle" : "Poker";
+				const canonicalNamespace = resolveNamespaceForGameType(resolvedGameType);
+				const storedNamespace = gameNamespaces[gameId] || canonicalNamespace;
+
+				if (!gameNamespaces[gameId]) {
+					gameNamespaces[gameId] = storedNamespace;
+				}
+
+				if (storedNamespace !== namespace.name) {
+					if (storedNamespace === "/" && namespace.name === canonicalNamespace) {
+						gameNamespaces[gameId] = canonicalNamespace;
+					} else {
+						socket.emit("COM-error", {
+							message: `This table is hosted on the '${storedNamespace}' namespace. Please reconnect there to join.`,
+						});
+						return;
+					}
+				}
+
+				if (defaultGameType && resolvedGameType !== defaultGameType) {
+					socket.emit("COM-error", {
+						message: `${resolvedGameType} games are handled on the /${resolvedGameType.toLowerCase()} namespace. Please reconnect there to join.`,
+					});
+					return;
+				}
+
+				if (resolvedGameType === "Pinochle" || pinochleGames[gameId]) {
+					handlePinochleJoin({
+						socket,
+						io,
+						gameId,
 					user,
 					gamesArray,
 					pinochleGames,
+					broadcastGamesList,
+					pendingReconnects,
 				});
 				return;
 			}
@@ -251,40 +401,40 @@ export function initializeSocket(io: Server) {
 			}
 
 			const userId = socket.id;
-			const game = pokerGames[gameId];
+			const pokerGame = pokerGames[gameId];
 
-			if (!game) {
+			if (!pokerGame) {
 				console.log(`Socket Error: Game not found.`);
-				socket.emit("error", { message: "Game not found" });
+				socket.emit("COM-error", { message: "Game not found" });
 				return;
 			}
 
-			if (game.players.length >= game.maxPlayers) {
+			if (pokerGame.players.length >= pokerGame.maxPlayers) {
 				console.log(`Socket Error: Game is full.`);
-				socket.emit("error", { message: "Game is full" });
+				socket.emit("COM-error", { message: "Game is full" });
 				return;
 			}
 
 			if (!users[userId]) {
 				console.log(`Socket Error: User must register first.`);
-				socket.emit("error", { message: "You must register first" });
+				socket.emit("COM-error", { message: "You must register first" });
 				return;
 			}
 
 			// Check if player is already in the game (by username, not socket id)
-			const existingPlayerIndex = game.players.findIndex((p) => p.username === users[userId].username);
+			const existingPlayerIndex = pokerGame.players.findIndex((p) => p.username === users[userId].username);
 
 			if (existingPlayerIndex >= 0) {
 
 				// Update the player's socket ID
-				const oldId = game.players[existingPlayerIndex].id;
-				game.players[existingPlayerIndex].id = userId;
-				console.log(`Player ${users[userId].username} reconnected to game '${game.name}' with new socket ID ${userId}`);
+				const oldId = pokerGame.players[existingPlayerIndex].id;
+				pokerGame.players[existingPlayerIndex].id = userId;
+				console.log(`Player ${users[userId].username} reconnected to game '${pokerGame.name}' with new socket ID ${userId}`);
 
 				// Also update tablePositions to match the new player id
-				const seatNum = game.players[existingPlayerIndex].seatNumber;
-				if (seatNum >= 0 && seatNum < game.tablePositions.length &&	game.tablePositions[seatNum].playerId === oldId) {
-					game.tablePositions[seatNum].playerId = userId;
+				const seatNum = pokerGame.players[existingPlayerIndex].seatNumber;
+				if (seatNum >= 0 && seatNum < pokerGame.tablePositions.length &&	pokerGame.tablePositions[seatNum].playerId === oldId) {
+					pokerGame.tablePositions[seatNum].playerId = userId;
 					console.log(`Updated tablePositions for seat ${seatNum} to new playerId ${userId}`);
 				}
 
@@ -300,15 +450,15 @@ export function initializeSocket(io: Server) {
 
         // Find an available seat
         let availableSeat = -1;
-        for (let i = 0; i < game.tablePositions.length; i++) {
-          if (!game.tablePositions[i].occupied) {
+        for (let i = 0; i < pokerGame.tablePositions.length; i++) {
+          if (!pokerGame.tablePositions[i].occupied) {
             availableSeat = i;
             break;
           }
         }
 
         if (availableSeat === -1) {
-          socket.emit("error", { message: "No available seats" });
+          socket.emit("COM-error", { message: "No available seats" });
           return;
         }
 
@@ -322,24 +472,24 @@ export function initializeSocket(io: Server) {
         );
         player.active = false;
         player.folded = true;
-        player.game = game;
+        player.game = pokerGame;
 
         // Add player to the game
-        game.addPlayer(player);
+        pokerGame.addPlayer(player);
 
         // Update table positions
-        game.tablePositions[availableSeat].occupied = true;
-        game.tablePositions[availableSeat].playerId = player.id;
+        pokerGame.tablePositions[availableSeat].occupied = true;
+        pokerGame.tablePositions[availableSeat].playerId = player.id;
 
         // Sort players by seat number to maintain consistent order
-        game.sortPlayerList();
+        pokerGame.sortPlayerList();
 
         console.log(
-          `New player ${player.username} joined game '${game.name}' at seat ${availableSeat}`
+          `New player ${player.username} joined game '${pokerGame.name}' at seat ${availableSeat}`
         );
 
         // Initialize player's statistis tracking object
-        initializePlayerStatsObject(game, player);
+        initializePlayerStatsObject(pokerGame, player);
       }
 
 			// Join the game room
@@ -347,77 +497,111 @@ export function initializeSocket(io: Server) {
 			socket.join(gameId);
 
 			// Update the game state for the player who just joined
-			socket.emit("game_state", { game: pokerGames[gameId].returnGameState() });
+			socket.emit("POK-game_state", { game: pokerGames[gameId].returnGameState() });
 
 			// Let everyone know someone joined
 			console.log(`Player '${users[userId].username} joining game room '${pokerGames[gameId].name}'...`);
-			io.to(gameId).emit("player_joined", {
+			io.to(gameId).emit("POK-player_joined", {
 				player: users[userId],
 				game: pokerGames[gameId].returnGameState(),
 			});
 
 			// Let everyone know about the updated game state
-			io.to(gameId).emit("game_state", {
+			io.to(gameId).emit("POK-game_state", {
 				game: pokerGames[gameId].returnGameState(),
 			});
 
 			// Check if we have at least 2 players and all are ready
-			if (game.players.length >= 2 && game.phase === "waiting") {
-				checkRoundStatus(game, io);
+			if (pokerGame.players.length >= 2 && pokerGame.phase === "waiting") {
+				checkRoundStatus(pokerGame, io);
 			}
 
-			// Update the games list for all clients
-			const gameIndex = gamesArray.findIndex((g) => g.id === gameId);
-			if (gameIndex !== -1) {
-				gamesArray[gameIndex].playerCount = game.players.length;
-				gamesArray[gameIndex].isStarted = game.hasStarted;
-				io.emit("games_list", gamesArray);
-			}
+				// Update the games list for all clients
+				const gameIndex = gamesArray.findIndex((g) => g.id === gameId);
+				if (gameIndex !== -1) {
+					gamesArray[gameIndex].playerCount = pokerGame.players.length;
+					gamesArray[gameIndex].isStarted = pokerGame.hasStarted;
+					broadcastGamesList();
+				}
 
 		});
 
-		socket.on("pinochle_join", (data) => {
-			const { gameId, user } = data || {};
-			if (!gameId || !user) {
-				socket.emit("error", { message: "Invalid join_game data" });
-				return;
-			}
+			socket.on("PIN-pinochle_join", (data) => {
+				const { gameId, user } = data || {};
+				if (!gameId || !user) {
+					socket.emit("COM-error", { message: "Invalid join_game data" });
+					return;
+				}
 
-			handlePinochleJoin({
-				socket,
-				io,
-				gameId,
-				user,
-				gamesArray,
-				pinochleGames,
+				const canonicalNamespace = resolveNamespaceForGameType("Pinochle");
+				const storedNamespace = gameNamespaces[gameId] || canonicalNamespace;
+
+				if (!gameNamespaces[gameId]) {
+					gameNamespaces[gameId] = storedNamespace;
+				}
+
+				if (storedNamespace !== namespace.name) {
+					if (storedNamespace === "/" && namespace.name === canonicalNamespace) {
+						gameNamespaces[gameId] = canonicalNamespace;
+					} else {
+						socket.emit("COM-error", {
+							message: `This table is hosted on the '${storedNamespace}' namespace. Please reconnect there to join.`,
+						});
+						return;
+					}
+				}
+
+				if (defaultGameType === "Poker") {
+					socket.emit("COM-error", {
+						message:
+							"Pinochle games are available on the /pinochle namespace. Please reconnect there to join.",
+					});
+					return;
+				}
+
+				handlePinochleJoin({
+					socket,
+					io,
+					gameId,
+					user,
+					gamesArray,
+					pinochleGames,
+					broadcastGamesList,
+					pendingReconnects,
+				});
 			});
-		});
 
 		// Handle player ready status separately from actions
-		socket.on("player_ready", (data) => {
-      console.log(`Received socket event 'player_ready'...`, data);
+		socket.on("COM-player_ready", (data) => {
+      console.log(`Received socket event 'COM-player_ready'...`, data);
 			if (!data || !data.gameId) {
-				socket.emit("error", { message: "Invalid ready data" });
+				socket.emit("COM-error", { message: "Invalid ready data" });
 				return;
 			}
 
-			const { gameId } = data;
-			const pinochleGame = pinochleGames[gameId];
-			if (pinochleGame) {
-				handlePinochleReady(pinochleGame, socket, io, gamesArray);
-				return;
-			}
+				const { gameId } = data;
+				const pinochleGame = pinochleGames[gameId];
+				if (pinochleGame) {
+					handlePinochleReady(
+						pinochleGame,
+						socket,
+						io,
+						gamesArray,
+						broadcastGamesList
+					);
+					return;
+				}
 			const game = pokerGames[gameId];
 			const userId = socket.id;
 
 			if (!game) {
-				socket.emit("error", { message: "Game not found" });
+				socket.emit("COM-error", { message: "Game not found" });
 				return;
 			}
 
 			const player = game.players.find((p) => p.id === userId);
 			if (!player) {
-				socket.emit("error", { message: "Player not found" });
+				socket.emit("COM-error", { message: "Player not found" });
 				return;
 			}
 
@@ -428,7 +612,7 @@ export function initializeSocket(io: Server) {
 			);
 
 			// Send immediate update about this player's ready status
-			io.to(gameId).emit("player_ready_changed", {
+			io.to(gameId).emit("POK-player_ready_changed", {
 				playerId: player.id,
 				playerName: player.username,
 				isReady: player.ready,
@@ -436,7 +620,7 @@ export function initializeSocket(io: Server) {
 			});
 
       // Pass ready status back to player for state sync
-      socket.to(userId).emit("player_ready_status", { isReady: player.ready });
+      socket.to(userId).emit("POK-player_ready_status", { isReady: player.ready });
 
 			// Check if all players are ready to start game or next round
 			if (game.players.length >= 2) {
@@ -449,7 +633,7 @@ export function initializeSocket(io: Server) {
 						game.status = "playing";
 						game.hasStarted = true;
 
-						io.to(gameId).emit("game_starting", {
+						io.to(gameId).emit("POK-game_starting", {
 							message: "All players ready! Game is starting...",
 							game: game.returnGameState(),
 						});
@@ -458,14 +642,14 @@ export function initializeSocket(io: Server) {
 						setTimeout(() => {
 							game.startRound();
 
-							io.to(gameId).emit("game_update", {
+							io.to(gameId).emit("POK-game_update", {
 								game: game.returnGameState(),
 								message: "Game has started!",
 							});
 
 							// Notify first player it's their turn
 							if (game.activePlayerId) {
-								io.to(game.activePlayerId).emit("your_turn", {
+								io.to(game.activePlayerId).emit("POK-your_turn", {
 									gameId: game.id,
 									allowedActions: game.getAllowedActionsForPlayer(
 										game.activePlayerId
@@ -477,7 +661,7 @@ export function initializeSocket(io: Server) {
 						// Starting next round
 						console.log("All players ready for next round...");
 
-						io.to(gameId).emit("round_starting", {
+						io.to(gameId).emit("POK-round_starting", {
 							message: "All players ready! New round is starting...",
 							game: game.returnGameState(),
 						});
@@ -485,13 +669,13 @@ export function initializeSocket(io: Server) {
 						setTimeout(() => {
 							game.startRound();
 
-							io.to(gameId).emit("game_update", {
+							io.to(gameId).emit("POK-game_update", {
 								game: game.returnGameState(),
 								message: "New round has started!",
 							});
 
 							if (game.activePlayerId) {
-								io.to(game.activePlayerId).emit("your_turn", {
+								io.to(game.activePlayerId).emit("POK-your_turn", {
 									gameId: game.id,
 									allowedActions: game.getAllowedActionsForPlayer(
 										game.activePlayerId
@@ -504,45 +688,45 @@ export function initializeSocket(io: Server) {
 			}
 		});
 
-		socket.on("pinochle_deal", (data) => {
-			const { gameId } = data || {};
-			const game = pinochleGames[gameId];
-			if (!game) return;
-			if (game.dealerId && game.dealerId !== socket.id) {
-				socket.emit("error", { message: "Only the dealer can deal." });
-				return;
-			}
-			startPinochleRound(game, io, gamesArray);
-		});
+			socket.on("PIN-pinochle_deal", (data) => {
+				const { gameId } = data || {};
+				const game = pinochleGames[gameId];
+				if (!game) return;
+				if (game.dealerId && game.dealerId !== socket.id) {
+					socket.emit("COM-error", { message: "Only the dealer can deal." });
+					return;
+				}
+				startPinochleRound(game, io, gamesArray, broadcastGamesList);
+			});
 
-		socket.on("pinochle_bid", (data) => {
+		socket.on("PIN-pinochle_bid", (data) => {
 			const { gameId, amount } = data || {};
 			if (!gameId || typeof amount !== "number") return;
 			handlePinochleBid(pinochleGames[gameId], socket, io, amount);
 		});
 
-		socket.on("pinochle_bid_pass", (data) => {
+		socket.on("PIN-pinochle_bid_pass", (data) => {
 			const { gameId } = data || {};
 			if (!gameId) return;
 			handlePinochleBidPass(pinochleGames[gameId], socket, io);
 		});
 
-		socket.on("pinochle_set_trump", (data) => {
+		socket.on("PIN-pinochle_set_trump", (data) => {
 			const { gameId, trump } = data || {};
 			if (!gameId || !trump) return;
 			handlePinochleSetTrump(pinochleGames[gameId], socket, io, trump);
 		});
 
-		socket.on("pinochle_play_card", (data) => {
+		socket.on("PIN-pinochle_play_card", (data) => {
 			const { gameId, card } = data || {};
 			if (!gameId || !card) return;
 			handlePinochlePlayCard(pinochleGames[gameId], socket, io, card);
 		});
 
 		// Handle player actions (fold, check, call, raise)
-		socket.on("player_action", (data) => {
+		socket.on("POK-player_action", (data) => {
 			if (!data || !data.gameId || !data.action) {
-				socket.emit("error", { message: "Invalid player action data" });
+				socket.emit("COM-error", { message: "Invalid player action data" });
 				return;
 			}
 
@@ -552,13 +736,13 @@ export function initializeSocket(io: Server) {
 			const actionType = action.type;
 
 			if (!game) {
-				socket.emit("error", { message: "Game not found" });
+				socket.emit("COM-error", { message: "Game not found" });
 				return;
 			}
 
 			const player = game.players.find((p) => p.id === userId);
 			if (!player) {
-				socket.emit("error", { message: "Player not found" });
+				socket.emit("COM-error", { message: "Player not found" });
 				return;
 			}
 
@@ -571,7 +755,7 @@ export function initializeSocket(io: Server) {
 			}
 
 			console.log(
-				`Received socket event 'player_action'...\nGame Name: ${game.name} (ID: ${gameId})\nUser: ${player.username} (Chips: ${player.chips})\nAction: ${actionType} (${action.amount})`
+				`Received socket event 'POK-player_action'...\nGame Name: ${game.name} (ID: ${gameId})\nUser: ${player.username} (Chips: ${player.chips})\nAction: ${actionType} (${action.amount})`
 			);
 
 			if (
@@ -579,7 +763,7 @@ export function initializeSocket(io: Server) {
 				actionType !== "toggleReady" &&
 				game.activePlayerId !== userId
 			) {
-				socket.emit("error", { message: "Not your turn" });
+				socket.emit("COM-error", { message: "Not your turn" });
 				return;
 			}
 
@@ -602,7 +786,7 @@ export function initializeSocket(io: Server) {
 
         case "check":
           if (game.currentBet > player.currentBet) {
-            socket.emit("error", {
+            socket.emit("COM-error", {
               message:
                 "You must call or raise. You cannot check when the current bet is higher than the amount you have bet this round.",
             });
@@ -663,13 +847,13 @@ export function initializeSocket(io: Server) {
         case "bet":
           const betAmount = action.amount;
           if (betAmount > player.chips) {
-            socket.emit("error", {
+            socket.emit("COM-error", {
               message: "You do not have enough chips to bet that amount.",
             });
             return false;
           }
           if (game.currentBet > 0) {
-            socket.emit("error", {
+            socket.emit("COM-error", {
               message:
                 "You cannot bet when there is already a bet in place. You must call or raise.",
             });
@@ -782,7 +966,7 @@ export function initializeSocket(io: Server) {
 					const winner = game.players.find((p) => !p.folded);
 					if (winner) {
 						// Emit winner announcement for fold-out win
-						io.to(gameId).emit("round_winners", {
+						io.to(gameId).emit("POK-round_winners", {
 							winners: [
 								{
 									playerId: winner.id,
@@ -808,11 +992,11 @@ export function initializeSocket(io: Server) {
 				}
 
 				// Broadcast updated game state to all players
-				io.to(gameId).emit("game_update", { game: game.returnGameState() });
+				io.to(gameId).emit("POK-game_update", { game: game.returnGameState() });
 
 				// If the phase changed, send a specific event
 				if (previousPhase !== game.phase) {
-					io.to(gameId).emit("phase_changed", {
+					io.to(gameId).emit("POK-phase_changed", {
 						previousPhase: previousPhase,
 						newPhase: game.phase,
 						game: game.returnGameState(),
@@ -830,7 +1014,7 @@ export function initializeSocket(io: Server) {
 							game.players[game.activePlayerIndex!].username
 						}' it's their turn`
 					);
-					io.to(game.activePlayerId).emit("your_turn", {
+					io.to(game.activePlayerId).emit("POK-your_turn", {
 						gameId: game.id,
 						allowedActions: game.getAllowedActionsForPlayer(
 							game.activePlayerId
@@ -838,7 +1022,7 @@ export function initializeSocket(io: Server) {
 					});
 
 					// Also broadcast a message to everyone about whose turn it is
-					io.to(gameId).emit("active_player_changed", {
+					io.to(gameId).emit("POK-active_player_changed", {
 						activePlayerId: game.activePlayerId,
 						activePlayerName:
 							game.players.find((p) => p.id === game.activePlayerId)
@@ -849,23 +1033,23 @@ export function initializeSocket(io: Server) {
 		});
 
 		// Handle chat messages
-		socket.on("chat_message", (data) => {
-			console.log(`Received socket event 'chat_message'...`, data);
+		socket.on("COM-chat_message", (data) => {
+			console.log(`Received socket event 'COM-chat_message'...`, data);
 			const userId = socket.id;
 			let sender = users[userId]?.username || "SYSTEM";
 
 
 			if (!data || (!data.gameId && data.scope === "game") || !data.message) {
-				socket.emit("error", { message: "Invalid chat message data ya doof!" });
+				socket.emit("COM-error", { message: "Invalid chat message data ya doof!" });
 				return;
 			}
 
 			const { scope, gameId, message } = data;
 
       if (!gameId && scope !== "lobby")
-        console.log(`Emitting socket event 'chat_message' to specific room '${gameId}'...`);
+        console.log(`Emitting socket event 'COM-chat_message' to specific room '${gameId}'...`);
       else if (scope === "lobby")
-        console.log(`Emitting socket event 'chat_message' to lobby...`);
+        console.log(`Emitting socket event 'COM-chat_message' to lobby...`);
       else if (!message) {
         console.error(`Invalid chat message`);
         return;
@@ -881,21 +1065,21 @@ export function initializeSocket(io: Server) {
 
       if (scope === "lobby") {
         // Send to all users in the lobby
-        io.to("lobby").emit("chat_message", chatPayload);
+        io.to("lobby").emit("COM-chat_message", chatPayload);
       } else if (scope === "game" && gameId) {
         // Send to all users in the game room
-        io.to(gameId).emit("chat_message", chatPayload);
+        io.to(gameId).emit("COM-chat_message", chatPayload);
       } else if (scope === "pinochle" && gameId) {
         // Send to all users in the game room
-        io.to(gameId).emit("chat_message", chatPayload);
+        io.to(gameId).emit("COM-chat_message", chatPayload);
       } else {
         console.error(`Invalid chat scope: ${scope}`);
-        socket.emit("error", { message: "Invalid chat scope" });
+        socket.emit("COM-error", { message: "Invalid chat scope" });
       }
 		});
 
-		socket.on("private_message", (data) => {
-			console.log(`Received socket event 'private_message'...`);
+		socket.on("COM-private_message", (data) => {
+			console.log(`Received socket event 'COM-private_message'...`);
 			const userId = socket.id;
 			if (!users[userId]) return;
 
@@ -913,9 +1097,9 @@ export function initializeSocket(io: Server) {
       };
 
       if (targetSocketId)
-        socket.to(targetSocketId).emit("chat_message", chatPayload);
+        socket.to(targetSocketId).emit("COM-chat_message", chatPayload);
       else
-        socket.emit("error", { message: "Recipient not found" });
+        socket.emit("COM-error", { message: "Recipient not found" });
 		});
 
 		// Handle disconnections
@@ -1022,7 +1206,7 @@ export function initializeSocket(io: Server) {
                           game.players[game.activePlayerIndex!].username
                         }' it's their turn`
                       );
-                      io.to(game.activePlayerId).emit("your_turn", {
+                      io.to(game.activePlayerId).emit("POK-your_turn", {
                         gameId: game.id,
                         allowedActions: game.getAllowedActionsForPlayer(
                           game.activePlayerId
@@ -1037,11 +1221,11 @@ export function initializeSocket(io: Server) {
                         message: `Player '${username}' has disconnected, it is now ${nextPlayer.username}'s turn.`,
                         timestamp,
                       };
-                      io.to(gameId).emit("chat_message", sysChatPayload);
+                      io.to(gameId).emit("COM-chat_message", sysChatPayload);
 
                       // INFO This was the code for broadcasting an update message, but there is no corresponding client-side event handler for this emitted event
                       // INFO Unless this becomes necessary, the update message is handled by a chat message from "SYSTEM" as done above
-                      /*io.to(gameId).emit("active_player_changed", {
+                      /*io.to(gameId).emit("POK-active_player_changed", {
                         activePlayerId: game.activePlayerId,
                         activePlayerName:
                           game.players.find((p) => p.id === game.activePlayerId)
@@ -1064,13 +1248,14 @@ export function initializeSocket(io: Server) {
 									game.players[0].chips += game.pot;
 								}
 								game.pot = 0;
-							}
+								}
 
-							if (game.players.length === 0) {
-								delete pokerGames[gameId];
+								if (game.players.length === 0) {
+									delete pokerGames[gameId];
+									delete gameNamespaces[gameId];
 
-								// Remove from games array
-								const gameIndex = gamesArray.findIndex((g) => g.id === gameId);
+									// Remove from games array
+									const gameIndex = gamesArray.findIndex((g) => g.id === gameId);
 								if (gameIndex !== -1) {
 									gamesArray.splice(gameIndex, 1);
 								}
@@ -1089,16 +1274,16 @@ export function initializeSocket(io: Server) {
 
 							// Let remaining players know
 							console.log(
-								`Emitting socket event 'player_left' to specific room '${gameId}'...`
+								`Emitting socket event 'POK-player_left' to specific room '${gameId}'...`
 							);
-							io.to(gameId).emit("player_left", {
+							io.to(gameId).emit("POK-player_left", {
 								playerId: userId,
 								game: pokerGames[gameId]?.returnGameState(),
 							});
 
-							// Update the games list for all clients
-							io.emit("games_list", gamesArray);
-						}
+								// Update the games list for all clients
+								broadcastGamesList();
+							}
 
 						// Clean up the pending reconnect
 						pendingReconnects.delete(reconnectKey);
@@ -1126,44 +1311,91 @@ export function initializeSocket(io: Server) {
 				const game = pinochleGames[gameId];
 				const playerIndex = game.players.findIndex((p) => p.id === userId);
 				if (playerIndex >= 0) {
-					game.players.splice(playerIndex, 1);
-					game.roundActive = false;
-					game.phase = "waiting";
-					game.status = "waitingForPlayers";
-					game.trumpSuit = null;
-					game.roundBid = 0;
-					game.bidLeaderId = undefined;
-					game.biddingTeam = undefined;
-					game.trick = { leadSuit: null, cards: [] };
-					game.activePlayerId = undefined;
-					game.activePlayerIndex = undefined;
-					game.meldTeamA = 0;
-					game.meldTeamB = 0;
-					game.trickPointsTeamA = 0;
-					game.trickPointsTeamB = 0;
+					const player = game.players[playerIndex];
+					const reconnectKey = `${gameId}${player.username}`;
 
-					if (game.players.length === 0) {
-						delete pinochleGames[gameId];
-						const idx = gamesArray.findIndex((g) => g.id === gameId);
-						if (idx !== -1) gamesArray.splice(idx, 1);
-					} else {
-						game.dealerIndex = 0;
-						game.dealerId = game.players[0].id;
-						const listEntry = gamesArray.find((g) => g.id === gameId);
-						if (listEntry) {
-							listEntry.playerCount = game.players.length;
-							listEntry.isStarted = game.roundActive;
-						}
-						io.to(gameId).emit("pinochle_update", buildPinochleState(game));
+					if (pendingReconnects.has(reconnectKey)) {
+						clearTimeout(pendingReconnects.get(reconnectKey)?.timeout);
 					}
-					io.emit("games_list", gamesArray);
+
+					const timeout = setTimeout(() => {
+						const targetGame = pinochleGames[gameId];
+						if (!targetGame) {
+							pendingReconnects.delete(reconnectKey);
+							return;
+						}
+
+						const removalIndex = targetGame.players.findIndex(
+							(p) => p.username === player.username
+						);
+
+						if (removalIndex < 0) {
+							pendingReconnects.delete(reconnectKey);
+							return;
+						}
+
+						targetGame.players.splice(removalIndex, 1);
+						targetGame.roundActive = false;
+						targetGame.phase = "waiting";
+						targetGame.status = "waitingForPlayers";
+						targetGame.trumpSuit = null;
+						targetGame.roundBid = 0;
+						targetGame.bidLeaderId = undefined;
+						targetGame.biddingTeam = undefined;
+						targetGame.trick = { leadSuit: null, cards: [] };
+						targetGame.activePlayerId = undefined;
+						targetGame.activePlayerIndex = undefined;
+						targetGame.meldTeamA = 0;
+						targetGame.meldTeamB = 0;
+						targetGame.trickPointsTeamA = 0;
+						targetGame.trickPointsTeamB = 0;
+
+						if (targetGame.players.length === 0) {
+							delete pinochleGames[gameId];
+							delete gameNamespaces[gameId];
+							const idx = gamesArray.findIndex((g) => g.id === gameId);
+							if (idx !== -1) gamesArray.splice(idx, 1);
+						} else {
+							targetGame.dealerIndex = 0;
+							targetGame.dealerId = targetGame.players[0].id;
+							const listEntry = gamesArray.find((g) => g.id === gameId);
+							if (listEntry) {
+								listEntry.playerCount = targetGame.players.length;
+								listEntry.isStarted = targetGame.roundActive;
+							}
+							io.to(gameId).emit(
+								"PIN-pinochle_update",
+								buildPinochleState(targetGame)
+							);
+						}
+
+						broadcastGamesList();
+						pendingReconnects.delete(reconnectKey);
+					}, 10000);
+
+					pendingReconnects.set(reconnectKey, {
+						userId,
+						gameId,
+						timestamp: Date.now(),
+						timeout,
+					});
+
+					console.log(
+						`Player ${player.username} disconnected from pinochle game ${gameId}. Setting 10-second timeout for reconnection.`
+					);
 				}
 			});
 		});
 	});
+};
+
+	registerNamespaceHandlers(defaultNamespace);
+	registerNamespaceHandlers(lobbyNamespace);
+	registerNamespaceHandlers(pokerNamespace);
+	registerNamespaceHandlers(pinochleNamespace);
 }
 
-function checkRoundStatus(game: Game, io) {
+function checkRoundStatus(game: Game, io: Namespace) {
 	// Sort players to ensure consistent order
 	game.sortPlayerList();
 
@@ -1191,7 +1423,7 @@ function checkRoundStatus(game: Game, io) {
 
 			// Announce game starting to all players
 			if (game.id) {
-				io.to(game.id).emit("game_starting", {
+				io.to(game.id).emit("POK-game_starting", {
 					message: "All players ready! Game is starting...",
 					game: game.returnGameState(),
 				});
@@ -1202,14 +1434,14 @@ function checkRoundStatus(game: Game, io) {
 					game.startRound();
 
 					// Send the initial game state to all players
-					io.to(game.id).emit("game_update", {
+					io.to(game.id).emit("POK-game_update", {
 						game: game.returnGameState(),
 						message: "Game has started!",
 					});
 
 					// Notify the active player it's their turn
 					if (game.activePlayerId) {
-						io.to(game.activePlayerId).emit("your_turn", {
+						io.to(game.activePlayerId).emit("POK-your_turn", {
 							gameId: game.id,
 							allowedActions: game.getAllowedActionsForPlayer(
 								game.activePlayerId
@@ -1241,7 +1473,7 @@ function checkRoundStatus(game: Game, io) {
 
 			// Announce new round starting
 			if (game.id) {
-				io.to(game.id).emit("round_starting", {
+				io.to(game.id).emit("POK-round_starting", {
 					message: "All players ready! New round is starting...",
 					game: game.returnGameState(),
 				});
@@ -1251,14 +1483,14 @@ function checkRoundStatus(game: Game, io) {
 					game.startRound();
 
 					// Send the updated game state to all players
-					io.to(game.id).emit("game_update", {
+					io.to(game.id).emit("POK-game_update", {
 						game: game.returnGameState(),
 						message: "New round has started!",
 					});
 
 					// Notify the active player it's their turn
 					if (game.activePlayerId) {
-						io.to(game.activePlayerId).emit("your_turn", {
+						io.to(game.activePlayerId).emit("POK-your_turn", {
 							gameId: game.id,
 							allowedActions: game.getAllowedActionsForPlayer(
 								game.activePlayerId
@@ -1355,7 +1587,7 @@ function getAllowedActions(game, playerId) {
 }
 
 // Add a function to handle showdown
-function handleShowdown(game, io) {
+function handleShowdown(game, io: Namespace) {
 	// If we're in showdown phase, determine winners
 	if (game.phase === "showdown") {
 		// If only one player remains (everyone else folded)
@@ -1391,7 +1623,7 @@ function handleShowdown(game, io) {
 			}
 
 			// Emit winner announcement to all players (win by fold)
-			io.to(game.id).emit("round_winners", {
+			io.to(game.id).emit("POK-round_winners", {
 				winners: [
 					{
 						playerId: winner.id,
@@ -1421,7 +1653,7 @@ function handleShowdown(game, io) {
 		});
 
 		// Send an immediate game state update so clients can see the revealed cards
-		io.to(game.id).emit("game_update", {
+		io.to(game.id).emit("POK-game_update", {
 			game: game.returnGameState(),
 			message: "Showdown! All active players reveal their cards.",
 		});
@@ -1467,7 +1699,7 @@ function handleShowdown(game, io) {
 		});
 
 		// Emit winner announcement to all players
-		io.to(game.id).emit("round_winners", {
+		io.to(game.id).emit("POK-round_winners", {
 			winners: winnerDetails,
 			showdown: true,
 		});
@@ -1481,7 +1713,7 @@ function handleShowdown(game, io) {
 	}
 }
 
-function resetForNextRound(game, io) {
+function resetForNextRound(game, io: Namespace) {
 
 	// Make sure the dealer index is valid
 	if (game.dealerIndex >= game.players.length) {
@@ -1490,7 +1722,7 @@ function resetForNextRound(game, io) {
 
   game.resetRound();
 
-  io.to(game.id).emit("round_reset", { game: game.returnGameState() });
+  io.to(game.id).emit("POK-round_reset", { game: game.returnGameState() });
 
   const chatPayload = {
     message: `Round ended, beginning round #${game.roundNumber}...`,
@@ -1498,7 +1730,7 @@ function resetForNextRound(game, io) {
     timestamp: insertTimestamp()
   }
 
-  io.to(game.id).emit("chat_message", chatPayload);
+  io.to(game.id).emit("COM-chat_message", chatPayload);
 
   /*
 	// Reset game state for next round
@@ -1526,21 +1758,21 @@ function resetForNextRound(game, io) {
 		game.startRound(); // Start the new round immediately since players are auto-ready
 
 		// Emit game update with new state
-		io.to(game.id).emit("game_update", {
+		io.to(game.id).emit("POK-game_update", {
 			game: game.returnGameState(),
 			message: "New round started!",
 		});
 
 		// Notify first active player it's their turn
 		if (game.activePlayerId) {
-			io.to(game.activePlayerId).emit("your_turn", {
+			io.to(game.activePlayerId).emit("POK-your_turn", {
 				gameId: game.id,
 				allowedActions: game.getAllowedActionsForPlayer(game.activePlayerId),
 			});
 		}
 	} else {
 		// Not enough players, just emit round ended
-		io.to(game.id).emit("round_ended", {
+		io.to(game.id).emit("POK-round_ended", {
 			game: game.returnGameState(),
 			message: "Not enough players to start next round.",
 		});
@@ -1576,13 +1808,14 @@ function buildPinochleState(game?: PinochleGame | null) {
 	return {
 		id: game.id,
 		name: game.name,
+		wagerPerGame: game.wagerPerGame ?? 0,
 		players: game.players.map((p) => ({
 			id: p.id,
 			username: p.username,
 			seatNumber: p.seatNumber,
 			team: p.team,
 			ready: p.ready,
-			cards: p.cards,
+			cards: sortPinochleHand(p.cards, game.trumpSuit),
 			tricksWon: p.tricksWon,
 			meldScore: p.meldScore,
 			totalScore: p.totalScore,
@@ -1611,17 +1844,43 @@ function handlePinochleJoin({
 	user,
 	gamesArray,
 	pinochleGames,
+	broadcastGamesList,
+	pendingReconnects,
 }: {
 	socket: any;
-	io: Server;
+	io: Namespace;
 	gameId: string;
 	user: any;
 	gamesArray: ListEntry[];
 	pinochleGames: Record<string, PinochleGame>;
+	broadcastGamesList: () => void;
+	pendingReconnects?: Map<
+		string,
+		{
+			userId: string;
+			gameId: string;
+			timestamp: number;
+			timeout: NodeJS.Timeout;
+		}
+	>;
 }) {
+	const reconnectKey =
+		user?.username && gameId ? `${gameId}${user.username}` : null;
+
+	if (reconnectKey && pendingReconnects?.has(reconnectKey)) {
+		const reconnectData = pendingReconnects.get(reconnectKey);
+		if (reconnectData?.timeout) {
+			clearTimeout(reconnectData.timeout);
+		}
+		pendingReconnects.delete(reconnectKey);
+		console.log(
+			`User ${user.username} reconnected to pinochle game ${gameId}`
+		);
+	}
+
 	const game = pinochleGames[gameId];
 	if (!game) {
-		socket.emit("error", { message: "Game not found" });
+		socket.emit("COM-error", { message: "Game not found" });
 		return;
 	}
 
@@ -1632,7 +1891,7 @@ function handlePinochleJoin({
 		existingPlayer.ready = false;
 	} else {
 		if (game.players.length >= 4) {
-			socket.emit("error", { message: "Game is full" });
+			socket.emit("COM-error", { message: "Game is full" });
 			return;
 		}
 		const takenSeats = new Set(game.players.map((p) => p.seatNumber));
@@ -1678,39 +1937,45 @@ function handlePinochleJoin({
 	}
 
 	const state = buildPinochleState(game);
-	socket.emit("pinochle_state", state);
-	io.to(gameId).emit("pinochle_update", state);
-	io.emit("games_list", gamesArray);
+	socket.emit("PIN-pinochle_state", state);
+	io.to(gameId).emit("PIN-pinochle_update", state);
+	broadcastGamesList();
 }
 
 function handlePinochleReady(
 	game: PinochleGame,
 	socket,
-	io: Server,
-	gamesArray?: ListEntry[]
+	io: Namespace,
+	gamesArray?: ListEntry[],
+	broadcastGamesList?: () => void
 ) {
 	if (!game) return;
 	const player = game.players.find((p) => p.id === socket.id);
 	if (!player) {
-		socket.emit("error", { message: "Player not found" });
+		socket.emit("COM-error", { message: "Player not found" });
 		return;
 	}
 	player.ready = !player.ready;
 
-	io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+	io.to(game.id).emit("PIN-pinochle_update", buildPinochleState(game));
 
 	const allReady =
 		game.players.length === 4 && game.players.every((p) => p.ready);
 	if (allReady && game.phase === "waiting") {
-		startPinochleRound(game, io, gamesArray);
+		startPinochleRound(game, io, gamesArray, broadcastGamesList);
 	}
 }
 
-function startPinochleRound(game: PinochleGame, io: Server, gamesArray?: ListEntry[]) {
+function startPinochleRound(
+	game: PinochleGame,
+	io: Namespace,
+	gamesArray?: ListEntry[],
+	broadcastGamesList?: () => void
+) {
 	if (!game || game.players.length !== 4) return;
 	const readyToStart = game.players.length === 4 && game.players.every((p) => p.ready);
 	if (!readyToStart) {
-		io.to(game.id).emit("error", {
+		io.to(game.id).emit("COM-error", {
 			message: "Four ready players are required to start a round.",
 		});
 		return;
@@ -1754,16 +2019,16 @@ function startPinochleRound(game: PinochleGame, io: Server, gamesArray?: ListEnt
 		if (listEntry) {
 			listEntry.isStarted = true;
 		}
-		io.emit("games_list", gamesArray);
+		broadcastGamesList?.();
 	}
 
-	io.to(game.id).emit("pinochle_hand_dealt", buildPinochleState(game));
-	io.to(game.id).emit("pinochle_bid_update", {
+	io.to(game.id).emit("PIN-pinochle_hand_dealt", buildPinochleState(game));
+	io.to(game.id).emit("PIN-pinochle_bid_update", {
 		roundBid: game.roundBid,
 		activePlayerId: game.activePlayerId,
 		bidLeaderId: game.bidLeaderId,
 	});
-	io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+	io.to(game.id).emit("PIN-pinochle_update", buildPinochleState(game));
 }
 
 function dealPinochleHands(game: PinochleGame) {
@@ -1775,7 +2040,7 @@ function dealPinochleHands(game: PinochleGame) {
 			const currentPosition = (game.dealerIndex + 1) % game.players.length;
 			const playerIndex = (currentPosition + p) % game.players.length;
 			const player = game.players[playerIndex];
-			const drawFive: Card[] = [];
+			const drawFive: PinochleCard[] = [];
 			for (let i = 0; i < 5; i++) {
 				const card = game.deck.draw();
 				card.faceUp = false;
@@ -1784,28 +2049,32 @@ function dealPinochleHands(game: PinochleGame) {
 			drawFive.forEach((card) => player.cards.push(card));
 		}
 	}
+
+	game.players.forEach((player) => {
+		player.cards = sortPinochleHand(player.cards);
+	});
 }
 
 function handlePinochleBid(
 	game: PinochleGame,
 	socket,
-	io: Server,
+	io: Namespace,
 	amount: number
 ) {
 	if (!game || game.phase !== "bid" || game.activePlayerId !== socket.id) {
-		socket.emit("error", { message: "Not your turn to bid" });
+		socket.emit("COM-error", { message: "Not your turn to bid" });
 		return;
 	}
 	const player = game.players.find((p) => p.id === socket.id);
 	if (!player) {
-		socket.emit("error", { message: "Player not found" });
+		socket.emit("COM-error", { message: "Player not found" });
 		return;
 	}
 
 	const normalized = normalizePinochleBid(amount);
 	const minBid = nextPinochleBid(game.roundBid || 49);
 	if (normalized < minBid) {
-		socket.emit("error", { message: `Minimum bid is ${minBid}` });
+		socket.emit("COM-error", { message: `Minimum bid is ${minBid}` });
 		return;
 	}
 
@@ -1828,21 +2097,21 @@ function handlePinochleBid(
 		game.status = "awaiting_trump";
 	}
 
-	io.to(game.id).emit("pinochle_bid_update", {
+	io.to(game.id).emit("PIN-pinochle_bid_update", {
 		roundBid: game.roundBid,
 		bidLeaderId: game.bidLeaderId,
 		biddingTeam: game.biddingTeam,
 		activePlayerId: game.activePlayerId,
 		trumpSuit: game.trumpSuit,
 	});
-	io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+	io.to(game.id).emit("PIN-pinochle_update", buildPinochleState(game));
 }
 
-function handlePinochleBidPass(game: PinochleGame, socket, io: Server) {
+function handlePinochleBidPass(game: PinochleGame, socket, io: Namespace) {
 	if (!game || game.phase !== "bid") return;
 	const player = game.players.find((p) => p.id === socket.id);
 	if (!player) {
-		socket.emit("error", { message: "Player not found" });
+		socket.emit("COM-error", { message: "Player not found" });
 		return;
 	}
 	player.passedBid = true;
@@ -1852,7 +2121,7 @@ function handlePinochleBidPass(game: PinochleGame, socket, io: Server) {
 		game.status = "All players passed. Redeal.";
 		game.roundActive = false;
 		game.phase = "waiting";
-		io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+		io.to(game.id).emit("PIN-pinochle_update", buildPinochleState(game));
 		return;
 	}
 
@@ -1873,29 +2142,29 @@ function handlePinochleBidPass(game: PinochleGame, socket, io: Server) {
 	}
 
 	game.phase = "bid";
-	io.to(game.id).emit("pinochle_bid_update", {
+	io.to(game.id).emit("PIN-pinochle_bid_update", {
 		roundBid: game.roundBid,
 		bidLeaderId: game.bidLeaderId,
 		biddingTeam: game.biddingTeam,
 		activePlayerId: game.activePlayerId,
 		trumpSuit: game.trumpSuit,
 	});
-	io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+	io.to(game.id).emit("PIN-pinochle_update", buildPinochleState(game));
 }
 
 function handlePinochleSetTrump(
 	game: PinochleGame,
 	socket,
-	io: Server,
+	io: Namespace,
 	trump: Suit
 ) {
 	if (!game || game.phase !== "bid" || game.bidLeaderId !== socket.id) {
-		socket.emit("error", { message: "You cannot set trump now" });
+		socket.emit("COM-error", { message: "You cannot set trump now" });
 		return;
 	}
 	const player = game.players.find((p) => p.id === socket.id);
 	if (!player) {
-		socket.emit("error", { message: "Player not found" });
+		socket.emit("COM-error", { message: "Player not found" });
 		return;
 	}
 
@@ -1906,13 +2175,16 @@ function handlePinochleSetTrump(
 		return;
 	}
 	if (!marriageSuits.includes(trump)) {
-		socket.emit("error", {
+		socket.emit("COM-error", {
 			message: `Invalid trump. You must choose a suit where you have a marriage.`,
 		});
 		return;
 	}
 
 	game.trumpSuit = trump;
+	game.players.forEach((p) => {
+		p.cards = sortPinochleHand(p.cards, trump);
+	});
 	game.phase = "playing";
 	game.status = "playing";
 
@@ -1932,37 +2204,37 @@ function handlePinochleSetTrump(
 	game.activePlayerId = game.bidLeaderId;
 	game.trick = { leadSuit: null, cards: [] };
 
-	io.to(game.id).emit("pinochle_bid_update", {
+	io.to(game.id).emit("PIN-pinochle_bid_update", {
 		roundBid: game.roundBid,
 		bidLeaderId: game.bidLeaderId,
 		biddingTeam: game.biddingTeam,
 		trumpSuit: game.trumpSuit,
 		activePlayerId: game.activePlayerId,
 	});
-	io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+	io.to(game.id).emit("PIN-pinochle_update", buildPinochleState(game));
 }
 
 function handlePinochlePlayCard(
 	game: PinochleGame,
 	socket,
-	io: Server,
+	io: Namespace,
 	payloadCard: any
 ) {
 	if (!game || game.phase !== "playing") return;
 	if (game.activePlayerId !== socket.id) {
-		socket.emit("error", { message: "Not your turn" });
+		socket.emit("COM-error", { message: "Not your turn" });
 		return;
 	}
 	const playerIndex = game.players.findIndex((p) => p.id === socket.id);
 	if (playerIndex === -1) {
-		socket.emit("error", { message: "Player not found" });
+		socket.emit("COM-error", { message: "Player not found" });
 		return;
 	}
 	const player = game.players[playerIndex];
 
 	const selectedIndex = findCardIndex(player.cards, payloadCard);
 	if (selectedIndex === -1) {
-		socket.emit("error", { message: "Card not in hand" });
+		socket.emit("COM-error", { message: "Card not in hand" });
 		return;
 	}
 
@@ -1973,11 +2245,12 @@ function handlePinochlePlayCard(
 	);
 	const selectedCard = player.cards[selectedIndex];
 	if (!allowed.some((c) => c === selectedCard)) {
-		socket.emit("error", { message: "You must follow suit / beat if able" });
+		socket.emit("COM-error", { message: "You must follow suit / beat if able" });
 		return;
 	}
 
 	// Play the card
+	selectedCard.faceUp = true;
 	player.cards.splice(selectedIndex, 1);
 	if (game.trick.cards.length === 0) {
 		game.trick.leadSuit = selectedCard.suit;
@@ -2016,11 +2289,11 @@ function handlePinochlePlayCard(
 			(p) => p.id === winner.playerId
 		);
 
-		io.to(game.id).emit("pinochle_trick_update", {
+		io.to(game.id).emit("PIN-pinochle_trick_update", {
 			trick: game.trick,
 			activePlayerId: game.activePlayerId,
 		});
-		io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+		io.to(game.id).emit("PIN-pinochle_update", buildPinochleState(game));
 
 		if (isLastTrick) {
 			completePinochleRound(game, io);
@@ -2029,17 +2302,17 @@ function handlePinochlePlayCard(
 		// Pass turn to next player clockwise
 		game.activePlayerIndex = (game.activePlayerIndex! + 1) % game.players.length;
 		game.activePlayerId = game.players[game.activePlayerIndex].id;
-		io.to(game.id).emit("pinochle_trick_update", {
+		io.to(game.id).emit("PIN-pinochle_trick_update", {
 			trick: game.trick,
 			activePlayerId: game.activePlayerId,
 		});
-		io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+		io.to(game.id).emit("PIN-pinochle_update", buildPinochleState(game));
 	}
 }
 
 function completePinochleRound(
 	game: PinochleGame,
-	io: Server,
+	io: Namespace,
 	options: { bidderAutoSet?: boolean } = {}
 ) {
 	if (!game) return;
@@ -2048,7 +2321,7 @@ function completePinochleRound(
 		game.phase = "waiting";
 		game.status = "No bid winner";
 		game.roundActive = false;
-		io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+		io.to(game.id).emit("PIN-pinochle_update", buildPinochleState(game));
 		return;
 	}
 	const bidderPoints =
@@ -2060,22 +2333,31 @@ function completePinochleRound(
 	const defenderMeld =
 		biddingTeam === "A" ? game.meldTeamB : game.meldTeamA;
 
+	const isAutoSet = !!options.bidderAutoSet;
 	const required = Math.max(game.roundBid - bidderMeld, 20);
-	const bidderMetBid = !options.bidderAutoSet && bidderPoints >= required;
+	const bidderMetBid = !isAutoSet && bidderPoints >= required;
 
 	let bidderGain = bidderMetBid ? bidderPoints + bidderMeld : 0;
 	let defenderGain =
-		defenderMeld >= 20 && defenderPoints >= 20
+		!isAutoSet && defenderMeld >= 20 && defenderPoints >= 20
 			? defenderPoints + defenderMeld
 			: 0;
 
 	if (biddingTeam === "A") {
-		if (bidderGain > 0) game.scoreTeamA += bidderGain;
-		else game.setsTeamA += 1;
+		if (bidderGain > 0) {
+			game.scoreTeamA += bidderGain;
+		} else {
+			game.setsTeamA += 1;
+			game.scoreTeamA -= game.roundBid;
+		}
 		game.scoreTeamB += defenderGain;
 	} else {
-		if (bidderGain > 0) game.scoreTeamB += bidderGain;
-		else game.setsTeamB += 1;
+		if (bidderGain > 0) {
+			game.scoreTeamB += bidderGain;
+		} else {
+			game.setsTeamB += 1;
+			game.scoreTeamB -= game.roundBid;
+		}
 		game.scoreTeamA += defenderGain;
 	}
 
@@ -2087,13 +2369,13 @@ function completePinochleRound(
 	if (winner) {
 		game.phase = "postgame";
 		game.status = "game_complete";
-		io.to(game.id).emit("pinochle_game_end", {
+		io.to(game.id).emit("PIN-pinochle_game_end", {
 			...buildPinochleState(game),
 			winner,
 		});
 	} else {
 		rotateDealer(game);
-		io.to(game.id).emit("pinochle_round_end", buildPinochleState(game));
+		io.to(game.id).emit("PIN-pinochle_round_end", buildPinochleState(game));
 		game.phase = "waiting";
 		game.trumpSuit = null;
 		game.roundBid = 0;
@@ -2109,7 +2391,7 @@ function completePinochleRound(
 			p.meldScore = 0;
 			p.roundPoints = 0;
 		});
-		io.to(game.id).emit("pinochle_update", buildPinochleState(game));
+		io.to(game.id).emit("PIN-pinochle_update", buildPinochleState(game));
 	}
 }
 
@@ -2150,73 +2432,162 @@ function nextPinochleBid(current: number): number {
 	return normalizePinochleBid(candidate);
 }
 
-function getMarriageSuits(hand: Card[]): Suit[] {
-	const suits: Suit[] = ["spades", "clubs", "hearts", "diamonds"];
-	const hasMarriage = (suit: Suit) => {
-		const kings = hand.filter((c) => c.suit === suit && c.rank === "king")
-			.length;
-		const queens = hand.filter((c) => c.suit === suit && c.rank === "queen")
-			.length;
-		return Math.min(kings, queens) > 0;
-	};
-	return suits.filter(hasMarriage);
+function sortPinochleHand(hand: PinochleCard[], trumpSuit?: Suit | null): PinochleCard[] {
+  if (!Array.isArray(hand)) return [];
+  const present = new Set(hand.map((card) => card.suit));
+  const prefByColor: Record<"black" | "red", Suit[]> = {
+    black: ["spades", "clubs"],
+    red: ["hearts", "diamonds"],
+  };
+  const suitColor = (suit: Suit): "black" | "red" =>
+    suit === "spades" || suit === "clubs" ? "black" : "red";
+
+  let suitOrder: Suit[];
+  if (trumpSuit && present.has(trumpSuit)) {
+    const remaining = new Set(present);
+    const order: Suit[] = [];
+    const addSuit = (s: Suit) => {
+      order.push(s);
+      remaining.delete(s);
+    };
+    addSuit(trumpSuit);
+
+    let needColor: "black" | "red" =
+      suitColor(trumpSuit) === "black" ? "red" : "black";
+
+    while (remaining.size > 0) {
+      let candidates = Array.from(remaining).filter(
+        (suit) => suitColor(suit) === needColor
+      );
+      if (candidates.length === 0) {
+        candidates = Array.from(remaining);
+      }
+      const preference = prefByColor[needColor];
+      const next =
+        candidates.find((suit) => preference.includes(suit)) || candidates[0];
+      addSuit(next);
+      needColor = suitColor(next) === "black" ? "red" : "black";
+    }
+    suitOrder = order;
+  } else {
+    const candidates: Suit[][] = [
+      ["spades", "hearts", "clubs", "diamonds"], // B R B R
+      ["hearts", "spades", "diamonds", "clubs"], // R B R B
+    ];
+
+    const scoredCandidates = candidates.map((order, idx) => {
+      const filtered = order.filter((suit) => present.has(suit));
+      const firstPos = order.findIndex((suit) => present.has(suit));
+      return {
+        filtered,
+        presentCount: filtered.length,
+        firstPos: firstPos === -1 ? Number.MAX_SAFE_INTEGER : firstPos,
+        index: idx,
+      };
+    });
+
+    const best =
+      scoredCandidates.reduce((bestSoFar, candidate) => {
+        if (candidate.presentCount > bestSoFar.presentCount) return candidate;
+        if (
+          candidate.presentCount === bestSoFar.presentCount &&
+          candidate.firstPos < bestSoFar.firstPos
+        )
+          return candidate;
+        return bestSoFar;
+      }, scoredCandidates[0]) || scoredCandidates[0];
+
+    suitOrder = best.filtered;
+  }
+  const rankOrder: PinochleRank[] = ["ace", "ten", "king", "queen", "jack"];
+  const rankWeight = (rank: Rank) => {
+    const idx = rankOrder.indexOf(rank);
+    return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
+  };
+  return suitOrder.flatMap((suit) =>
+    hand
+      .filter((card) => card.suit === suit)
+      .sort(
+        (a, b) =>
+          rankWeight(a.rank as PinochleRank) -
+          rankWeight(b.rank as PinochleRank)
+      )
+  );
 }
 
-function calculatePinochleMeld(hand: Card[], trumpSuit: Suit): {
-	total: number;
-	meldCards: Card[];
-	meldCount: MeldCount;
+function getMarriageSuits(hand: PinochleCard[]): Suit[] {
+  const suits: Suit[] = ["spades", "clubs", "hearts", "diamonds"];
+  const hasMarriage = (suit: Suit) => {
+    const kings = hand.filter(
+      (c) => c.suit === suit && c.rank === "king"
+    ).length;
+    const queens = hand.filter(
+      (c) => c.suit === suit && c.rank === "queen"
+    ).length;
+    return Math.min(kings, queens) > 0;
+  };
+  return suits.filter(hasMarriage);
+}
+
+function calculatePinochleMeld(
+  hand: PinochleCard[],
+  trumpSuit: Suit
+): {
+  total: number;
+  meldCards: PinochleCard[];
+  meldCount: MeldCount;
 } {
-	const meldCount = countMeldTypes(hand, trumpSuit);
-	const meldCards = determineMeldCards(hand, trumpSuit, meldCount);
-	const total = scoreMeld(meldCount);
-	return { total, meldCards, meldCount };
+  const meldCount = countMeldTypes(hand, trumpSuit);
+  const meldCards = determineMeldCards(hand, trumpSuit, meldCount);
+  const total = scoreMeld(meldCount);
+  return { total, meldCards, meldCount };
 }
 
-function countMeldTypes(hand: Card[], trumpSuit: Suit): MeldCount {
-	const countAround = (rank: Rank) => {
-		const suits: Suit[] = ["spades", "clubs", "hearts", "diamonds"];
-		const perSuit = suits.map(
-			(suit) =>
-				hand.filter((card) => card.suit === suit && card.rank === rank).length
-		);
-		return Math.min(...perSuit);
-	};
-	const pinochleSets = Math.min(
-		hand.filter((c) => c.suit === "spades" && c.rank === "queen").length,
-		hand.filter((c) => c.suit === "diamonds" && c.rank === "jack").length
-	);
+function countMeldTypes(hand: PinochleCard[], trumpSuit: Suit): MeldCount {
+  const countAround = (rank: Rank) => {
+    const suits: Suit[] = ["spades", "clubs", "hearts", "diamonds"];
+    const perSuit = suits.map(
+      (suit) =>
+        hand.filter((card) => card.suit === suit && card.rank === rank).length
+    );
+    return Math.min(...perSuit);
+  };
+  const pinochleSets = Math.min(
+    hand.filter((c) => c.suit === "spades" && c.rank === "queen").length,
+    hand.filter((c) => c.suit === "diamonds" && c.rank === "jack").length
+  );
 
-	const runRanks: Rank[] = ["ace", "ten", "king", "queen", "jack"];
-	const trumpCounts = runRanks.map(
-		(rank) =>
-			hand.filter((c) => c.suit === trumpSuit && c.rank === rank).length
-	);
-	const trumpRuns = Math.min(...trumpCounts);
+  const runRanks: PinochleRank[] = ["ace", "ten", "king", "queen", "jack"];
+  const trumpCounts = runRanks.map(
+    (rank) => hand.filter((c) => c.suit === trumpSuit && c.rank === rank).length
+  );
+  const trumpRuns = Math.min(...trumpCounts);
 
-	const marriageCount = (suit: Suit) => {
-		const kings = hand.filter((c) => c.suit === suit && c.rank === "king")
-			.length;
-		const queens = hand.filter((c) => c.suit === suit && c.rank === "queen")
-			.length;
-		const base = Math.min(kings, queens);
-		return base * (suit === trumpSuit ? 4 : 2);
-	};
+  const marriageCount = (suit: Suit) => {
+    const kings = hand.filter(
+      (c) => c.suit === suit && c.rank === "king"
+    ).length;
+    const queens = hand.filter(
+      (c) => c.suit === suit && c.rank === "queen"
+    ).length;
+    const base = Math.min(kings, queens);
+    return base * (suit === trumpSuit ? 4 : 2);
+  };
 
-	return {
-		acesAround: countAround("ace"),
-		kingsAround: countAround("king"),
-		queensAround: countAround("queen"),
-		jacksAround: countAround("jack"),
-		pinochles: pinochleSets,
-		trumpRuns,
-		marriages: {
-			spades: marriageCount("spades"),
-			clubs: marriageCount("clubs"),
-			hearts: marriageCount("hearts"),
-			diamonds: marriageCount("diamonds"),
-		},
-	};
+  return {
+    acesAround: countAround("ace"),
+    kingsAround: countAround("king"),
+    queensAround: countAround("queen"),
+    jacksAround: countAround("jack"),
+    pinochles: pinochleSets,
+    trumpRuns,
+    marriages: {
+      spades: marriageCount("spades"),
+      clubs: marriageCount("clubs"),
+      hearts: marriageCount("hearts"),
+      diamonds: marriageCount("diamonds"),
+    },
+  };
 }
 
 function scoreMeld(meldObject: MeldCount): number {
@@ -2321,73 +2692,71 @@ function scoreMeld(meldObject: MeldCount): number {
 }
 
 function determineMeldCards(
-	hand: Card[],
-	trumpSuit: Suit,
-	meldObject: MeldCount
-): Card[] {
-	const suits: Suit[] = ["spades", "clubs", "hearts", "diamonds"];
-	const highlight = new Set<Card>();
-	const cardsBySuit: Record<Suit, Card[]> = {
-		spades: hand.filter((card) => card.suit === "spades"),
-		clubs: hand.filter((card) => card.suit === "clubs"),
-		hearts: hand.filter((card) => card.suit === "hearts"),
-		diamonds: hand.filter((card) => card.suit === "diamonds"),
-	};
-	const bySuitAndRank = (suit: Suit, rank: Rank) =>
-		cardsBySuit[suit].filter((card) => card.rank === rank);
-	const addFirstN = (cards: Card[], n: number) => {
-		for (let i = 0; i < Math.min(n, cards.length); i++) {
-			highlight.add(cards[i]);
-		}
-	};
+  hand: PinochleCard[],
+  trumpSuit: Suit,
+  meldObject: MeldCount
+): PinochleCard[] {
+  const suits: Suit[] = ["spades", "clubs", "hearts", "diamonds"];
+  const highlight = new Set<PinochleCard>();
+  const cardsBySuit: Record<Suit, PinochleCard[]> = {
+    spades: hand.filter((card) => card.suit === "spades"),
+    clubs: hand.filter((card) => card.suit === "clubs"),
+    hearts: hand.filter((card) => card.suit === "hearts"),
+    diamonds: hand.filter((card) => card.suit === "diamonds"),
+  };
+  const bySuitAndRank = (suit: Suit, rank: Rank) =>
+    cardsBySuit[suit].filter((card) => card.rank === rank);
+  const addFirstN = (cards: PinochleCard[], n: number) => {
+    for (let i = 0; i < Math.min(n, cards.length); i++) {
+      highlight.add(cards[i]);
+    }
+  };
 
-	const addAround = (rank: Rank, count: number) => {
-		const perSuit = suits.map((suit) => bySuitAndRank(suit, rank));
-		for (let i = 0; i < count; i++) {
-			perSuit.forEach((arr) => arr[i] && highlight.add(arr[i]));
-		}
-	};
+  const addAround = (rank: PinochleRank, count: number) => {
+    const perSuit = suits.map((suit) => bySuitAndRank(suit, rank));
+    for (let i = 0; i < count; i++) {
+      perSuit.forEach((arr) => arr[i] && highlight.add(arr[i]));
+    }
+  };
 
-	addAround("ace", meldObject.acesAround);
-	addAround("king", meldObject.kingsAround);
-	addAround("queen", meldObject.queensAround);
-	addAround("jack", meldObject.jacksAround);
+  addAround("ace", meldObject.acesAround);
+  addAround("king", meldObject.kingsAround);
+  addAround("queen", meldObject.queensAround);
+  addAround("jack", meldObject.jacksAround);
 
-	const queensSpades = bySuitAndRank("spades", "queen");
-	const jacksDiamonds = bySuitAndRank("diamonds", "jack");
-	const pinochleSets = Math.min(queensSpades.length, jacksDiamonds.length);
-	for (let i = 0; i < pinochleSets; i++) {
-		highlight.add(queensSpades[i]);
-		highlight.add(jacksDiamonds[i]);
-	}
+  const queensSpades = bySuitAndRank("spades", "queen");
+  const jacksDiamonds = bySuitAndRank("diamonds", "jack");
+  const pinochleSets = Math.min(queensSpades.length, jacksDiamonds.length);
+  for (let i = 0; i < pinochleSets; i++) {
+    highlight.add(queensSpades[i]);
+    highlight.add(jacksDiamonds[i]);
+  }
 
-	const runRanks: Rank[] = ["ace", "ten", "king", "queen", "jack"];
-	const trumpRankCards = runRanks.map((rank) =>
-		bySuitAndRank(trumpSuit, rank)
-	);
-	const runSets = Math.min(...trumpRankCards.map((arr) => arr.length));
-	for (let i = 0; i < runSets; i++) {
-		trumpRankCards.forEach((arr) => highlight.add(arr[i]));
-	}
+  const runRanks: PinochleRank[] = ["ace", "ten", "king", "queen", "jack"];
+  const trumpRankCards = runRanks.map((rank) => bySuitAndRank(trumpSuit, rank));
+  const runSets = Math.min(...trumpRankCards.map((arr) => arr.length));
+  for (let i = 0; i < runSets; i++) {
+    trumpRankCards.forEach((arr) => highlight.add(arr[i]));
+  }
 
-	suits.forEach((suit) => {
-		const kings = bySuitAndRank(suit, "king");
-		const queens = bySuitAndRank(suit, "queen");
-		const marriageSets = Math.min(kings.length, queens.length);
-		for (let i = 0; i < marriageSets; i++) {
-			highlight.add(kings[i]);
-			highlight.add(queens[i]);
-		}
-	});
+  suits.forEach((suit) => {
+    const kings = bySuitAndRank(suit, "king");
+    const queens = bySuitAndRank(suit, "queen");
+    const marriageSets = Math.min(kings.length, queens.length);
+    for (let i = 0; i < marriageSets; i++) {
+      highlight.add(kings[i]);
+      highlight.add(queens[i]);
+    }
+  });
 
-	return Array.from(highlight);
+  return Array.from(highlight);
 }
 
 function getAllowedPinochleCards(
-	playerHand: Card[],
+	playerHand: PinochleCard[],
 	trick: PinochleTrickState,
 	trumpSuit: Suit | null | undefined
-): Card[] {
+): PinochleCard[] {
 	if (!trumpSuit) return playerHand;
 	if (trick.cards.length === 0 || !trick.leadSuit) return playerHand;
 
@@ -2396,7 +2765,7 @@ function getAllowedPinochleCards(
 		(entry) => entry.card.suit === leadingSuit
 	);
 	const highestLeadValue = leadSuitCardsOnTable.reduce(
-		(max, entry) => Math.max(max, entry.card.getPinochleValue()),
+		(max, entry) => Math.max(max, entry.card.getValue()),
 		-Infinity
 	);
 	const trumpCardsOnTable = trick.cards.filter(
@@ -2404,7 +2773,7 @@ function getAllowedPinochleCards(
 	);
 	const trumpPlayed = trumpCardsOnTable.length > 0;
 	const highestTrumpValue = trumpCardsOnTable.reduce(
-		(max, entry) => Math.max(max, entry.card.getPinochleValue()),
+		(max, entry) => Math.max(max, entry.card.getValue()),
 		-Infinity
 	);
 
@@ -2418,7 +2787,7 @@ function getAllowedPinochleCards(
 	if (!trumpPlayed || leadingSuit === trumpSuit) {
 		if (playerLeadSuitCards.length > 0) {
 			const higherLeadCards = playerLeadSuitCards.filter(
-				(card) => card.getPinochleValue() > highestLeadValue
+				(card) => card.getValue() > highestLeadValue
 			);
 			return higherLeadCards.length > 0
 				? higherLeadCards
@@ -2433,7 +2802,7 @@ function getAllowedPinochleCards(
 
 	if (playerTrumpCards.length > 0) {
 		const winningTrumps = playerTrumpCards.filter(
-			(card) => card.getPinochleValue() > highestTrumpValue
+			(card) => card.getValue() > highestTrumpValue
 		);
 		return winningTrumps.length > 0 ? winningTrumps : playerTrumpCards;
 	}
@@ -2493,7 +2862,7 @@ function determineTrickWinner(
 	}
 	const winning = contenders.reduce((best, current) => {
 		if (!best) return current;
-		return current.card.getPinochleValue() > best.card.getPinochleValue()
+		return current.card.getValue() > best.card.getValue()
 			? current
 			: best;
 	}, contenders[0]);

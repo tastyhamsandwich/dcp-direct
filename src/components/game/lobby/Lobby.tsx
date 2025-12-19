@@ -10,6 +10,8 @@ interface LobbyProps {
   socket: any;
   onJoinGame: (gameId: string, gameType?: GameType) => void;
   onCreateGame: (gameData: any) => void;
+  gameFilter: GameListFilter;
+  onGameFilterChange: (filter: GameListFilter) => void;
 }
 
 const Lobby: React.FC<LobbyProps> = ({ 
@@ -17,7 +19,9 @@ const Lobby: React.FC<LobbyProps> = ({
   profile, 
   socket, 
   onJoinGame,
-  onCreateGame 
+  onCreateGame,
+  gameFilter,
+  onGameFilterChange,
 }) => {
   const [showModal, setShowModal] = useState<boolean>(false);
   
@@ -56,6 +60,8 @@ const Lobby: React.FC<LobbyProps> = ({
     setShowModal(false);
   };
 
+  const filterOptions: GameListFilter[] = ['Both', 'Poker', 'Pinochle'];
+
   return (
     <div className="w-2/3 bg-gray-800 rounded-lg shadow-lg overflow-hidden">
       <div className="p-6">
@@ -63,6 +69,41 @@ const Lobby: React.FC<LobbyProps> = ({
           <h2 className="text-2xl font-semibold text-gray-100">Available Games</h2>
           <div className="text-sm text-gray-400">
             Logged in as <span className="text-blue-400 font-medium">{username}</span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 mb-6">
+          <span className="text-xs font-semibold tracking-wide text-gray-400 uppercase">
+            Show games
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {filterOptions.map((option) => {
+              const optionId = `game-filter-${option.toLowerCase()}`;
+              const isActive = gameFilter === option;
+
+              return (
+                <label
+                  key={option}
+                  htmlFor={optionId}
+                  className={`flex items-center px-3 py-2 rounded-md border cursor-pointer transition-colors ${
+                    isActive
+                      ? 'border-blue-500 bg-blue-900/40 text-blue-100'
+                      : 'border-gray-700 bg-gray-700 text-gray-300 hover:border-gray-600 hover:bg-gray-650'
+                  }`}
+                >
+                  <input
+                    id={optionId}
+                    type="radio"
+                    name="game-type-filter"
+                    value={option}
+                    checked={isActive}
+                    onChange={() => onGameFilterChange(option)}
+                    className="sr-only"
+                  />
+                  <span className="text-sm font-medium">{option}</span>
+                </label>
+              );
+            })}
           </div>
         </div>
         
