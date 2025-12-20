@@ -230,6 +230,7 @@ export default function PinochleGamePage({
 	const [pendingPlay, setPendingPlay] = useState<TrickCard | null>(null);
 	const [showMeldModal, setShowMeldModal] = useState(false);
 	const [showRoundRecap, setShowRoundRecap] = useState(false);
+	const [autoReadyNextHand, setAutoReadyNextHand] = useState(false);
 	const [completedTrick, setCompletedTrick] =
 		useState<PinochleGameState["trick"] | null>(null);
 	const [completedTrickWinnerId, setCompletedTrickWinnerId] = useState<
@@ -238,6 +239,7 @@ export default function PinochleGamePage({
 	const [isCollectingTrick, setIsCollectingTrick] = useState(false);
 	const socketRef = useRef<Socket | null>(null);
 	const lastMeldTokenRef = useRef<string | null>(null);
+	const lastAutoReadyTokenRef = useRef<string | null>(null);
 
 	const currentPlayerId = socketRef.current?.id;
 	const myPlayer = useMemo(
@@ -513,6 +515,37 @@ export default function PinochleGamePage({
 			setShowRoundRecap(true);
 		}
 	}, [isRoundRecapPhase]);
+
+	useEffect(() => {
+		if (!autoReadyNextHand) {
+			lastAutoReadyTokenRef.current = null;
+			return;
+		}
+		if (!isRoundRecapPhase || gameState?.phase !== "waiting") return;
+		if (!myPlayer || myPlayer.ready) return;
+
+		const token = [
+			gameState?.scoreTeamA ?? 0,
+			gameState?.scoreTeamB ?? 0,
+			gameState?.setsTeamA ?? 0,
+			gameState?.setsTeamB ?? 0,
+			gameState?.status ?? "",
+		].join("|");
+
+		if (lastAutoReadyTokenRef.current === token) return;
+		lastAutoReadyTokenRef.current = token;
+		handleToggleReady();
+	}, [
+		autoReadyNextHand,
+		gameState?.phase,
+		gameState?.status,
+		gameState?.scoreTeamA,
+		gameState?.scoreTeamB,
+		gameState?.setsTeamA,
+		gameState?.setsTeamB,
+		isRoundRecapPhase,
+		myPlayer?.ready,
+	]);
 
 	const orderedPlayers = useMemo(() => {
 		const players = gameState?.players || [];
@@ -970,6 +1003,17 @@ export default function PinochleGamePage({
 									</button>
 								)}
 							</div>
+							<label className="mt-3 flex items-center gap-2 text-xs text-white/70">
+								<input
+									type="checkbox"
+									checked={autoReadyNextHand}
+									onChange={(event) =>
+										setAutoReadyNextHand(event.target.checked)
+									}
+									className="h-4 w-4 accent-emerald-400"
+								/>
+								Auto-ready for next deal
+							</label>
 							{gameState?.phase === "bid" && (
 								<div className="mt-4 text-xs uppercase tracking-[0.2em] text-white/60">
 									Bidding in progress...
@@ -1116,7 +1160,6 @@ export default function PinochleGamePage({
 				>
 					<div
 						className="w-full max-w-4xl rounded-2xl border border-black/60 bg-[#f7f5c6] p-6 text-black shadow-[0_26px_60px_rgba(0,0,0,0.55)]"
-						onClick={(event) => event.stopPropagation()}
 					>
 						<div className="mb-4 text-lg font-semibold uppercase tracking-[0.2em] text-black/70">
 							Meld Scoring
@@ -1171,7 +1214,7 @@ export default function PinochleGamePage({
 							})}
 						</div>
 						<div className="mt-6 text-right text-xs uppercase tracking-[0.2em] text-black/60">
-							Click outside to close
+							Click anywhere to close
 						</div>
 					</div>
 				</div>
@@ -1184,7 +1227,6 @@ export default function PinochleGamePage({
 				>
 					<div
 						className="w-full max-w-xl rounded-2xl border border-black/60 bg-[#f7f5c6] p-6 text-black shadow-[0_26px_60px_rgba(0,0,0,0.55)]"
-						onClick={(event) => event.stopPropagation()}
 					>
 						<div className="mb-4 text-lg font-semibold uppercase tracking-[0.2em] text-black/70">
 							Round Recap
@@ -1245,7 +1287,7 @@ export default function PinochleGamePage({
 							</div>
 						</div>
 						<div className="mt-6 text-right text-xs uppercase tracking-[0.2em] text-black/60">
-							Click outside to close
+							Click anywhere to close
 						</div>
 					</div>
 				</div>
