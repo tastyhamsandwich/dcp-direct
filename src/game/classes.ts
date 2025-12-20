@@ -1,6 +1,6 @@
 
 import { capitalize, valueToRank } from '@lib/utils';
-import { evaluateHand, evaluateHands, isHandOneBetter } from '@game/utils';
+import { evaluateHand, evaluateHands, isHandOneBetter } from './utils';
 import { Socket, Server } from 'socket.io';
 import { v4 as uuidv4 } from "uuid";
 import { socketManager, type SocketManager } from '@lib/socketManager';

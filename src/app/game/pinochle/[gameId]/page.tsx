@@ -310,6 +310,8 @@ export default function PinochleGamePage({
 		() => getBidIncrement(Math.max(bidAmount, gameState?.roundBid ?? 50)),
 		[bidAmount, gameState?.roundBid]
 	);
+	const bidDecrement = bidAmount > 100 ? 10 : bidAmount > 60 ? 5 : 1;
+	const canDecreaseBid = canBid && bidAmount > minNextBid;
 
 	const handleStateUpdate = (payload: any) => {
 		const incoming =
@@ -620,24 +622,46 @@ export default function PinochleGamePage({
 						{gameState?.phase === "bid" && (
 							<div className="flex flex-col sm:flex-row gap-3 items-center">
 								<div className="flex items-center gap-2 w-full sm:w-auto">
-									<label className="text-sm text-gray-300" htmlFor="bidInput">
+									<label className="text-sm text-gray-300" htmlFor="bidOutput">
 										Your bid
 									</label>
-									<input
-										id="bidInput"
-										type="number"
-										value={bidAmount}
-										min={minNextBid}
-										step={bidStep}
-										onChange={(e) =>
-											handleBidInputChange(Number(e.target.value))
-										}
-										onBlur={(e) =>
-											handleBidInputChange(Number(e.target.value))
-										}
-										className="w-28 border border-gray-600 bg-gray-700 text-gray-100 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-600"
-										disabled={!canBid}
-									/>
+									<div className="flex items-center gap-2">
+										<button
+											type="button"
+											onClick={() =>
+												handleBidInputChange(bidAmount - bidDecrement)
+											}
+											disabled={!canDecreaseBid}
+											className={`h-9 w-9 rounded border border-gray-600 text-lg ${
+												canDecreaseBid
+													? "bg-gray-700 hover:bg-gray-600 text-gray-100"
+													: "bg-gray-800 text-gray-500 cursor-not-allowed"
+											}`}
+											aria-label="Decrease bid"
+										>
+											-
+										</button>
+										<output
+											id="bidOutput"
+											className="w-20 text-center border border-gray-600 bg-gray-700 text-gray-100 rounded px-2 py-1"
+											aria-live="polite"
+										>
+											{bidAmount}
+										</output>
+										<button
+											type="button"
+											onClick={() => handleBidInputChange(bidAmount + bidStep)}
+											disabled={!canBid}
+											className={`h-9 w-9 rounded border border-gray-600 text-lg ${
+												canBid
+													? "bg-gray-700 hover:bg-gray-600 text-gray-100"
+													: "bg-gray-800 text-gray-500 cursor-not-allowed"
+											}`}
+											aria-label="Increase bid"
+										>
+											+
+										</button>
+									</div>
 								</div>
 								<div className="flex gap-2 w-full sm:w-auto">
 									<button
