@@ -1,5 +1,5 @@
-import type { Player, SuitSymbol, Suit, RankValue, SuitCapitalized, SuitInitial, Winner, HandRank } from '../types/game';
-import { Card, Hand } from '@game/classes';
+//import type { Player, SuitSymbol, Suit, RankValue, SuitCapitalized, SuitInitial, Winner, HandRank } from '../types/game';
+import { Card, Hand } from './classes';
 import { capitalize, valueToRank } from '@lib/utils';
 
 export function toggleReady(player: Player) {

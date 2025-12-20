@@ -17,7 +17,7 @@
     "noImplicitAny": false,
     "jsx": "react-jsx",
     "incremental": true,
-    "types": ["node"],
+    "types": ["node", "jest"],
     "plugins": [{"name": "next" }],
     "paths": {
       "@comps/*": ["./src/components/*"],

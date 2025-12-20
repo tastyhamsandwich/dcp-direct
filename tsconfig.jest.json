@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["jest", "node"],
+    "paths": {
+      "@comps/*": ["./src/components/*"],
+      "@components/*": ["./src/components/*"],
+      "@contexts/*": ["./src/contexts/*"],
+      "@lib/*": ["./src/lib/*"],
+      "@app/*": ["./src/app/*"],
+      "@/*": ["./src/*"],
+      "@socket": ["./socket"],
+      "@game/*": ["./src/game/*"],
+      "@utils/*": ["./src/lib/utils/*"],
+      "@hooks/*": ["./src/hooks/*"],
+      "@db/*": ["./src/lib/db/*"],
+      "@api/*": ["./src/app/api/*"],
+      "@mongoose/*": ["./src/lib/mongoose/*"],
+      "@schema/*": ["./src/lib/mongoose/schema/*"],
+      "@types/*": ["./src/types/*"]
+    }
+  }
+}
