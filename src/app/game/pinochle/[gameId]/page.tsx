@@ -8,6 +8,7 @@ import Card from "@components/game/Card";
 import DraggableChat from "@comps/game/Chat";
 import { ResolveSocketUrl } from "@lib/socketUrl";
 import { DeterminePlayableCards } from "@game/pinochleRules";
+import { motion } from "framer-motion";
 
 
 type AnyCard = {
@@ -29,9 +30,12 @@ type PinochlePlayer = {
   team?: "A" | "B";
   ready?: boolean;
   cards: AnyCard[];
+  meldCards?: AnyCard[];
   tricksWon?: number;
   meldScore?: number;
   totalScore?: number;
+  passedBid?: boolean;
+  roundPoints?: number;
 };
 
 type PinochlePhase =
@@ -63,6 +67,10 @@ type PinochleGameState = {
 	scoreTeamB?: number;
 	meldTeamA?: number;
 	meldTeamB?: number;
+	trickPointsTeamA?: number;
+	trickPointsTeamB?: number;
+	setsTeamA?: number;
+	setsTeamB?: number;
 	wagerPerGame?: number;
 	//kittyCount?: number;
 	//deckCount?: number;
@@ -202,6 +210,9 @@ const getAllowedPlayableCards = (
 		.map((entry) => entry.card);
 };
 
+const seatOrder = ["bottom", "right", "top", "left"] as const;
+type SeatPosition = (typeof seatOrder)[number];
+
 export default function PinochleGamePage({
 	params,
 }: {
@@ -216,7 +227,17 @@ export default function PinochleGamePage({
 	const [selectedCardIndex, setSelectedCardIndex] = useState<number | null>(
 		null
 	);
+	const [pendingPlay, setPendingPlay] = useState<TrickCard | null>(null);
+	const [showMeldModal, setShowMeldModal] = useState(false);
+	const [showRoundRecap, setShowRoundRecap] = useState(false);
+	const [completedTrick, setCompletedTrick] =
+		useState<PinochleGameState["trick"] | null>(null);
+	const [completedTrickWinnerId, setCompletedTrickWinnerId] = useState<
+		string | null
+	>(null);
+	const [isCollectingTrick, setIsCollectingTrick] = useState(false);
 	const socketRef = useRef<Socket | null>(null);
+	const lastMeldTokenRef = useRef<string | null>(null);
 
 	const currentPlayerId = socketRef.current?.id;
 	const myPlayer = useMemo(
@@ -369,6 +390,12 @@ export default function PinochleGamePage({
 					: prev
 			);
 		});
+		socket.on("PIN-pinochle_trick_complete", (data) => {
+			if (data?.trick) {
+				setCompletedTrick(data.trick);
+				setCompletedTrickWinnerId(data?.winnerPlayerId ?? null);
+			}
+		});
 
 		socket.on("POK-player_left", handleStateUpdate);
 		socket.on("POK-player_joined", handleStateUpdate);
@@ -415,23 +442,6 @@ export default function PinochleGamePage({
 		emitWithGameId("PIN-pinochle_set_trump", { trump: suit });
 	};
 
-	const handlePlayCard = () => {
-		if (!canPlayCard || selectedCardIndex === null || !myPlayer) return;
-		const card = myPlayer.cards[selectedCardIndex];
-		const allowed = getAllowedPlayableCards(
-			myPlayer.cards,
-			gameState?.trick,
-			gameState?.trumpSuit
-		);
-		const allowedSet = new Set(allowed);
-		if (!allowedSet.has(card)) {
-			return;
-		}
-
-		emitWithGameId("PIN-pinochle_play_card", { card });
-		setSelectedCardIndex(null);
-	};
-
 	const handleToggleReady = () => {
 		emitWithGameId("COM-player_ready");
 	};
@@ -456,6 +466,181 @@ export default function PinochleGamePage({
 		[allowedPlayableCards]
 	);
 
+	const isMeldPhase =
+		gameState?.phase === "scoring" ||
+		gameState?.status === "meld" ||
+		gameState?.status === "scoring";
+
+	useEffect(() => {
+		if (isMeldPhase) {
+			setShowMeldModal(true);
+		}
+	}, [isMeldPhase]);
+
+	useEffect(() => {
+		const meldToken = [
+			gameState?.roundBid ?? "",
+			gameState?.trumpSuit ?? "",
+			gameState?.meldTeamA ?? "",
+			gameState?.meldTeamB ?? "",
+		].join("|");
+		const shouldOpen =
+			gameState?.phase === "playing" &&
+			!!gameState?.trumpSuit &&
+			gameState?.meldTeamA !== undefined &&
+			gameState?.meldTeamB !== undefined &&
+			lastMeldTokenRef.current !== meldToken;
+		if (shouldOpen) {
+			lastMeldTokenRef.current = meldToken;
+			setShowMeldModal(true);
+		}
+		if (gameState?.phase === "waiting") {
+			lastMeldTokenRef.current = null;
+		}
+	}, [
+		gameState?.phase,
+		gameState?.trumpSuit,
+		gameState?.meldTeamA,
+		gameState?.meldTeamB,
+		gameState?.roundBid,
+	]);
+
+	const isRoundRecapPhase =
+		gameState?.status === "round_complete" || gameState?.status === "bid_set";
+
+	useEffect(() => {
+		if (isRoundRecapPhase) {
+			setShowRoundRecap(true);
+		}
+	}, [isRoundRecapPhase]);
+
+	const orderedPlayers = useMemo(() => {
+		const players = gameState?.players || [];
+		if (!players.length) return [] as PinochlePlayer[];
+		const hasSeats = players.some((p) => typeof p.seatNumber === "number");
+		const sorted = hasSeats
+			? [...players].sort(
+					(a, b) => (a.seatNumber ?? 0) - (b.seatNumber ?? 0)
+			  )
+			: [...players];
+		if (!myPlayer || !hasSeats) return sorted;
+		const mySeatIndex = sorted.findIndex((p) => p.id === myPlayer.id);
+		if (mySeatIndex === -1) return sorted;
+		return [...sorted.slice(mySeatIndex), ...sorted.slice(0, mySeatIndex)];
+	}, [gameState?.players, myPlayer]);
+
+	const seatMap = useMemo(() => {
+		const map = new Map<SeatPosition, PinochlePlayer | undefined>();
+		seatOrder.forEach((position, index) => {
+			map.set(position, orderedPlayers[index]);
+		});
+		return map;
+	}, [orderedPlayers]);
+
+	const meldDisplayPlayers = useMemo(() => {
+		if (!orderedPlayers.length) return [] as PinochlePlayer[];
+		if (!myPlayer?.team) return orderedPlayers.slice(0, 4);
+		const myTeamPlayers = orderedPlayers.filter(
+			(player) => player.team === myPlayer.team
+		);
+		const orderedMyTeam = myTeamPlayers.sort((a, b) => {
+			if (a.id === myPlayer.id) return -1;
+			if (b.id === myPlayer.id) return 1;
+			return 0;
+		});
+		const opponentPlayers = orderedPlayers.filter(
+			(player) => player.team !== myPlayer.team
+		);
+		return [...orderedMyTeam, ...opponentPlayers];
+	}, [myPlayer?.team, orderedPlayers]);
+
+	const handRows = useMemo(() => {
+		const cards = myPlayer?.cards || [];
+		if (cards.length <= 12) return [cards];
+		const splitIndex = Math.ceil(cards.length / 2);
+		return [cards.slice(0, splitIndex), cards.slice(splitIndex)];
+	}, [myPlayer?.cards]);
+
+	useEffect(() => {
+		if (!pendingPlay || !gameState?.trick?.cards) return;
+		const alreadyRecorded = gameState.trick.cards.some(
+			(entry) => entry.playerId === pendingPlay.playerId
+		);
+		if (alreadyRecorded) {
+			setPendingPlay(null);
+		}
+	}, [gameState?.trick?.cards, pendingPlay]);
+
+	useEffect(() => {
+		if (!gameState?.trick?.cards?.length) {
+			setPendingPlay(null);
+		}
+	}, [gameState?.trick?.cards?.length]);
+
+	useEffect(() => {
+		if (!completedTrick?.cards?.length || !completedTrickWinnerId) return;
+		setIsCollectingTrick(false);
+		const pauseTimer = setTimeout(() => setIsCollectingTrick(true), 500);
+		const clearTimer = setTimeout(() => {
+			setCompletedTrick(null);
+			setCompletedTrickWinnerId(null);
+			setIsCollectingTrick(false);
+		}, 1200);
+		return () => {
+			clearTimeout(pauseTimer);
+			clearTimeout(clearTimer);
+		};
+	}, [completedTrick, completedTrickWinnerId]);
+
+	const suitIcon = (suit: Suit) => {
+		switch (suit) {
+			case "spades":
+				return "M24 2c6 7 11 11 11 18 0 6-4 10-9 10-2 0-4-1-6-3 1 4 3 7 6 10H22c3-3 5-6 6-10-2 2-4 3-6 3-5 0-9-4-9-10 0-7 5-11 11-18z";
+			case "hearts":
+				return "M24 38C13 29 6 23 6 16a8 8 0 0 1 15-4 8 8 0 0 1 15 4c0 7-7 13-12 18z";
+			case "diamonds":
+				return "M24 4l14 20-14 20L10 24 24 4z";
+			default:
+				return "M24 6c6 4 12 9 12 16 0 5-3 9-8 9-2 0-4-1-6-2 1 3 2 6 5 9H21c3-3 4-6 5-9-2 1-4 2-6 2-5 0-8-4-8-9 0-7 6-12 12-16z";
+		}
+	};
+
+	const myTeam = myPlayer?.team || "A";
+	const opponentTeam = myTeam === "A" ? "B" : "A";
+	const teamStats = useMemo(() => {
+		const meldA = gameState?.meldTeamA ?? 0;
+		const meldB = gameState?.meldTeamB ?? 0;
+		const tricksA = gameState?.trickPointsTeamA ?? 0;
+		const tricksB = gameState?.trickPointsTeamB ?? 0;
+		return {
+			teamA: {
+				meld: meldA,
+				tricks: tricksA,
+				total: meldA + tricksA,
+				score: gameState?.scoreTeamA ?? 0,
+			},
+			teamB: {
+				meld: meldB,
+				tricks: tricksB,
+				total: meldB + tricksB,
+				score: gameState?.scoreTeamB ?? 0,
+			},
+		};
+	}, [
+		gameState?.meldTeamA,
+		gameState?.meldTeamB,
+		gameState?.trickPointsTeamA,
+		gameState?.trickPointsTeamB,
+		gameState?.scoreTeamA,
+		gameState?.scoreTeamB,
+	]);
+
+	const bidderTeam = gameState?.biddingTeam;
+	const bidderMeld =
+		bidderTeam === "A" ? teamStats.teamA.meld : teamStats.teamB.meld;
+	const tricksNeeded = Math.max((gameState?.roundBid ?? 0) - bidderMeld, 20);
+	const trickCenterOffset = { x: 0, y: -30 };
+
 	if (loading) {
 		return <div className="text-center p-10 text-gray-200">Loading...</div>;
 	}
@@ -469,389 +654,602 @@ export default function PinochleGamePage({
 	}
 
 	return (
-		<div className="container mx-auto p-4 bg-gray-900 text-gray-200 min-h-screen">
-			<div className="bg-gray-800 border-l-4 border-blue-700 p-4 mb-4 rounded">
-				<p className="text-gray-200">
-					{isConnected
-						? "Connected to game server"
-						: "Disconnected from game server"}
-				</p>
-			</div>
-
-			<h1 className="text-2xl font-bold mb-4 text-gray-100">
-				Pinochle Room: {gameState?.name || gameId}
-			</h1>
-
-			<div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-				<div className="bg-gray-800 p-4 rounded-lg shadow space-y-2">
-					<div className="text-sm text-gray-400">Phase</div>
-					<div className="text-xl font-semibold text-gray-100">
-						{gameState?.phase ?? gameState?.status ?? "waiting"}
+		<div className="min-h-screen bg-gradient-to-b from-[#0b0416] via-[#120c25] to-[#0a0818] text-gray-100">
+			<div className="mx-auto max-w-6xl px-4 py-6">
+				<div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+					<div className="rounded border border-white/10 bg-black/40 px-3 py-2">
+						{isConnected
+							? "Connected to game server"
+							: "Disconnected from game server"}
 					</div>
-					<div className="text-sm text-gray-400">Active Player</div>
-					<div className="text-lg text-gray-100">
-						{activePlayerName || "—"}
+					<div className="text-right text-xs uppercase tracking-[0.25em] text-white/60">
+						Pinochle Room {gameState?.name || gameId}
 					</div>
 				</div>
-				<div className="bg-gray-800 p-4 rounded-lg shadow space-y-2">
-					<div className="flex items-center justify-between">
-						<div>
-							<div className="text-sm text-gray-400">Current Bid</div>
-							<div className="text-xl font-semibold text-gray-100">
-								{gameState?.roundBid ?? "—"}
-							</div>
-						</div>
-						<div className="text-right">
-							<div className="text-sm text-gray-400">Bidder</div>
-							<div className="text-lg text-gray-100">
-								{bidLeaderName || "—"}
-							</div>
-						</div>
-					</div>
-					<div className="text-sm text-gray-400">Trump Suit</div>
-					<div className="text-lg text-gray-100">
-						{gameState?.trumpSuit || (showTrumpSelector ? "Select trump" : "—")}
-					</div>
-				</div>
-				<div className="bg-gray-800 p-4 rounded-lg shadow space-y-2">
-					<div className="flex justify-between">
-						<div>
-							<div className="text-sm text-gray-400">Team A</div>
-							<div className="text-lg font-semibold text-gray-100">
-								{gameState?.scoreTeamA ?? 0} pts
-							</div>
-							<div className="text-xs text-gray-400">
-								Meld: {gameState?.meldTeamA ?? 0}
-							</div>
-						</div>
-						<div className="text-right">
-							<div className="text-sm text-gray-400">Team B</div>
-							<div className="text-lg font-semibold text-gray-100">
-								{gameState?.scoreTeamB ?? 0} pts
-							</div>
-							<div className="text-xs text-gray-400">
-								Meld: {gameState?.meldTeamB ?? 0}
-							</div>
-						</div>
-					</div>
-					<div className="text-sm text-gray-400">
-						Dealer:{" "}
-						<span className="text-gray-100">
-							{gameState?.players.find((p) => p.id === gameState?.dealerId)
-								?.username || "—"}
-						</span>
-					</div>
-				</div>
-			</div>
 
-			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-				<div className="lg:col-span-2 space-y-6">
-					<div className="bg-gray-800 p-4 rounded-lg shadow">
-						<div className="flex flex-wrap items-center gap-3 mb-4">
-							{isDealer && (
-								<button
-									onClick={handleDeal}
-									className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-md"
-									disabled={gameState?.phase === "playing"}
-								>
-									Deal Hands
-								</button>
-							)}
-
-							{showTrumpSelector && (
-								<div className="flex items-center gap-2">
-									<span className="text-sm text-gray-300">Set Trump:</span>
-									{availableTrumpSuits.length ? (
-										availableTrumpSuits.map((suit) => (
-											<button
-												key={suit}
-												onClick={() => handleSetTrump(suit)}
-												className="px-3 py-1 bg-purple-700 hover:bg-purple-800 text-white rounded text-sm"
-											>
-												{suit}
-											</button>
-										))
-									) : (
-										<span className="text-xs text-red-300">
-											No valid trump suits (need a king and queen).
-										</span>
-									)}
+				<div className="grid gap-6 lg:grid-cols-[240px_1fr_280px]">
+					<div className="rounded-lg border border-black/40 bg-white/10 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
+						<div className="text-lg font-semibold text-white/90">Scoreboard</div>
+						<div className="mt-4 space-y-3 text-sm">
+							<div className="rounded-md border border-white/10 bg-white/5 p-3">
+								<div className="flex items-center justify-between text-xs uppercase text-white/60">
+									<span>You</span>
+									<span>Them</span>
 								</div>
-							)}
-
-							{gameState?.phase === "waiting" && (
-								<button
-									onClick={handleToggleReady}
-									className="px-3 py-2 bg-green-700 hover:bg-green-800 text-white rounded-md text-sm"
-								>
-									{myPlayer?.ready ? "Unready" : "Ready"}
-								</button>
-							)}
-						</div>
-
-						{gameState?.phase === "bid" && (
-							<div className="flex flex-col sm:flex-row gap-3 items-center">
-								<div className="flex items-center gap-2 w-full sm:w-auto">
-									<label className="text-sm text-gray-300" htmlFor="bidOutput">
-										Your bid
-									</label>
-									<div className="flex items-center gap-2">
-										<button
-											type="button"
-											onClick={() =>
-												handleBidInputChange(bidAmount - bidDecrement)
-											}
-											disabled={!canDecreaseBid}
-											className={`h-9 w-9 rounded border border-gray-600 text-lg ${
-												canDecreaseBid
-													? "bg-gray-700 hover:bg-gray-600 text-gray-100"
-													: "bg-gray-800 text-gray-500 cursor-not-allowed"
-											}`}
-											aria-label="Decrease bid"
-										>
-											-
-										</button>
-										<output
-											id="bidOutput"
-											className="w-20 text-center border border-gray-600 bg-gray-700 text-gray-100 rounded px-2 py-1"
-											aria-live="polite"
-										>
-											{bidAmount}
-										</output>
-										<button
-											type="button"
-											onClick={() => handleBidInputChange(bidAmount + bidStep)}
-											disabled={!canBid}
-											className={`h-9 w-9 rounded border border-gray-600 text-lg ${
-												canBid
-													? "bg-gray-700 hover:bg-gray-600 text-gray-100"
-													: "bg-gray-800 text-gray-500 cursor-not-allowed"
-											}`}
-											aria-label="Increase bid"
-										>
-											+
-										</button>
+								<div className="mt-2 grid grid-cols-2 gap-2 text-center text-lg">
+									<div>
+										<div className="text-xs uppercase text-white/50">Meld</div>
+										<div className="font-bold text-emerald-300">
+											{gameState?.meldTeamA ?? 0}
+										</div>
+									</div>
+									<div>
+										<div className="text-xs uppercase text-white/50">Meld</div>
+										<div className="font-bold text-red-300">
+											{gameState?.meldTeamB ?? 0}
+										</div>
+									</div>
+									<div>
+										<div className="text-xs uppercase text-white/50">Tricks</div>
+										<div className="font-bold text-emerald-300">
+											{gameState?.trickPointsTeamA ?? 0}
+										</div>
+									</div>
+									<div>
+										<div className="text-xs uppercase text-white/50">Tricks</div>
+										<div className="font-bold text-red-300">
+											{gameState?.trickPointsTeamB ?? 0}
+										</div>
 									</div>
 								</div>
-								<div className="flex gap-2 w-full sm:w-auto">
-									<button
-										onClick={handleBid}
-										disabled={!canBid}
-										className={`px-4 py-2 rounded-md ${
-											canBid
-												? "bg-blue-700 hover:bg-blue-800 text-white"
-												: "bg-gray-700 text-gray-400 cursor-not-allowed"
-										}`}
-									>
-										Bid
-									</button>
-									<button
-										onClick={handlePassBid}
-										disabled={!canBid}
-										className={`px-4 py-2 rounded-md ${
-											canBid
-												? "bg-red-700 hover:bg-red-800 text-white"
-												: "bg-gray-700 text-gray-400 cursor-not-allowed"
-										}`}
-									>
-										Pass
-									</button>
+								<div className="mt-3 grid grid-cols-2 gap-2 border-t border-white/10 pt-3 text-center text-lg">
+									<div>
+										<div className="text-xs uppercase text-white/50">Score</div>
+										<div className="font-bold text-emerald-300">
+											{gameState?.scoreTeamA ?? 0}
+										</div>
+									</div>
+									<div>
+										<div className="text-xs uppercase text-white/50">Score</div>
+										<div className="font-bold text-red-300">
+											{gameState?.scoreTeamB ?? 0}
+										</div>
+									</div>
 								</div>
-								<div className="text-sm text-gray-400">
-									Bids: 50-60 by 1s, 60-100 by 5s, 100+ by 10s. Only the active bidder may act.
+								<div className="mt-3 border-t border-white/10 pt-3 text-xs uppercase text-white/60">
+									Round Bid{" "}
+									<span className="text-white/90">
+										{gameState?.roundBid ?? "-"}
+									</span>
 								</div>
 							</div>
-						)}
-
-						{gameState?.phase === "playing" && (
-							<div className="flex flex-col sm:flex-row items-center gap-3">
-								<button
-									onClick={handlePlayCard}
-									disabled={!canPlayCard || selectedCardIndex === null}
-									className={`px-4 py-2 rounded-md ${
-										canPlayCard && selectedCardIndex !== null
-											? "bg-green-700 hover:bg-green-800 text-white"
-											: "bg-gray-700 text-gray-400 cursor-not-allowed"
-									}`}
-								>
-									Play Selected Card
-								</button>
-								<div className="text-sm text-gray-400">
-									{canPlayCard
-										? "It's your turn to play."
-										: "Waiting for your turn."}
+							<div className="rounded-md border border-white/10 bg-white/5 p-3 text-xs uppercase text-white/60">
+								<div>Phase</div>
+								<div className="mt-1 text-base font-semibold text-white/90">
+									{gameState?.phase ?? gameState?.status ?? "waiting"}
+								</div>
+								<div className="mt-2">Active</div>
+								<div className="text-base text-white/80">
+									{activePlayerName || "-"}
+								</div>
+								<div className="mt-2">Trump</div>
+								<div className="text-base text-white/80">
+									{gameState?.trumpSuit || (showTrumpSelector ? "Select" : "-")}
 								</div>
 							</div>
-						)}
+						</div>
 					</div>
 
-					<div className="bg-gray-800 p-4 rounded-lg shadow">
-						<h2 className="text-lg font-semibold text-gray-100 mb-3">
-							Current Trick
-						</h2>
-						{gameState?.trick?.cards?.length ? (
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-								{gameState.trick.cards.map((entry, idx) => {
+					<div className="relative rounded-[28px] border border-[#1d1206] bg-[#082e14] shadow-[0_20px_50px_rgba(0,0,0,0.45)]">
+						<div className="absolute inset-0 rounded-[28px] border-4 border-[#3d2107]" />
+						<div className="relative flex min-h-[520px] flex-col items-center justify-between px-6 py-8">
+							<div
+								className={`text-lg font-semibold tracking-wide text-white/90 ${
+									seatMap.get("top")?.id === gameState?.activePlayerId
+										? "font-bold text-yellow-300 underline"
+										: ""
+								}`}
+							>
+								{seatMap.get("top")?.username || "Waiting for partner"}
+							</div>
+							<div
+								className={`absolute left-6 top-1/2 -translate-y-1/2 text-sm font-semibold text-white/80 ${
+									seatMap.get("left")?.id === gameState?.activePlayerId
+										? "font-bold text-yellow-300 underline"
+										: ""
+								}`}
+							>
+								{seatMap.get("left")?.username || "Waiting..."}
+							</div>
+							<div
+								className={`absolute right-6 top-1/2 -translate-y-1/2 text-sm font-semibold text-white/80 ${
+									seatMap.get("right")?.id === gameState?.activePlayerId
+										? "font-bold text-yellow-300 underline"
+										: ""
+								}`}
+							>
+								{seatMap.get("right")?.username || "Waiting..."}
+							</div>
+							<div
+								className={`absolute bottom-8 text-lg font-semibold text-white/90 ${
+									myPlayer?.id === gameState?.activePlayerId
+										? "font-bold text-yellow-300 underline"
+										: ""
+								}`}
+							>
+								{myPlayer?.username || "You"}
+							</div>
+
+							<div className="relative mt-10 flex h-60 w-60 items-center justify-center">
+								{(
+									completedTrick?.cards?.length
+										? completedTrick.cards
+										: [
+												...(gameState?.trick?.cards || []),
+												...(pendingPlay ? [pendingPlay] : []),
+										  ]
+								).map((entry, idx) => {
 									const normalized = normalizeCard(entry.card);
-									const playerName =
-										gameState.players.find((p) => p.id === entry.playerId)
-											?.username || entry.playerId;
+									const seatIndex = orderedPlayers.findIndex(
+										(player) => player.id === entry.playerId
+									);
+									const seat =
+										seatOrder[seatIndex >= 0 ? seatIndex : 0] || "bottom";
+									const motionStart = {
+										bottom: { x: 0, y: 140 },
+										top: { x: 0, y: -140 },
+										left: { x: -160, y: 0 },
+										right: { x: 160, y: 0 },
+									}[seat];
+									const baseStop = {
+										bottom: { x: 0, y: 35 },
+										top: { x: 0, y: -85 },
+										left: { x: -70, y: -20 },
+										right: { x: 70, y: -20 },
+									}[seat];
+									const overlapOffset = {
+										bottom: { x: idx * 6, y: idx * 4 },
+										top: { x: idx * 6, y: -idx * 4 },
+										left: { x: -idx * 4, y: idx * 6 },
+										right: { x: idx * 4, y: -idx * 6 },
+									}[seat];
+									const winnerSeatIndex = orderedPlayers.findIndex(
+										(player) => player.id === completedTrickWinnerId
+									);
+									const winnerSeat =
+										seatOrder[winnerSeatIndex >= 0 ? winnerSeatIndex : 0] ||
+										"bottom";
+									const collectTarget = {
+										bottom: { x: 0, y: 220 },
+										top: { x: 0, y: -220 },
+										left: { x: -260, y: 0 },
+										right: { x: 260, y: 0 },
+									}[winnerSeat];
+
+									if (!normalized) {
+										return (
+											<div
+												key={`${entry.playerId}-${idx}`}
+												className="text-xs text-white/70"
+											>
+												Card hidden
+											</div>
+										);
+									}
+
 									return (
-										<div
+										<motion.div
 											key={`${entry.playerId}-${idx}`}
-											className="flex items-center gap-3 bg-gray-700 p-3 rounded"
+											initial={{ opacity: 0, ...motionStart }}
+											animate={{
+												opacity: 1,
+												x: isCollectingTrick
+													? collectTarget.x
+													: baseStop.x + overlapOffset.x + trickCenterOffset.x,
+												y: isCollectingTrick
+													? collectTarget.y
+													: baseStop.y + overlapOffset.y + trickCenterOffset.y,
+											}}
+											transition={{ duration: 0.2, ease: "easeOut" }}
+											className="absolute"
+											style={{ zIndex: 10 + idx }}
 										>
-											<div className="w-32 text-gray-200">{playerName}</div>
-											{normalized ? (
-												<Card
-													scaleFactor={1}
-													rank={normalized.rank}
-													suit={normalized.suit}
-													faceDown={normalized.faceUp === false}
-												/>
-											) : (
-												<span className="text-sm text-gray-400">
-													Card hidden
-												</span>
-											)}
-										</div>
+											<Card
+												scaleFactor={1.05}
+												rank={normalized.rank}
+												suit={normalized.suit}
+												faceDown={false}
+											/>
+										</motion.div>
 									);
 								})}
 							</div>
-						) : (
-							<div className="text-sm text-gray-400">
-								No cards played in this trick yet.
+
+							{gameState?.phase === "bid" && (
+								<>
+									{(["top", "left", "right", "bottom"] as SeatPosition[]).map(
+										(position) => {
+											const player = seatMap.get(position);
+											if (!player) return null;
+											const isActive = player.id === gameState?.activePlayerId;
+											const isLeader = player.id === gameState?.bidLeaderId;
+											const label = player.passedBid
+												? "PASS"
+												: isLeader
+													? `${gameState?.roundBid ?? ""}`
+													: "--";
+											const isBottomBidder =
+												position === "bottom" && player.id === myPlayer?.id;
+											const positionClasses = {
+												top: "top-24 left-1/2 -translate-x-1/2",
+												left: "left-16 top-1/2 -translate-y-1/2",
+												right: "right-16 top-1/2 -translate-y-1/2",
+												bottom: "bottom-24 left-1/2 -translate-x-1/2",
+											}[position];
+											return (
+												<div
+													key={`bid-${position}`}
+													className={`absolute ${positionClasses} rounded-lg border-2 border-black/50 bg-[#f6f0c4] px-5 py-4 text-center text-xl font-bold uppercase text-black shadow-[0_10px_20px_rgba(0,0,0,0.35)] ${
+														isActive ? "ring-2 ring-red-400" : ""
+													}`}
+												>
+													{isBottomBidder ? (
+														<div className="flex flex-col items-center gap-2">
+															<div className="flex items-center gap-2">
+																<button
+																	type="button"
+																	onClick={() =>
+																		handleBidInputChange(
+																			bidAmount - bidDecrement
+																		)
+																	}
+																	disabled={!canDecreaseBid}
+																	className="rounded border border-black/30 px-2 py-1 text-lg font-bold text-black/70 disabled:opacity-40"
+																>
+																	-
+																</button>
+																<button
+																	onClick={handleBid}
+																	disabled={!canBid}
+																	className="min-w-[60px] rounded border border-black/40 px-3 py-1 text-2xl font-bold text-black disabled:opacity-40"
+																>
+																	{bidAmount}
+																</button>
+																<button
+																	type="button"
+																	onClick={() =>
+																		handleBidInputChange(bidAmount + bidStep)
+																	}
+																	disabled={!canBid}
+																	className="rounded border border-black/30 px-2 py-1 text-lg font-bold text-black/70 disabled:opacity-40"
+																>
+																	+
+																</button>
+															</div>
+															<button
+																onClick={handlePassBid}
+																disabled={!canBid}
+																className="rounded border border-black/40 px-4 py-1 text-sm font-semibold uppercase text-black/80 disabled:opacity-40"
+															>
+																Pass
+															</button>
+														</div>
+													) : (
+														label
+													)}
+												</div>
+											);
+										}
+									)}
+								</>
+							)}
+						</div>
+					</div>
+
+					<div className="space-y-4">
+						<div className="rounded-lg border border-white/10 bg-black/40 p-4 text-sm text-white/70">
+							<div className="mb-2 text-xs uppercase tracking-[0.2em] text-white/60">
+								Actions
+							</div>
+							<div className="flex flex-wrap gap-2">
+								{isDealer && (
+									<button
+										onClick={handleDeal}
+										className="rounded bg-emerald-700 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-800"
+										disabled={gameState?.phase === "playing"}
+									>
+										Deal
+									</button>
+								)}
+								{gameState?.phase === "waiting" && (
+									<button
+										onClick={handleToggleReady}
+										className="rounded bg-sky-600 px-3 py-2 text-xs font-semibold text-white hover:bg-sky-700"
+									>
+										{myPlayer?.ready ? "Unready" : "Ready"}
+									</button>
+								)}
+							</div>
+							{gameState?.phase === "bid" && (
+								<div className="mt-4 text-xs uppercase tracking-[0.2em] text-white/60">
+									Bidding in progress...
+								</div>
+							)}
+						</div>
+
+						<DraggableChat socket={socketRef.current} scope="pinochle" />
+
+						{process.env.NODE_ENV !== "production" && gameState && (
+							<div className="rounded-lg border border-emerald-900 bg-black/70 p-4 text-xs text-emerald-200">
+								<h2 className="text-sm font-semibold">[DEBUG] Game State</h2>
+								<pre className="mt-2 max-h-80 overflow-y-auto whitespace-pre-wrap break-all rounded border border-emerald-900 bg-black/60 p-2">
+									{JSON.stringify(gameState, null, 2)}
+								</pre>
 							</div>
 						)}
 					</div>
+				</div>
 
-					<div className="bg-gray-800 p-4 rounded-lg shadow">
-						<h2 className="text-lg font-semibold text-gray-100 mb-3">
-							Your Hand
-						</h2>
-								{myPlayer?.cards?.length ? (
-									<div className="flex flex-wrap gap-3">
-										{myPlayer.cards.map((card, idx) => {
-											const normalized = normalizeCard(card);
-											const isAllowed =
-												!canPlayCard || allowedCardSet.has(card);
-											return (
-												<button
-													key={`${card.name || `${card.suit}-${idx}`}`}
-													onClick={() => setSelectedCardIndex(idx)}
-													className={`p-1 rounded border ${
-														selectedCardIndex === idx
-															? "border-blue-500 bg-gray-700"
-															: "border-transparent"
-													} ${
-														canPlayCard && !isAllowed
-															? "opacity-50 cursor-not-allowed"
-															: ""
-													}`}
-													disabled={
-														(!canPlayCard && gameState?.phase !== "playing") ||
-														(canPlayCard && !isAllowed)
+				<div className="mt-8 rounded-2xl border border-white/10 bg-black/50 p-4">
+					<div className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.25em] text-white/60">
+						<span>Your Hand</span>
+						<span>
+							{canPlayCard
+								? "Click a card to play."
+								: "Waiting for your turn."}
+						</span>
+					</div>
+					{handRows.length ? (
+						<div className="space-y-3">
+							{handRows.map((row, rowIndex) => (
+								<div
+									key={`hand-row-${rowIndex}`}
+									className="flex flex-nowrap justify-center overflow-x-auto pb-2"
+									style={{ gap: 0 }}
+								>
+									{row.map((card, idx) => {
+										const globalIndex =
+											rowIndex === 0 ? idx : idx + handRows[0].length;
+										const normalized = normalizeCard(card);
+										const isAllowed =
+											!canPlayCard || allowedCardSet.has(card);
+										const isSelected = selectedCardIndex === globalIndex;
+										return (
+											<button
+												key={`${card.name || `${card.suit}-${globalIndex}`}`}
+												onClick={() => {
+													if (canPlayCard && isAllowed && myPlayer) {
+														setPendingPlay({
+															playerId: myPlayer.id,
+															card,
+														});
+														emitWithGameId("PIN-pinochle_play_card", { card });
+														setSelectedCardIndex(null);
+														return;
 													}
+													setSelectedCardIndex((prev) =>
+														prev === globalIndex ? null : globalIndex
+													);
+												}}
+												className={`relative -ml-8 first:ml-0 focus:outline-none ${
+													isSelected ? "z-20" : "z-10"
+												} ${canPlayCard && !isAllowed ? "opacity-50" : ""}`}
+												disabled={canPlayCard && !isAllowed}
+											>
+												<div
+													className={`rounded-lg border-2 ${
+														isSelected
+															? "border-amber-400 shadow-[0_0_12px_rgba(252,211,77,0.8)]"
+															: "border-transparent"
+													}`}
 												>
 													{normalized ? (
 														<Card
-															scaleFactor={1}
+															scaleFactor={0.95}
 															rank={normalized.rank}
-													suit={normalized.suit}
-													faceDown={false}
-												/>
-											) : (
-												<span className="text-sm text-gray-400">
-													Unknown
-												</span>
-											)}
-										</button>
-									);
-								})}
-							</div>
-						) : (
-							<div className="text-sm text-gray-400">
-								You have no cards yet.
-							</div>
-						)}
-					</div>
-				</div>
-
-				<div className="space-y-6">
-					<div className="bg-gray-800 p-4 rounded-lg shadow">
-						<h3 className="text-lg font-semibold text-gray-100 mb-3">
-							Players
-						</h3>
-						<ul className="space-y-2">
-							{gameState?.players.map((player) => {
-								const teamLabel =
-									player.team ||
-									((player.seatNumber ?? 0) % 2 === 0 ? "A" : "B");
-								return (
-									<li
-										key={player.id}
-										className={`p-3 rounded border ${
-											player.id === currentPlayerId
-												? "border-blue-600 bg-gray-700"
-												: "border-gray-700 bg-gray-800"
-										}`}
-									>
-										<div className="flex justify-between items-center">
-											<div>
-												<div className="text-gray-100 font-medium">
-													{player.username}
-													{player.id === gameState?.dealerId && (
-														<span className="ml-2 text-xs text-purple-300">
-															Dealer
+															suit={normalized.suit}
+															faceDown={false}
+															animate={false}
+														/>
+													) : (
+														<span className="text-xs text-white/60">
+															Unknown
 														</span>
 													)}
 												</div>
-												<div className="text-xs text-gray-400">
-													Team {teamLabel}
-												</div>
-											</div>
-											<div className="text-right text-sm text-gray-300">
-												<div>
-													Meld: {player.meldScore ?? "—"}
-												</div>
-												<div>
-													Tricks: {player.tricksWon ?? 0}
-												</div>
-												{player.ready && (
-													<div className="text-green-400 text-xs">Ready</div>
-												)}
-												{player.id === gameState?.activePlayerId && (
-													<div className="text-blue-400 text-xs">Active</div>
-												)}
-											</div>
-										</div>
-									</li>
-								);
-							})}
-						</ul>
-					</div>
-
-					<DraggableChat socket={socketRef.current} scope="pinochle" />
-
-					{process.env.NODE_ENV !== "production" && gameState && (
-						<div className="p-4 bg-gray-950 text-green-300 rounded overflow-x-auto">
-							<h2 className="text-lg font-bold mb-2">[DEBUG] Game State</h2>
-							<pre className="text-xs whitespace-pre-wrap break-all max-h-96 overflow-y-auto border border-green-700 rounded bg-gray-900 p-2 mb-4">
-								{JSON.stringify(gameState, null, 2)}
-							</pre>
+											</button>
+										);
+									})}
+								</div>
+							))}
 						</div>
+					) : (
+						<div className="text-sm text-white/60">You have no cards yet.</div>
 					)}
+				</div>
+
+				<div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-xs text-white/60">
+					<button
+						onClick={() => router.push("/game")}
+						className="rounded bg-white/10 px-3 py-2 text-xs font-semibold text-white hover:bg-white/20"
+					>
+						Back to Lobby
+					</button>
+					<div className="uppercase tracking-[0.2em]">
+						{bidLeaderName ? `Bidder: ${bidLeaderName}` : "Waiting for bid"}
+					</div>
 				</div>
 			</div>
 
-			<div className="mt-6">
-				<button
-					onClick={() => router.push("/game")}
-					className="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded"
+			{showTrumpSelector && (
+				<div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4">
+					<div className="w-full max-w-lg rounded-2xl border border-black/60 bg-[#f6f0c4] p-6 text-black shadow-[0_24px_60px_rgba(0,0,0,0.55)]">
+						<div className="text-lg font-semibold uppercase tracking-[0.2em] text-black/70">
+							Declare Trump
+						</div>
+						<div className="mt-4 grid grid-cols-2 gap-4">
+							{availableTrumpSuits.map((suit) => (
+								<button
+									key={suit}
+									onClick={() => handleSetTrump(suit)}
+									className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-black/30 bg-white/80 px-4 py-6 text-sm font-semibold uppercase shadow-[0_8px_18px_rgba(0,0,0,0.25)] hover:bg-white"
+								>
+									<svg
+										viewBox="0 0 48 48"
+										className="h-12 w-12"
+										aria-hidden
+									>
+										<path d={suitIcon(suit)} fill="currentColor" />
+									</svg>
+									{suit}
+								</button>
+							))}
+						</div>
+					</div>
+				</div>
+			)}
+
+			{showMeldModal && (
+				<div
+					className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 px-4"
+					onClick={() => setShowMeldModal(false)}
 				>
-					Back to Lobby
-				</button>
-			</div>
+					<div
+						className="w-full max-w-4xl rounded-2xl border border-black/60 bg-[#f7f5c6] p-6 text-black shadow-[0_26px_60px_rgba(0,0,0,0.55)]"
+						onClick={(event) => event.stopPropagation()}
+					>
+						<div className="mb-4 text-lg font-semibold uppercase tracking-[0.2em] text-black/70">
+							Meld Scoring
+						</div>
+						<div className="grid gap-6">
+							{meldDisplayPlayers.map((player, index) => {
+								const meldCards = player.meldCards || [];
+								const teamTotal =
+									player.team === "A"
+										? gameState?.meldTeamA
+										: gameState?.meldTeamB;
+								const showTeamTotal = index === 0 || index === 2;
+								return (
+									<div
+										key={`meld-${player.id}`}
+										className="grid grid-cols-[180px_1fr_120px] items-center gap-6"
+									>
+										<div className="text-xl font-semibold text-black/80">
+											{player.username}
+										</div>
+										<div className="flex flex-wrap gap-2">
+											{meldCards.length ? (
+												meldCards.map((card, cardIndex) => {
+													const normalized = normalizeCard(card);
+													return normalized ? (
+														<Card
+															key={`${player.id}-${cardIndex}`}
+															scaleFactor={0.6}
+															rank={normalized.rank}
+															suit={normalized.suit}
+															faceDown={false}
+															animate={false}
+														/>
+													) : null;
+												})
+											) : (
+												<div className="text-sm text-black/50">
+													No meld cards.
+												</div>
+											)}
+										</div>
+										<div className="text-right text-2xl font-bold text-black/80">
+											{player.meldScore ?? 0}
+											{showTeamTotal && (
+												<div className="mt-2 text-base font-semibold text-black/60">
+													Team {player.team} total: {teamTotal ?? 0}
+												</div>
+											)}
+										</div>
+									</div>
+								);
+							})}
+						</div>
+						<div className="mt-6 text-right text-xs uppercase tracking-[0.2em] text-black/60">
+							Click outside to close
+						</div>
+					</div>
+				</div>
+			)}
+
+			{showRoundRecap && (
+				<div
+					className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 px-4"
+					onClick={() => setShowRoundRecap(false)}
+				>
+					<div
+						className="w-full max-w-xl rounded-2xl border border-black/60 bg-[#f7f5c6] p-6 text-black shadow-[0_26px_60px_rgba(0,0,0,0.55)]"
+						onClick={(event) => event.stopPropagation()}
+					>
+						<div className="mb-4 text-lg font-semibold uppercase tracking-[0.2em] text-black/70">
+							Round Recap
+						</div>
+						<div className="grid grid-cols-[1fr_120px_120px] gap-y-4 text-xl font-semibold">
+							<div />
+							<div className="text-center">You</div>
+							<div className="text-center">Them</div>
+
+							<div>Bid</div>
+							<div className="text-center">
+								{bidderTeam === myTeam ? gameState?.roundBid ?? "-" : "-"}
+							</div>
+							<div className="text-center">
+								{bidderTeam === opponentTeam
+									? gameState?.roundBid ?? "-"
+									: "-"}
+							</div>
+
+							<div>Meld</div>
+							<div className="text-center">
+								{myTeam === "A" ? teamStats.teamA.meld : teamStats.teamB.meld}
+							</div>
+							<div className="text-center">
+								{myTeam === "A" ? teamStats.teamB.meld : teamStats.teamA.meld}
+							</div>
+
+							<div>Needed</div>
+							<div className="text-center">
+								{bidderTeam === myTeam ? tricksNeeded : "-"}
+							</div>
+							<div className="text-center">
+								{bidderTeam === opponentTeam ? tricksNeeded : "-"}
+							</div>
+
+							<div>Tricks</div>
+							<div className="text-center">
+								{myTeam === "A" ? teamStats.teamA.tricks : teamStats.teamB.tricks}
+							</div>
+							<div className="text-center">
+								{myTeam === "A" ? teamStats.teamB.tricks : teamStats.teamA.tricks}
+							</div>
+
+							<div className="border-t border-black/30 pt-3">Total</div>
+							<div className="border-t border-black/30 pt-3 text-center">
+								{myTeam === "A" ? teamStats.teamA.total : teamStats.teamB.total}
+							</div>
+							<div className="border-t border-black/30 pt-3 text-center">
+								{myTeam === "A" ? teamStats.teamB.total : teamStats.teamA.total}
+							</div>
+
+							<div className="border-t border-black/30 pt-3">Score</div>
+							<div className="border-t border-black/30 pt-3 text-center">
+								{myTeam === "A" ? teamStats.teamA.score : teamStats.teamB.score}
+							</div>
+							<div className="border-t border-black/30 pt-3 text-center">
+								{myTeam === "A" ? teamStats.teamB.score : teamStats.teamA.score}
+							</div>
+						</div>
+						<div className="mt-6 text-right text-xs uppercase tracking-[0.2em] text-black/60">
+							Click outside to close
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 }

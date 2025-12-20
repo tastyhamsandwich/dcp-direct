@@ -1819,7 +1819,10 @@ function buildPinochleState(game?: PinochleGame | null) {
 			cards: sortPinochleHand(p.cards, game.trumpSuit),
 			tricksWon: p.tricksWon,
 			meldScore: p.meldScore,
+			meldCards: p.meldCards,
 			totalScore: p.totalScore,
+			passedBid: p.passedBid,
+			roundPoints: p.roundPoints,
 		})),
 		phase: game.phase,
 		status: game.status,
@@ -1834,6 +1837,10 @@ function buildPinochleState(game?: PinochleGame | null) {
 		scoreTeamB: game.scoreTeamB,
 		meldTeamA: game.meldTeamA,
 		meldTeamB: game.meldTeamB,
+		trickPointsTeamA: game.trickPointsTeamA,
+		trickPointsTeamB: game.trickPointsTeamB,
+		setsTeamA: game.setsTeamA,
+		setsTeamB: game.setsTeamB,
 		deckCount: game.deck?.cards?.length ?? 0,
 	};
 }
@@ -2283,6 +2290,11 @@ function handlePinochlePlayCard(
 			if (winnerPlayer.team === "A") game.trickPointsTeamA += 2;
 			else game.trickPointsTeamB += 2;
 		}
+
+		io.to(game.id).emit("PIN-pinochle_trick_complete", {
+			trick: game.trick,
+			winnerPlayerId: winner.playerId,
+		});
 
 		game.trick = { leadSuit: null, cards: [] };
 		game.activePlayerId = winner.playerId;
