@@ -7,6 +7,7 @@ import { Playwrite_TZ } from "next/font/google";
 import { createDropdownMenuScope } from "@radix-ui/react-dropdown-menu";
 import { updatePlayerStats } from "@lib/database"
 import { PinochleDeck, PinochleCard, PinochlePlayer } from "@game/pinochle";
+import { DeterminePlayableCards } from "@game/pinochleRules";
 
 export function initializeSocket(io: Server) {
 	// Store active games
@@ -2758,56 +2759,9 @@ function getAllowedPinochleCards(
 	trumpSuit: Suit | null | undefined
 ): PinochleCard[] {
 	if (!trumpSuit) return playerHand;
-	if (trick.cards.length === 0 || !trick.leadSuit) return playerHand;
-
-	const leadingSuit = trick.leadSuit;
-	const leadSuitCardsOnTable = trick.cards.filter(
-		(entry) => entry.card.suit === leadingSuit
-	);
-	const highestLeadValue = leadSuitCardsOnTable.reduce(
-		(max, entry) => Math.max(max, entry.card.getValue()),
-		-Infinity
-	);
-	const trumpCardsOnTable = trick.cards.filter(
-		(entry) => entry.card.suit === trumpSuit
-	);
-	const trumpPlayed = trumpCardsOnTable.length > 0;
-	const highestTrumpValue = trumpCardsOnTable.reduce(
-		(max, entry) => Math.max(max, entry.card.getValue()),
-		-Infinity
-	);
-
-	const playerLeadSuitCards = playerHand.filter(
-		(card) => card.suit === leadingSuit
-	);
-	const playerTrumpCards = playerHand.filter(
-		(card) => card.suit === trumpSuit
-	);
-
-	if (!trumpPlayed || leadingSuit === trumpSuit) {
-		if (playerLeadSuitCards.length > 0) {
-			const higherLeadCards = playerLeadSuitCards.filter(
-				(card) => card.getValue() > highestLeadValue
-			);
-			return higherLeadCards.length > 0
-				? higherLeadCards
-				: playerLeadSuitCards;
-		}
-		return playerHand;
-	}
-
-	if (playerLeadSuitCards.length > 0) {
-		return playerLeadSuitCards;
-	}
-
-	if (playerTrumpCards.length > 0) {
-		const winningTrumps = playerTrumpCards.filter(
-			(card) => card.getValue() > highestTrumpValue
-		);
-		return winningTrumps.length > 0 ? winningTrumps : playerTrumpCards;
-	}
-
-	return playerHand;
+	if (trick.cards.length === 0) return playerHand;
+	const leadingCards = trick.cards.map((entry) => entry.card);
+	return DeterminePlayableCards(playerHand, leadingCards, trumpSuit);
 }
 
 function findCardIndex(hand: Card[], payload: any): number {

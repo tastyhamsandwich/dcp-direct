@@ -95,6 +95,23 @@ describe("Pinochle rule helpers", () => {
     ExpectSameCards(playable, playerHand);
   });
 
+  test("requires following suit even when holding trump", () => {
+    const trumpSuit: Suit = "spades";
+    const leadingSuit: Suit = "hearts";
+    const leadCard = CreateCard("king", leadingSuit, DEFAULT_CARD_ID);
+    const trumpCard = CreateCard("ace", trumpSuit, DEFAULT_CARD_ID);
+    const playerHand = [leadCard, trumpCard];
+    const leadingCards = [CreateCard("ace", leadingSuit, DEFAULT_CARD_ID)];
+
+    const playable = DeterminePlayableCards(
+      playerHand,
+      leadingCards,
+      trumpSuit
+    );
+
+    ExpectSameCards(playable, [leadCard]);
+  });
+
   test("counts melds, scores them, and returns meld cards", () => {
     const trumpSuit: Suit = "hearts";
     const hand = CreateMeldHand();

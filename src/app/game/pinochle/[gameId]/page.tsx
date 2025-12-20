@@ -7,6 +7,7 @@ import { io, Socket } from "socket.io-client";
 import Card from "@components/game/Card";
 import DraggableChat from "@comps/game/Chat";
 import { ResolveSocketUrl } from "@lib/socketUrl";
+import { DeterminePlayableCards } from "@game/pinochleRules";
 
 
 type AnyCard = {
@@ -172,64 +173,33 @@ const getAllowedPlayableCards = (
 
 	if (!normalizedHand.length) return hand;
 
-	const leadingSuit = trick.leadSuit;
+	const normalizedCards = normalizedHand.map((entry) => ({
+		suit: entry.normalized.suit,
+		rank: entry.normalized.rank,
+		rankValue: getPinochleRankValue(entry.normalized.rank) as PinochleRankValue,
+	}));
+	const leadingCards = (trick.cards || [])
+		.map((entry) => normalizeCard(entry.card))
+		.filter((card): card is { suit: Suit; rank: PinochleRank } => !!card)
+		.map((card) => ({
+			suit: card.suit,
+			rank: card.rank,
+			rankValue: getPinochleRankValue(card.rank) as PinochleRankValue,
+		}));
 
-	const leadSuitCardsOnTable = (trick.cards || [])
-    .map((entry) => normalizeCard(entry.card))
-    .filter((card): card is { suit: Suit; rank: PinochleRank } => !!card)
-    .filter((card) => card.suit === leadingSuit);
-	const highestLeadValue =
-		leadSuitCardsOnTable.reduce(
-			(max, card) => Math.max(max, getPinochleRankValue(card.rank)),
-			-Infinity
-		) ?? -Infinity;
-
-	const trumpCardsOnTable = (trick.cards || [])
-    .map((entry) => normalizeCard(entry.card))
-    .filter((card): card is { suit: Suit; rank: PinochleRank } => !!card)
-    .filter((card) => card.suit === trumpSuit);
-	const trumpPlayed = trumpCardsOnTable.length > 0;
-	const highestTrumpValue =
-		trumpCardsOnTable.reduce(
-			(max, card) => Math.max(max, getPinochleRankValue(card.rank)),
-			-Infinity
-		) ?? -Infinity;
-
-	const playerLeadSuitCards = normalizedHand.filter(
-		(entry) => entry.normalized.suit === leadingSuit
+	const allowedNormalized = DeterminePlayableCards(
+		normalizedCards,
+		leadingCards,
+		trumpSuit
 	);
-	const playerTrumpCards = normalizedHand.filter(
-		(entry) => entry.normalized.suit === trumpSuit
+	const allowedIndexes = new Set(
+		allowedNormalized
+			.map((card) => normalizedCards.indexOf(card))
+			.filter((index) => index >= 0)
 	);
-
-	if (!trumpPlayed || leadingSuit === trumpSuit) {
-		if (playerLeadSuitCards.length > 0) {
-			const higherLeadCards = playerLeadSuitCards.filter(
-				(entry) =>
-					getPinochleRankValue(entry.normalized.rank) > highestLeadValue
-			);
-			return higherLeadCards.length > 0
-				? higherLeadCards.map((entry) => entry.card)
-				: playerLeadSuitCards.map((entry) => entry.card);
-		}
-		return hand;
-	}
-
-	if (playerLeadSuitCards.length > 0) {
-		return playerLeadSuitCards.map((entry) => entry.card);
-	}
-
-	if (playerLeadSuitCards.length === 0 && playerTrumpCards.length > 0) {
-		const winningTrumps = playerTrumpCards.filter(
-			(entry) =>
-				getPinochleRankValue(entry.normalized.rank) > highestTrumpValue
-		);
-		return winningTrumps.length > 0
-			? winningTrumps.map((entry) => entry.card)
-			: playerTrumpCards.map((entry) => entry.card);
-	}
-
-	return hand;
+	return normalizedHand
+		.filter((_, index) => allowedIndexes.has(index))
+		.map((entry) => entry.card);
 };
 
 export default function PinochleGamePage({
