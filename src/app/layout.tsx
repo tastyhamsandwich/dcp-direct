@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import NavBar from '@comps/nav/NavBar';
+import NavBarClient from '@comps/nav/NavBarClient';
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
@@ -32,7 +32,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <AuthProvider>
-          <NavBar />
+          <NavBarClient />
           <div className="main-content">{children}</div>
           <Toaster position="top-right" />
         </AuthProvider>

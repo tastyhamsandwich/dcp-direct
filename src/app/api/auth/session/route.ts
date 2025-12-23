@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifySession } from "@lib/session";
-import { getUserById } from "@lib/database";
+import { getProfileById } from "@lib/userService";
 
 export async function GET() {
   const session = await verifySession();
@@ -10,15 +10,15 @@ export async function GET() {
   }
 
   // Fetch user data from DB
-  const result = await getUserById(session.userId);
-  if (!result.success) {
+  const profile = await getProfileById(session.userId);
+  if (!profile) {
     console.log(`User not found in database`);
     return NextResponse.json({ user: null, session: null }, { status: 401 });
   }
 
   console.log(`Verified user session.`)
   return NextResponse.json({
-    user: result.user,
+    user: profile,
     session: session,
   });
 }

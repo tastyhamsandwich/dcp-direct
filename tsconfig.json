@@ -37,6 +37,6 @@
       "@types/*": ["./src/types/*"]
     }
   },
-  "include": ["./src/types/**.ts", "src/socket.ts", "./src/*.ts", "next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/server.js", ".next/dev/types/**/*.ts"],
+  "include": ["**/*.ts", "**/*.tsx", "**/*.d.ts", "./src/types/**.ts", "src/socket.ts", "./src/*.ts", "next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/server.js", ".next/dev/types/**/*.ts"],
   "exclude": ["node_modules", "misc/*.*"]
 }

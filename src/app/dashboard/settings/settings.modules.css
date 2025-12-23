@@ -111,9 +111,36 @@ select {
   height: 2.5rem;
   border-radius: 0.375rem;
   border: 1px solid var(--blue-4);
-  background-color: var(--blue-2);
+  background-color: #ffffff;
   padding: 0 0.75rem;
   font-size: 0.875rem;
+  color: #111111;
+}
+
+.settings-subheading {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #64ffda;
+  text-align: center;
+}
+
+.settings-subtitle {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--blue-contrast);
+  text-align: left;
+}
+
+.radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.radio-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
   color: var(--blue-contrast);
 }
 

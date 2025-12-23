@@ -77,6 +77,28 @@ type PinochleGameState = {
 };
 
 const SUITS: Suit[] = ["spades", "hearts", "diamonds", "clubs"];
+type ModalCloseBehavior = "inside" | "outside" | "anywhere";
+type HandRowLayout = "single" | "split";
+type HandRankOrder = "high-to-low" | "low-to-high";
+type HandSuitOrder = "alternating" | "black-first" | "red-first";
+
+type PinochlePreferences = {
+	meldModalClose: ModalCloseBehavior;
+	recapModalClose: ModalCloseBehavior;
+	autoReadyEnabled: boolean;
+	handRowLayout: HandRowLayout;
+	handRankOrder: HandRankOrder;
+	handSuitOrder: HandSuitOrder;
+};
+
+const defaultPinochlePreferences: PinochlePreferences = {
+	meldModalClose: "outside",
+	recapModalClose: "outside",
+	autoReadyEnabled: true,
+	handRowLayout: "single",
+	handRankOrder: "high-to-low",
+	handSuitOrder: "alternating",
+};
 
 const getBidIncrement = (value: number): number => {
 	if (value >= 100) return 10;
@@ -164,6 +186,17 @@ const getPinochleRankValue = (rank?: PinochleRank | string): number => {
   return rank ? rankMap[rank.toString().toLowerCase()] ?? -Infinity : -Infinity;
 };
 
+const getSuitOrder = (order: HandSuitOrder): Suit[] => {
+	switch (order) {
+		case "black-first":
+			return ["spades", "clubs", "hearts", "diamonds"];
+		case "red-first":
+			return ["hearts", "diamonds", "spades", "clubs"];
+		default:
+			return ["spades", "hearts", "clubs", "diamonds"];
+	}
+};
+
 const getAllowedPlayableCards = (
 	hand: AnyCard[],
 	trick?: PinochleGameState["trick"],
@@ -238,12 +271,23 @@ export default function PinochleGamePage({
 	const [isCollectingTrick, setIsCollectingTrick] = useState(false);
 	const socketRef = useRef<Socket | null>(null);
 	const lastMeldTokenRef = useRef<string | null>(null);
+	const prevPhaseRef = useRef<PinochlePhase | null>(null);
+	const [hasManualReadyOnce, setHasManualReadyOnce] = useState(false);
 
 	const currentPlayerId = socketRef.current?.id;
 	const myPlayer = useMemo(
 		() => gameState?.players.find((p) => p.id === currentPlayerId),
 		[gameState, currentPlayerId]
 	);
+
+	const pinochlePreferences = useMemo<PinochlePreferences>(() => {
+		// TODO: hydrate from real player preferences once settings UI persists them.
+		const fromProfile = (user as any)?.preferences?.pinochle;
+		return {
+			...defaultPinochlePreferences,
+			...(fromProfile || {}),
+		};
+	}, [user]);
 
 	const isDealer = gameState?.dealerId === currentPlayerId;
 	const canBid =
@@ -443,6 +487,9 @@ export default function PinochleGamePage({
 	};
 
 	const handleToggleReady = () => {
+		if (gameState?.phase === "waiting" && !myPlayer?.ready) {
+			setHasManualReadyOnce(true);
+		}
 		emitWithGameId("COM-player_ready");
 	};
 
@@ -554,12 +601,42 @@ export default function PinochleGamePage({
 		return [...orderedMyTeam, ...opponentPlayers];
 	}, [myPlayer?.team, orderedPlayers]);
 
-	const handRows = useMemo(() => {
+	const sortedHand = useMemo(() => {
 		const cards = myPlayer?.cards || [];
+		if (!cards.length) return [];
+		const suitOrder = getSuitOrder(pinochlePreferences.handSuitOrder);
+		const suitIndex = new Map<Suit, number>(
+			suitOrder.map((suit, index) => [suit, index])
+		);
+		return [...cards].sort((a, b) => {
+			const normalizedA = normalizeCard(a);
+			const normalizedB = normalizeCard(b);
+			if (!normalizedA || !normalizedB) return 0;
+			const suitDiff =
+				(suitIndex.get(normalizedA.suit) ?? 0) -
+				(suitIndex.get(normalizedB.suit) ?? 0);
+			if (suitDiff !== 0) return suitDiff;
+			const rankA = getPinochleRankValue(normalizedA.rank);
+			const rankB = getPinochleRankValue(normalizedB.rank);
+			return pinochlePreferences.handRankOrder === "high-to-low"
+				? rankB - rankA
+				: rankA - rankB;
+		});
+	}, [
+		myPlayer?.cards,
+		pinochlePreferences.handRankOrder,
+		pinochlePreferences.handSuitOrder,
+	]);
+
+	const handRows = useMemo(() => {
+		const cards = sortedHand;
+		if (pinochlePreferences.handRowLayout === "single") {
+			return [cards];
+		}
 		if (cards.length <= 12) return [cards];
 		const splitIndex = Math.ceil(cards.length / 2);
 		return [cards.slice(0, splitIndex), cards.slice(splitIndex)];
-	}, [myPlayer?.cards]);
+	}, [pinochlePreferences.handRowLayout, sortedHand]);
 
 	useEffect(() => {
 		if (!pendingPlay || !gameState?.trick?.cards) return;
@@ -591,6 +668,31 @@ export default function PinochleGamePage({
 			clearTimeout(clearTimer);
 		};
 	}, [completedTrick, completedTrickWinnerId]);
+
+	useEffect(() => {
+		const currentPhase = gameState?.phase ?? null;
+		const prevPhase = prevPhaseRef.current;
+		prevPhaseRef.current = currentPhase;
+		if (!pinochlePreferences.autoReadyEnabled) return;
+		if (!hasManualReadyOnce) return;
+		if (
+			prevPhase !== "waiting" &&
+			currentPhase === "waiting" &&
+			!myPlayer?.ready
+		) {
+			emitWithGameId("COM-player_ready");
+		}
+	}, [
+		gameState?.phase,
+		hasManualReadyOnce,
+		myPlayer?.ready,
+		pinochlePreferences.autoReadyEnabled,
+	]);
+
+	const shouldCloseOnOutside = (behavior: ModalCloseBehavior) =>
+		behavior === "outside" || behavior === "anywhere";
+	const shouldCloseOnInside = (behavior: ModalCloseBehavior) =>
+		behavior === "inside" || behavior === "anywhere";
 
 	const suitIcon = (suit: Suit) => {
 		switch (suit) {
@@ -640,6 +742,8 @@ export default function PinochleGamePage({
 		bidderTeam === "A" ? teamStats.teamA.meld : teamStats.teamB.meld;
 	const tricksNeeded = Math.max((gameState?.roundBid ?? 0) - bidderMeld, 20);
 	const trickCenterOffset = { x: 0, y: -30 };
+	const meldCloseBehavior = pinochlePreferences.meldModalClose;
+	const recapCloseBehavior = pinochlePreferences.recapModalClose;
 
 	if (loading) {
 		return <div className="text-center p-10 text-gray-200">Loading...</div>;
@@ -855,7 +959,7 @@ export default function PinochleGamePage({
 											style={{ zIndex: 10 + idx }}
 										>
 											<Card
-												scaleFactor={1.05}
+												scaleFactor={1.2}
 												rank={normalized.rank}
 												suit={normalized.suit}
 												faceDown={false}
@@ -1031,7 +1135,7 @@ export default function PinochleGamePage({
 														prev === globalIndex ? null : globalIndex
 													);
 												}}
-												className={`relative -ml-8 first:ml-0 focus:outline-none ${
+												className={`relative -ml-10 first:ml-0 focus:outline-none ${
 													isSelected ? "z-20" : "z-10"
 												} ${canPlayCard && !isAllowed ? "opacity-50" : ""}`}
 												disabled={canPlayCard && !isAllowed}
@@ -1045,7 +1149,7 @@ export default function PinochleGamePage({
 												>
 													{normalized ? (
 														<Card
-															scaleFactor={0.95}
+															scaleFactor={1.1}
 															rank={normalized.rank}
 															suit={normalized.suit}
 															faceDown={false}
@@ -1112,11 +1216,20 @@ export default function PinochleGamePage({
 			{showMeldModal && (
 				<div
 					className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 px-4"
-					onClick={() => setShowMeldModal(false)}
+					onClick={() => {
+						if (shouldCloseOnOutside(meldCloseBehavior)) {
+							setShowMeldModal(false);
+						}
+					}}
 				>
 					<div
 						className="w-full max-w-4xl rounded-2xl border border-black/60 bg-[#f7f5c6] p-6 text-black shadow-[0_26px_60px_rgba(0,0,0,0.55)]"
-						onClick={(event) => event.stopPropagation()}
+						onClick={(event) => {
+							event.stopPropagation();
+							if (shouldCloseOnInside(meldCloseBehavior)) {
+								setShowMeldModal(false);
+							}
+						}}
 					>
 						<div className="mb-4 text-lg font-semibold uppercase tracking-[0.2em] text-black/70">
 							Meld Scoring
@@ -1144,7 +1257,7 @@ export default function PinochleGamePage({
 													return normalized ? (
 														<Card
 															key={`${player.id}-${cardIndex}`}
-															scaleFactor={0.6}
+															scaleFactor={0.7}
 															rank={normalized.rank}
 															suit={normalized.suit}
 															faceDown={false}
@@ -1180,11 +1293,20 @@ export default function PinochleGamePage({
 			{showRoundRecap && (
 				<div
 					className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 px-4"
-					onClick={() => setShowRoundRecap(false)}
+					onClick={() => {
+						if (shouldCloseOnOutside(recapCloseBehavior)) {
+							setShowRoundRecap(false);
+						}
+					}}
 				>
 					<div
 						className="w-full max-w-xl rounded-2xl border border-black/60 bg-[#f7f5c6] p-6 text-black shadow-[0_26px_60px_rgba(0,0,0,0.55)]"
-						onClick={(event) => event.stopPropagation()}
+						onClick={(event) => {
+							event.stopPropagation();
+							if (shouldCloseOnInside(recapCloseBehavior)) {
+								setShowRoundRecap(false);
+							}
+						}}
 					>
 						<div className="mb-4 text-lg font-semibold uppercase tracking-[0.2em] text-black/70">
 							Round Recap

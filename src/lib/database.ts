@@ -19,6 +19,16 @@ export type User_DB = {
   username?: string;
   password?: string;
   email?: string;
+  preferences?: {
+    pinochle?: {
+      meldModalClose?: "inside" | "outside" | "anywhere";
+      recapModalClose?: "inside" | "outside" | "anywhere";
+      autoReadyEnabled?: boolean;
+      handRowLayout?: "single" | "split";
+      handRankOrder?: "high-to-low" | "low-to-high";
+      handSuitOrder?: "alternating" | "black-first" | "red-first";
+    };
+  };
   first_name?: string | null;
   last_name?: string | null;
   phone?: number | null;
@@ -133,7 +143,7 @@ const connectDB = async () => {
 
 };
 
-const userDB = async () => {
+export const userDB = async () => {
   const users = await connectDB();
 
   return users.collection("users");
@@ -217,6 +227,7 @@ export async function getUserById(userId: string): Promise<OpResult> {
     id: userId,
     username: data.username,
     email: data.email,
+    preferences: data.preferences || {},
     first_name: data.first_name || "",
     last_name: data.last_name || "",
     phone: data.phone || "",
@@ -254,6 +265,7 @@ export async function getUserByUsername(username: string): Promise<OpResult> {
     _id: data._id,
     username: data.username,
     email: data.email,
+    preferences: data.preferences || {},
     first_name: data.first_name || "",
     last_name: data.last_name || "",
     phone: data.phone || "",
@@ -301,6 +313,7 @@ export async function getUserByEmail(email: string): Promise<OpResult> {
     _id: data._id,
     username: data.username,
     email: data.email,
+    preferences: data.preferences || {},
     first_name: data.first_name || "",
     last_name: data.last_name || "",
     phone: data.phone || "",
@@ -369,6 +382,16 @@ export const createUser = async (userData: UserProps): Promise<OpResult> => {
       email: userData.email,
       username: userData.username,
       password: hashword,
+      preferences: {
+        pinochle: {
+          meldModalClose: "outside",
+          recapModalClose: "outside",
+          autoReadyEnabled: true,
+          handRowLayout: "single",
+          handRankOrder: "high-to-low",
+          handSuitOrder: "alternating",
+        },
+      },
       role: "USER",
       level: 1,
       exp: 0,
@@ -484,6 +507,7 @@ export const updateUser = async (
         id: updatedId,
         username: updatedData.$set.username,
         email: updatedData.$set.email,
+        preferences: updatedData.$set.preferences || {},
         first_name: updatedData.$set.first_name || "",
         last_name: updatedData.$set.last_name || "",
         phone: updatedData.$set.phone || null,

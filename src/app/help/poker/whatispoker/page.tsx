@@ -4,7 +4,7 @@ import './poker.module.css';
 const WhatIsPoker = () => {
 
   return (
-    <div className="p-5 bg-slate-700 text-slate-200 w-max border-lg text-lg text-shadow-md text-shadow-black inline-block rounded-xl">
+    <div className="p-5 bg-slate-700 text-slate-200 w-full max-w-3xl border-lg text-lg text-shadow-md text-shadow-black rounded-xl">
       <h1 className="m-2 p-4 what-h1 text-white text-4xl underline text-shadow-2xl text-shadow-black justify-evenly align-middle">
         What Is Poker?
       </h1>

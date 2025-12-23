@@ -69,34 +69,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const router = useRouter();
 
   // Fetch the profile data for a user
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async () => {
     try {
-
-      if (userId === undefined) {
-        console.log(`User ID is undefined`);
-        console.error('User ID is undefined');
-        setError('User ID is undefined');
-        return null;
-      }
-      console.log(`DEBUG: ${userId}`);
-
       const res = await fetch("/api/auth/profile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(userId),
+        method: "GET",
       });
 
-      console.log(`Sent API call to fetch profile for userId: ${userId}`);
-      const result = await res.json() as { data: Profile | null; error?: string };
+      const result = await res.json() as { success: boolean; user?: Profile; error?: string };
 
-      if (result.error) {
+      if (!result.success) {
         console.log(`Failed to fetch profile from API call`);
         console.error('Error fetching profile: ', result.error);
-        setError(result.error);
+        setError(result.error || "Failed to fetch profile");
         return null;
       }
 
-      return result.data as Profile;
+      return result.user || null;
     } catch (err) {
       if (err instanceof Error) {
         console.error('Error in fetchProfile: ', err.message);
@@ -112,7 +100,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     setLoading(true);
     try {
-      const profileData = await fetchProfile(user.id!);
+      const profileData = await fetchProfile();
       if (profileData) {
         setUser(profileData);
       }
@@ -135,7 +123,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const res = await fetch("/api/auth/update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: updates.id, ...updates }),
+        body: JSON.stringify({
+          userId: updates.id ?? user.id,
+          updates,
+        }),
       });
       const result = await res.json() as { success: boolean; error?: string };
 

@@ -1,15 +1,30 @@
-import { updateUser } from '@lib/database';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
+import { updateProfileById } from "@lib/userService";
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId, userData } = await req.json() as { userId: string, userData: any };
-    const result = await updateUser(userId, userData);
-    if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+    const { userId, updates } = await req.json() as {
+      userId: string;
+      updates: Record<string, unknown>;
+    };
+    if (!userId) {
+      return NextResponse.json(
+        { success: false, error: "Missing userId" },
+        { status: 400 }
+      );
     }
-    return NextResponse.json(result, { status: 200 });
+    const profile = await updateProfileById(userId, updates);
+    if (!profile) {
+      return NextResponse.json(
+        { success: false, error: "User not found" },
+        { status: 404 }
+      );
+    }
+    return NextResponse.json({ success: true, user: profile }, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

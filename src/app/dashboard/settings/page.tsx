@@ -35,6 +35,21 @@ export default function SettingsPage() {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
+  const [pinochleMeldClose, setPinochleMeldClose] = useState<'inside' | 'outside' | 'anywhere'>('outside');
+  const [pinochleRecapClose, setPinochleRecapClose] = useState<'inside' | 'outside' | 'anywhere'>('outside');
+  const [pinochleAutoReady, setPinochleAutoReady] = useState(true);
+  const [pinochleHandRowLayout, setPinochleHandRowLayout] = useState<'single' | 'split'>('single');
+  const [pinochleHandRankOrder, setPinochleHandRankOrder] = useState<'high-to-low' | 'low-to-high'>('high-to-low');
+  const [pinochleHandSuitOrder, setPinochleHandSuitOrder] = useState<'alternating' | 'black-first' | 'red-first'>('alternating');
+
+  const defaultPinochlePreferences = {
+    meldModalClose: "outside",
+    recapModalClose: "outside",
+    autoReadyEnabled: true,
+    handRowLayout: "single",
+    handRankOrder: "high-to-low",
+    handSuitOrder: "alternating",
+  } as const;
 
   type EmailFormData = {
     email: string;
@@ -54,6 +69,17 @@ export default function SettingsPage() {
     if (user) {
       setDisplayName(user.username || '');
       setEmail(user.email || '');
+      const pinochlePrefs = user.preferences?.pinochle || defaultPinochlePreferences;
+      setPinochleMeldClose(pinochlePrefs.meldModalClose || defaultPinochlePreferences.meldModalClose);
+      setPinochleRecapClose(pinochlePrefs.recapModalClose || defaultPinochlePreferences.recapModalClose);
+      setPinochleAutoReady(
+        typeof pinochlePrefs.autoReadyEnabled === "boolean"
+          ? pinochlePrefs.autoReadyEnabled
+          : defaultPinochlePreferences.autoReadyEnabled
+      );
+      setPinochleHandRowLayout(pinochlePrefs.handRowLayout || defaultPinochlePreferences.handRowLayout);
+      setPinochleHandRankOrder(pinochlePrefs.handRankOrder || defaultPinochlePreferences.handRankOrder);
+      setPinochleHandSuitOrder(pinochlePrefs.handSuitOrder || defaultPinochlePreferences.handSuitOrder);
       
       // Fetch additional user data
       const fetchUserData = async () => {
@@ -274,6 +300,35 @@ export default function SettingsPage() {
     alert('This would open a secure payment method form in a production environment.');
     // TODO Add logic to open a payment method form/modal and handle the response
   };
+
+  const handleUpdatePinochlePreferences = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
+    setError('');
+
+    try {
+      const preferences = {
+        ...(user?.preferences || {}),
+        pinochle: {
+          meldModalClose: pinochleMeldClose,
+          recapModalClose: pinochleRecapClose,
+          autoReadyEnabled: pinochleAutoReady,
+          handRowLayout: pinochleHandRowLayout,
+          handRankOrder: pinochleHandRankOrder,
+          handSuitOrder: pinochleHandSuitOrder,
+        },
+      };
+
+      await updateProfile({ preferences });
+      setMessage('Preferences updated successfully');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update preferences');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
   
   if (!user) {
     return <div className="text-center p-8">Loading user data...</div>;
@@ -490,6 +545,166 @@ export default function SettingsPage() {
                 </div>
                 <Button type="submit" disabled={loading}>
                   {loading ? "Updating..." : "Update Timezone"}
+                </Button>
+              </form>
+
+              <form onSubmit={handleUpdatePinochlePreferences} className="settings-form">
+                <h4 className="settings-subheading">Info Box Interactivity</h4>
+                <div className="settings-subtitle">Click to Close Window...</div>
+
+                <div className="form-group">
+                  <label>Meld Scoring Window</label>
+                  <div className="radio-group" role="radiogroup" aria-label="Meld scoring window close behavior">
+                    <label className="radio-option">
+                      <input
+                        type="radio"
+                        name="pinochleMeldClose"
+                        value="inside"
+                        checked={pinochleMeldClose === "inside"}
+                        onChange={() => setPinochleMeldClose("inside")}
+                      />
+                      Inside
+                    </label>
+                    <label className="radio-option">
+                      <input
+                        type="radio"
+                        name="pinochleMeldClose"
+                        value="outside"
+                        checked={pinochleMeldClose === "outside"}
+                        onChange={() => setPinochleMeldClose("outside")}
+                      />
+                      Outside
+                    </label>
+                    <label className="radio-option">
+                      <input
+                        type="radio"
+                        name="pinochleMeldClose"
+                        value="anywhere"
+                        checked={pinochleMeldClose === "anywhere"}
+                        onChange={() => setPinochleMeldClose("anywhere")}
+                      />
+                      Either
+                    </label>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Round Recap Window</label>
+                  <div className="radio-group" role="radiogroup" aria-label="Round recap window close behavior">
+                    <label className="radio-option">
+                      <input
+                        type="radio"
+                        name="pinochleRecapClose"
+                        value="inside"
+                        checked={pinochleRecapClose === "inside"}
+                        onChange={() => setPinochleRecapClose("inside")}
+                      />
+                      Inside
+                    </label>
+                    <label className="radio-option">
+                      <input
+                        type="radio"
+                        name="pinochleRecapClose"
+                        value="outside"
+                        checked={pinochleRecapClose === "outside"}
+                        onChange={() => setPinochleRecapClose("outside")}
+                      />
+                      Outside
+                    </label>
+                    <label className="radio-option">
+                      <input
+                        type="radio"
+                        name="pinochleRecapClose"
+                        value="anywhere"
+                        checked={pinochleRecapClose === "anywhere"}
+                        onChange={() => setPinochleRecapClose("anywhere")}
+                      />
+                      Either
+                    </label>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="radio-option">
+                    <input
+                      type="checkbox"
+                      checked={pinochleAutoReady}
+                      onChange={(e) => setPinochleAutoReady(e.target.checked)}
+                    />
+                    Auto-ready after first round
+                  </label>
+                </div>
+
+                <h4 className="settings-subheading">Hand Display Settings</h4>
+                <div className="form-group">
+                  <label>Hand Layout</label>
+                  <div className="radio-group" role="radiogroup" aria-label="Hand layout">
+                    <label className="radio-option">
+                      <input
+                        type="radio"
+                        name="pinochleHandRowLayout"
+                        value="single"
+                        checked={pinochleHandRowLayout === "single"}
+                        onChange={() => setPinochleHandRowLayout("single")}
+                      />
+                      Single Row
+                    </label>
+                    <label className="radio-option">
+                      <input
+                        type="radio"
+                        name="pinochleHandRowLayout"
+                        value="split"
+                        checked={pinochleHandRowLayout === "split"}
+                        onChange={() => setPinochleHandRowLayout("split")}
+                      />
+                      Double Row
+                    </label>
+                  </div>
+                </div>
+
+                <div className="settings-subtitle">Sorting Options</div>
+                <div className="form-group">
+                  <label>Rank Sorting</label>
+                  <div className="radio-group" role="radiogroup" aria-label="Rank sorting">
+                    <label className="radio-option">
+                      <input
+                        type="radio"
+                        name="pinochleHandRankOrder"
+                        value="high-to-low"
+                        checked={pinochleHandRankOrder === "high-to-low"}
+                        onChange={() => setPinochleHandRankOrder("high-to-low")}
+                      />
+                      High-to-Low
+                    </label>
+                    <label className="radio-option">
+                      <input
+                        type="radio"
+                        name="pinochleHandRankOrder"
+                        value="low-to-high"
+                        checked={pinochleHandRankOrder === "low-to-high"}
+                        onChange={() => setPinochleHandRankOrder("low-to-high")}
+                      />
+                      Low-to-High
+                    </label>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="pinochleHandSuitOrder">Suit Arrangement</label>
+                  <select
+                    id="pinochleHandSuitOrder"
+                    className="w-full p-2 border rounded"
+                    value={pinochleHandSuitOrder}
+                    onChange={(e) => setPinochleHandSuitOrder(e.target.value as 'alternating' | 'black-first' | 'red-first')}
+                  >
+                    <option value="alternating">Alternating colors</option>
+                    <option value="black-first">Black/black/red/red</option>
+                    <option value="red-first">Red/red/black/black</option>
+                  </select>
+                </div>
+
+                <Button type="submit" disabled={loading}>
+                  {loading ? "Updating..." : "Update Pinochle Preferences"}
                 </Button>
               </form>
             </div>

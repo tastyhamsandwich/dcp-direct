@@ -1,20 +1,33 @@
-import { getUserById, type OpResult } from '@lib/database';
+import { NextResponse } from "next/server";
+import { verifySession } from "@lib/session";
+import { getProfileById } from "@lib/userService";
 
-export async function POST(req: Request, res: Response) {
+export async function GET() {
   try {
-    const { userId } = await req.json() as { userId: string };
-    
-    const result: OpResult = await getUserById(userId);
-
-    if (!result.success) {
-      const err = result.error || result.message || "User not found";
-      return new Response(JSON.stringify({ err }), { status: 400 });
+    const session = await verifySession();
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: "No active session" },
+        { status: 401 }
+      );
     }
 
-    return new Response(JSON.stringify(result.user), { status: 200 });
+    const profile = await getProfileById(session.userId);
+    if (!profile) {
+      return NextResponse.json(
+        { success: false, error: "User not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ success: true, user: profile }, { status: 200 });
   } catch (error) {
-    if (error instanceof Error)
+    if (error instanceof Error) {
       console.log(`Error fetching profile: ${error.message}`);
-    return new Response(JSON.stringify({ error }), { status: 500 });
+    }
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
